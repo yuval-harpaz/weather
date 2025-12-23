@@ -109,7 +109,7 @@ function parseLocation(locStr) {
 }
 
 // Load stations data from CSV
-fetch('../data/ims_stations.csv')
+fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv')
   .then(response => response.text())
   .then(csvText => {
     const data = Papa.parse(csvText, { header: true, skipEmptyLines: true }).data;
