@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Weather Stations Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="logo.png">
+  <link rel="icon" href="logo.jpg">
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
   <!-- Common map styles -->
@@ -77,8 +77,8 @@ function toProperCase(text) {
 
 // Load both CSVs
 Promise.all([
-  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv').then(r => r.text()),
-  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_regions.csv').then(r => r.text())
+  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/ims_stations.csv').then(r => r.text()),
+  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/ims_regions.csv').then(r => r.text())
 ]).then(([stationsCsv, regionsCsv]) => {
     const data = Papa.parse(stationsCsv, { header: true, skipEmptyLines: true }).data;
     const regionsData = Papa.parse(regionsCsv, { header: true, skipEmptyLines: true }).data;
