@@ -1,0 +1,100 @@
+/* Common map styles for weather maps */
+
+#map {
+  height: 100vh;
+  width: 100%;
+}
+
+#floating-title {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 10px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 1000;
+  direction: rtl;
+  text-align: center;
+  max-width: 90%;
+}
+
+#floating-title h1 {
+  font-size: 1.4em;
+  font-weight: 500;
+  margin: 0 0 8px 0;
+}
+
+#floating-title .data-source {
+  font-size: 0.75em;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+#floating-title .data-source a {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: #666;
+  transition: opacity 0.2s;
+}
+
+#floating-title .data-source a:hover {
+  opacity: 0.7;
+}
+
+#floating-title .ims-logo {
+  height: 16px;
+  width: auto;
+  vertical-align: middle;
+}
+
+.legend {
+  background: white;
+  padding: 10px 14px;
+  font-size: 0.9em;
+  line-height: 1.8;
+  border-radius: 6px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.legend-item {
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.legend-color {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-left: 6px;
+}
+
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.7) !important;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  #floating-title h1 {
+    font-size: 1.2em;
+  }
+  
+  #floating-title .data-source {
+    font-size: 0.7em;
+  }
+  
+  #floating-title .ims-logo {
+    height: 14px;
+  }
+}

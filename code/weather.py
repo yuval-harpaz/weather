@@ -13,10 +13,9 @@ f = open('token.txt', 'r')
 token = f.read()
 f.close()
 token = token.replace('\n', '')
+headers = {'Authorization': 'ApiToken '+token}
 def update_stations():
     url = 'https://api.ims.gov.il/v1/Envista/stations'
-    token = token.replace('\n', '')
-    headers = {'Authorization': 'ApiToken '+token}
     response = requests.request("GET", url, headers=headers)
     data = json.loads(response.text.encode('utf8'))
     df = pd.DataFrame(data)
@@ -26,7 +25,14 @@ def update_stations():
     if len(df_new) > 0:
         df.to_csv('data/ims_stations.csv', index=False)
 
-
+def update_regions():
+    url = 'https://api.ims.gov.il/v1/Envista/regions'
+    response = requests.request("GET", url, headers=headers)
+    data = json.loads(response.text.encode('utf8'))
+    df_reg = pd.DataFrame(data)
+    prev = pd.read_csv('data/ims_regions.csv')
+    df_reg_new = df_reg[~df_reg['regionId'].isin(prev['regionId'].values)]
+    df_reg.to_csv('data/ims_regions.csv', index=False)
 names = sorted([x for x in df['name'].values if '_1m' not in x])
 names = [x for x in names if not x.split(' ')[-1].isnumeric()]
 # df.to_csv('data/ims_stations.csv', index=False)

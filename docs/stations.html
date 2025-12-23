@@ -7,59 +7,18 @@
   <link rel="icon" href="logo.png">
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
-
-  <style>
-    #map {
-      height: 100vh;
-      width: 100%;
-    }
-    #floating-title {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.9);
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 1.4em;
-      font-weight: 500;
-      box-shadow: 0 0 4px rgba(0,0,0,0.2);
-      z-index: 1000;
-      direction: rtl;
-      text-align: center;
-    }
-    .legend {
-      background: white;
-      padding: 10px 14px;
-      font-size: 0.9em;
-      line-height: 1.8;
-      border-radius: 6px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-      max-height: 80vh;
-      overflow-y: auto;
-    }
-    .legend-item {
-      margin: 4px 0;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .legend-color {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      margin-left: 6px;
-    }
-    .leaflet-control-attribution {
-      background: rgba(255, 255, 255, 0.7) !important;
-      font-size: 12px;
-    }
-  </style>
+  <!-- Common map styles -->
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 <div id="floating-title">
-  תחנות מזג אוויר - מפת תחנות IMS
+  <h1>תחנות מזג אוויר - מפת תחנות IMS</h1>
+  <div class="data-source">
+    <span>נתונים מ</span>
+    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+      <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo">
+    </a>
+  </div>
 </div>
 <div id="map"></div>
 
@@ -108,11 +67,30 @@ function parseLocation(locStr) {
   return null;
 }
 
-// Load stations data from CSV
-fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv')
-  .then(response => response.text())
-  .then(csvText => {
-    const data = Papa.parse(csvText, { header: true, skipEmptyLines: true }).data;
+// Convert uppercase text to proper case
+function toProperCase(text) {
+  return text.split(' ').map(word => {
+    if (word.length === 0) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
+}
+
+// Load both CSVs
+Promise.all([
+  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv').then(r => r.text()),
+  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_regions.csv').then(r => r.text())
+]).then(([stationsCsv, regionsCsv]) => {
+    const data = Papa.parse(stationsCsv, { header: true, skipEmptyLines: true }).data;
+    const regionsData = Papa.parse(regionsCsv, { header: true, skipEmptyLines: true }).data;
+    
+    // Create region name mapping
+    const regionNames = {};
+    regionsData.forEach(row => {
+      const regionId = parseInt(row.regionId);
+      if (!isNaN(regionId) && row.name) {
+        regionNames[regionId] = toProperCase(row.name);
+      }
+    });
     
     // Count stations by region
     const regionCounts = {};
@@ -144,10 +122,12 @@ fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/da
       const color = regionColors[station.regionId] || '#999999';
       const activeText = station.active ? 'פעילה' : 'לא פעילה';
       
+      const regionName = regionNames[station.regionId] || `אזור ${station.regionId}`;
+      
       const popup = `<div dir="rtl" style="text-align: right; font-size: 1.1em;">
         <strong>${station.name}</strong><br>
         מזהה תחנה: ${station.stationId}<br>
-        אזור: ${station.regionId}<br>
+        אזור: ${regionName}<br>
         סטטוס: ${activeText}
       </div>`;
       
@@ -173,9 +153,10 @@ fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/da
       sortedRegions.forEach(regionId => {
         const color = regionColors[regionId] || '#999999';
         const count = regionCounts[regionId];
+        const regionName = regionNames[regionId] || `אזור ${regionId}`;
         div.innerHTML += `
           <div class="legend-item">
-            <span><span class="legend-color" style="background-color: ${color};"></span>אזור ${regionId}</span>
+            <span><span class="legend-color" style="background-color: ${color};"></span>${regionName}</span>
             <span style="margin-right: 10px;">(${count})</span>
           </div>`;
       });
@@ -186,7 +167,7 @@ fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/da
     legend.addTo(map);
   })
   .catch(error => {
-    console.error('Error loading stations data:', error);
+    console.error('Error loading data:', error);
   });
 
 </script>
