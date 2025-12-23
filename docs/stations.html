@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>Weather Stations Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="logo.png">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+    #floating-title {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 1.4em;
+      font-weight: 500;
+      box-shadow: 0 0 4px rgba(0,0,0,0.2);
+      z-index: 1000;
+      direction: rtl;
+      text-align: center;
+    }
+    .legend {
+      background: white;
+      padding: 10px 14px;
+      font-size: 0.9em;
+      line-height: 1.8;
+      border-radius: 6px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .legend-item {
+      margin: 4px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .legend-color {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: 6px;
+    }
+    .leaflet-control-attribution {
+      background: rgba(255, 255, 255, 0.7) !important;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+<div id="floating-title">
+  תחנות מזג אוויר - מפת תחנות IMS
+</div>
+<div id="map"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<script>
+// Initialize map centered on Israel
+const map = L.map('map').setView([31.5, 35.0], 8);
+
+// Tile layer
+L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
+  attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
+}).addTo(map);
+
+
+// Color palette for different regions
+const regionColors = {
+  6: '#e41a1c',   // Red
+  7: '#377eb8',   // Blue
+  8: '#4daf4a',   // Green
+  9: '#984ea3',   // Purple
+  10: '#ff7f00',  // Orange
+  11: '#ffff33',  // Yellow
+  12: '#a65628',  // Brown
+  13: '#f781bf',  // Pink
+  14: '#999999',  // Gray
+  15: '#66c2a5'   // Teal
+};
+
+// Parse location string from CSV
+function parseLocation(locStr) {
+  try {
+    // Location format: "{'latitude': 32.8174, 'longitude': 35.7622}"
+    const latMatch = locStr.match(/latitude['"]*:\s*([\d.]+)/);
+    const lngMatch = locStr.match(/longitude['"]*:\s*([\d.]+)/);
+    if (latMatch && lngMatch) {
+      return {
+        lat: parseFloat(latMatch[1]),
+        lng: parseFloat(lngMatch[1])
+      };
+    }
+  } catch (e) {
+    console.error('Error parsing location:', locStr, e);
+  }
+  return null;
+}
+
+// Load stations data from CSV
+fetch('../data/ims_stations.csv')
+  .then(response => response.text())
+  .then(csvText => {
+    const data = Papa.parse(csvText, { header: true, skipEmptyLines: true }).data;
+    
+    // Count stations by region
+    const regionCounts = {};
+    const validStations = [];
+    
+    data.forEach(row => {
+      const location = parseLocation(row.location);
+      if (location && location.lat && location.lng) {
+        const regionId = parseInt(row.regionId);
+        if (!isNaN(regionId)) {
+          regionCounts[regionId] = (regionCounts[regionId] || 0) + 1;
+          validStations.push({
+            name: row.name,
+            stationId: row.stationId,
+            lat: location.lat,
+            lng: location.lng,
+            regionId: regionId,
+            active: row.active === 'True'
+          });
+        }
+      }
+    });
+    
+    console.log(`Loaded ${validStations.length} stations`);
+    console.log('Region counts:', regionCounts);
+    
+    // Add markers for each station
+    validStations.forEach(station => {
+      const color = regionColors[station.regionId] || '#999999';
+      const activeText = station.active ? 'פעילה' : 'לא פעילה';
+      
+      const popup = `<div dir="rtl" style="text-align: right; font-size: 1.1em;">
+        <strong>${station.name}</strong><br>
+        מזהה תחנה: ${station.stationId}<br>
+        אזור: ${station.regionId}<br>
+        סטטוס: ${activeText}
+      </div>`;
+      
+      L.circleMarker([station.lat, station.lng], {
+        radius: 6,
+        fillColor: color,
+        color: '#fff',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.8
+      }).addTo(map).bindPopup(popup);
+    });
+    
+    // Add legend
+    const legend = L.control({ position: 'topright' });
+    legend.onAdd = function(map) {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = '<div dir="rtl" style="text-align: right;"><strong>אזורים</strong><br>';
+      
+      // Sort regions by ID
+      const sortedRegions = Object.keys(regionCounts).sort((a, b) => parseInt(a) - parseInt(b));
+      
+      sortedRegions.forEach(regionId => {
+        const color = regionColors[regionId] || '#999999';
+        const count = regionCounts[regionId];
+        div.innerHTML += `
+          <div class="legend-item">
+            <span><span class="legend-color" style="background-color: ${color};"></span>אזור ${regionId}</span>
+            <span style="margin-right: 10px;">(${count})</span>
+          </div>`;
+      });
+      
+      div.innerHTML += '</div>';
+      return div;
+    };
+    legend.addTo(map);
+  })
+  .catch(error => {
+    console.error('Error loading stations data:', error);
+  });
+
+</script>
+
+</body>
+</html>
