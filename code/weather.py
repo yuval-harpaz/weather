@@ -44,21 +44,29 @@ def update_activity():
     for ista in range(len(df_sta)):
         stationid = df_sta['stationId'].values[ista]
         url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/1/earliest'
-        response = requests.request("GET", url, headers=headers)
-        txt = response.text.encode('utf8')
-        try:
-            data = json.loads(txt)
-            df_activity.at[ista, 'earliest'] = data['data'][0]['datetime']
-        except (json.JSONDecodeError, KeyError, IndexError):
-            df_activity.at[ista, 'earliest'] = ''
+        for itry in range(10):
+            response = requests.request("GET", url, headers=headers)
+            txt = response.text.encode('utf8')
+            try:
+                data = json.loads(txt)
+                df_activity.at[ista, 'earliest'] = data['data'][0]['datetime']
+                break
+            except (json.JSONDecodeError, KeyError, IndexError):
+                df_activity.at[ista, 'earliest'] = ''
+                time.sleep(0.3)
         url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/1/latest'
-        response = requests.request("GET", url, headers=headers)
-        txt = response.text.encode('utf8')
-        try:
-            data = json.loads(txt)
-            df_activity.at[ista, 'latest'] = data['data'][0]['datetime']
-        except (json.JSONDecodeError, KeyError, IndexError):
-            df_activity.at[ista, 'latest'] = ''
+        #try 10 times
+        for itry in range(10):
+            
+            response = requests.request("GET", url, headers=headers)
+            txt = response.text.encode('utf8')
+            try:
+                data = json.loads(txt)
+                df_activity.at[ista, 'latest'] = data['data'][0]['datetime']
+                break
+            except (json.JSONDecodeError, KeyError, IndexError):
+                df_activity.at[ista, 'latest'] = ''
+                time.sleep(0.3)
     df_activity.to_csv('data/ims_activity.csv', index=False)
     
 def query_rain(station='HAFEZ HAYYIM', from_date='2025-10-07', to_date='2025-10-10', monitor='Rain'):
