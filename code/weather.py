@@ -18,12 +18,14 @@ def update_stations():
     url = 'https://api.ims.gov.il/v1/Envista/stations'
     response = requests.request("GET", url, headers=headers)
     data = json.loads(response.text.encode('utf8'))
-    df = pd.DataFrame(data)
+    df_sta = pd.DataFrame(data)
     prev = pd.read_csv('data/ims_stations.csv')
     # look for new stations
-    df_new = df[~df['stationId'].isin(prev['stationId'].values)]
+    df_new = df_sta[~df_sta['stationId'].isin(prev['stationId'].values)]
     if len(df_new) > 0:
-        df.to_csv('data/ims_stations.csv', index=False)
+        df_sta.to_csv('data/ims_stations.csv', index=False)
+
+df_sta = pd.read_csv('data/ims_stations.csv')
 
 def update_regions():
     url = 'https://api.ims.gov.il/v1/Envista/regions'
@@ -32,7 +34,70 @@ def update_regions():
     df_reg = pd.DataFrame(data)
     prev = pd.read_csv('data/ims_regions.csv')
     df_reg_new = df_reg[~df_reg['regionId'].isin(prev['regionId'].values)]
-    df_reg.to_csv('data/ims_regions.csv', index=False)
+    if len(df_reg_new) > 0:
+        df_reg.to_csv('data/ims_regions.csv', index=False)
+
+def update_activity():
+    df_activity = pd.DataFrame(columns=['stationId', 'name', 'earliest', 'latest'])
+    df_activity['stationId'] = df_sta['stationId']
+    df_activity['name'] = df_sta['name']
+    for ista in range(len(df_sta)):
+        stationid = df_sta['stationId'].values[ista]
+        url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/1/earliest'
+        response = requests.request("GET", url, headers=headers)
+        txt = response.text.encode('utf8')
+        try:
+            data = json.loads(txt)
+            df_activity.at[ista, 'earliest'] = data['data'][0]['datetime']
+        except (json.JSONDecodeError, KeyError, IndexError):
+            df_activity.at[ista, 'earliest'] = ''
+        url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/1/latest'
+        response = requests.request("GET", url, headers=headers)
+        txt = response.text.encode('utf8')
+        try:
+            data = json.loads(txt)
+            df_activity.at[ista, 'latest'] = data['data'][0]['datetime']
+        except (json.JSONDecodeError, KeyError, IndexError):
+            df_activity.at[ista, 'latest'] = ''
+    df_activity.to_csv('data/ims_activity.csv', index=False)
+    
+def query_rain(station='HAFEZ HAYYIM', from_date='2025-10-07', to_date='2025-10-10', monitor='Rain'):
+    stationid = df_sta['stationId'].values[df_sta['name'] == station][0]
+    monitors = df_sta['monitors'].values[df_sta['name'] == station][0]
+    if not f"'{monitor}'" in monitors:
+        print(f'station has no {monitor} monitor')
+        return None
+    irain = monitors.index(f"'{monitor}'")
+    tmp = monitors[:irain]  # find which channel has name 'Rain'
+    channel = int(tmp[::-1][tmp[::-1].index(","):tmp[::-1].index(":'dI")][1:].strip()[::-1]) # find last '
+    if to_date is None:  # daily
+        date = from_date
+        url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/{channel}/daily/{date[:4]}/{date[5:7]}/{date[8:10]}'
+    else:
+        url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/{channel}?from={from_date.replace("-","/")}&to={to_date.replace("-","/")}'
+    response = requests.request("GET", url, headers=headers)
+    txt = response.text.encode('utf8')
+    #save to json
+    # with open(f'data/{station}_{date}_{monitor}.json', 'w') as f:
+    #     f.write(txt.decode('utf8'))
+    data = json.loads(txt)
+    data = data['data']
+    # sum values for valid
+    sum_rain = [0]
+    date = [data[0]['datetime'][:10]]
+    for idata in range(len(data)):
+        current_date = data[idata]['datetime'][:10]
+        if current_date != date[-1]:
+            sum_rain.append(0)
+            date.append(current_date)
+        if data[idata]['channels'][0]['valid'] == True and data[idata]['channels'][0]['status'] == 1:
+            value = data[idata]['channels'][0]['value']
+            print(data[idata]['datetime'], value)
+            sum_rain[-1] += value
+        else:
+            print('buga')
+    return data
+
 names = sorted([x for x in df['name'].values if '_1m' not in x])
 names = [x for x in names if not x.split(' ')[-1].isnumeric()]
 # df.to_csv('data/ims_stations.csv', index=False)
