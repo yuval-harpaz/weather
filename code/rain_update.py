@@ -44,7 +44,9 @@ else:
                 istart = np.where(df_rain_new['datetime'] == df_rain['datetime'].iloc[-1])[0][0] + 1
                 for irow in range(istart, len(df_rain_new)):
                     df_rain.at[len(df_rain), 'datetime'] = df_rain_new.at[irow, 'datetime']
-            df_rain[sta] = np.nan
+            monitor = df_sta['monitors'][df_sta['name'].values == sta].values[0]
+            if 'Rain' in monitor:
+                df_rain[sta] = np.nan  # maybe someplace in the desert, no rain so far
             if sta in df_rain_new.columns:
                 for row_new in np.where(~df_rain_new[sta].isna())[0]:
                     row = np.where(df_rain['datetime'] == df_rain_new.at[row_new, 'datetime'])[0]
