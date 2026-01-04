@@ -240,8 +240,8 @@ function createBarMarker(lat, lng, stationName, currentAmount, median10y, percen
   
   const marker = L.marker([lat, lng], { icon: icon }).addTo(map);
   marker.bindTooltip(tooltipContent, {
-    direction: 'top',
-    offset: [0, -10],
+    direction: 'left',
+    offset: [190, -20],
     opacity: 0.9
   });
   
@@ -430,7 +430,7 @@ Promise.all([
         <div style="margin: 10px 0; font-size: 0.9em;">
           <div style="margin: 3px 0;">
             <span style="display: inline-block; width: 15px; height: 15px; background-color: #e74c3c; margin-left: 5px;"></span>
-            &lt; 50%
+            0-50%
           </div>
           <div style="margin: 3px 0;">
             <span style="display: inline-block; width: 15px; height: 15px; background-color: #f39c12; margin-left: 5px;"></span>
@@ -446,7 +446,7 @@ Promise.all([
           </div>
           <div style="margin: 3px 0;">
             <span style="display: inline-block; width: 15px; height: 15px; background-color: #3498db; margin-left: 5px;"></span>
-            &gt; 125% (הרבה מעל החציון)
+            + 125% (הרבה מעל החציון)
           </div>
         </div>
         <p style="font-size: 0.85em; margin: 10px 0 0 0;">
