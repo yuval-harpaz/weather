@@ -27,17 +27,22 @@ else:
         idsta = still_active[ista]
         sta = df_sta['name'][df_sta['stationId'] == idsta].values[0]
         if sta in df_rain.columns:
-            last = df_rain['datetime'][np.where(~df_rain[sta].isna())[0][-1]][:10]
+            last = np.where(~df_rain[sta].isna())[0]
+            if len(last) == 0:  # no rain yet, maybe no successful read yet
+                last = df_rain['datetime'][0][:10]
+            else:
+                last = df_rain['datetime'][last[-1]][:10]
             df_rain_new = rain_1h(stations=[sta], from_date=last, to_date=f'{y}-{m}-{d}', save_csv=False)
             if df_rain_new['datetime'].iloc[-1] > df_rain['datetime'].iloc[-1]:
                 istart = np.where(df_rain_new['datetime'] == df_rain['datetime'].iloc[-1])[0][0] + 1
                 for irow in range(istart, len(df_rain_new)):
                     df_rain.at[len(df_rain), 'datetime'] = df_rain_new.at[irow, 'datetime']
-            for row_new in np.where(~df_rain_new[sta].isna())[0]:
-                row = np.where(df_rain['datetime'] == df_rain_new.at[row_new, 'datetime'])[0]
-                if len(row) == 0:
-                    raise ValueError('Datetime mismatch when updating rain data')
-                df_rain.at[row[0], sta] = df_rain_new.at[row_new, sta]
+            if sta in df_rain_new.columns and df_rain_new[sta].notna().any():
+                for row_new in np.where(~df_rain_new[sta].isna())[0]:
+                    row = np.where(df_rain['datetime'] == df_rain_new.at[row_new, 'datetime'])[0]
+                    if len(row) == 0:
+                        raise ValueError('Datetime mismatch when updating rain data')
+                    df_rain.at[row[0], sta] = df_rain_new.at[row_new, sta]
         else:
             df_rain_new = rain_1h(stations=[sta], from_date=f'{y}-01-01', to_date=f'{y}-{m}-{d}', save_csv=False)
             if df_rain_new['datetime'].iloc[-1] > df_rain['datetime'].iloc[-1]:

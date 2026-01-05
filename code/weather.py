@@ -247,9 +247,16 @@ def rain_1h(stations=None, from_date='2025-10-07', to_date='2025-10-10', save_cs
         yearly = False
         year = None
         if type(save_csv) == bool:
-            opcsv = f'data/rain_{from_date}_to_{to_date}.csv'
+            if save_csv:
+                opcsv = f'data/rain_{from_date}_to_{to_date}.csv'
+            else:
+                opcsv = ''
     df_activity = pd.read_csv('data/ims_activity.csv')
     hours = hour_vector(from_date, to_date)
+    # if hours extend beyond now, limit to now
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    if hours[-1] > now_str:
+        hours = [h for h in hours if h <= now_str]
     if stations is None:
         stations = df_sta['name'].values
     # for station in stations:
@@ -285,10 +292,11 @@ def rain_1h(stations=None, from_date='2025-10-07', to_date='2025-10-10', save_cs
 
         earliest = df_activity['earliest'].values[df_activity['name'] == station][0]
         latest = df_activity['latest'].values[df_activity['name'] == station][0]
-        if from_date > latest or to_date < earliest:
-            msg = f'skipping inactive {station}'
-            print(f'\r{msg:<80}', end='', flush=True)
-            continue
+        if from_date < '2026':  # don't skip stations active in 2026
+            if from_date > latest or to_date < earliest:
+                msg = f'skipping inactive {station}'
+                print(f'\r{msg:<80}', end='', flush=True)
+                continue
         if '_1m' in station:
             monitor = 'Rain_1_min'
         else:
@@ -327,10 +335,8 @@ def rain_1h(stations=None, from_date='2025-10-07', to_date='2025-10-10', save_cs
 def shrink_rain_data(year='2024'):
     """
     Removes rows with all NaN values from yearly rain data to reduce file size.
-    
     Inputs:
         year (str): Year to process (e.g., '2024'). Default is '2024'.
-    
     Outputs:
         pandas.DataFrame: DataFrame with only rows containing at least one non-NaN rain value
     """
