@@ -6,7 +6,7 @@ sys.path.append(os.environ['HOME']+'/weather/code')
 from weather import rain_1h, update_stations, update_activity
 import numpy as np
 update_stations()
-update_activity()
+# update_activity()
 #get current year
 current_year = datetime.now().year
 y = str(current_year)
