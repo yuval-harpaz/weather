@@ -202,14 +202,15 @@ Promise.all([
   
   // Get all unique station names from rain data
   const stationNames = new Set();
-  if (rainData.length > 0) {
-    Object.keys(rainData[0]).forEach(key => {
-      if (key !== 'datetime') {
+  rainData.forEach(row => {
+    Object.keys(row).forEach(key => {
+      if (key && key !== 'datetime') {
         stationNames.add(key);
       }
     });
-  }
-  
+  });
+
+
   console.log(`Found ${stationNames.size} stations in rain data`);
   
   // Create a map of stations with their locations
@@ -224,7 +225,11 @@ Promise.all([
       };
     }
   });
-  
+  stationNames.forEach(name => {
+    if (!stationLocations[name]) {
+      console.warn('Missing station in ims_stations.csv:', name);
+    }
+  });
   // Counter for charts
   let chartCounter = 0;
   
