@@ -11,11 +11,8 @@ from datetime import datetime, timedelta
 # https://ims.gov.il/sites/default/files/2023-01/API%20explanation_1.pdf
 # https://ims.gov.il/he/ObservationDataAPI
 
-f = open('token.txt', 'r')
-token = f.read()
-f.close()
-token = token.replace('\n', '')
-headers = {'Authorization': 'ApiToken '+token}
+ims_api_token = os.environ.get('IMS_API_TOKEN')
+headers = {'Authorization': 'ApiToken '+ims_api_token}
 
 def timing():
     """
