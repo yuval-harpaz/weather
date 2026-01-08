@@ -14,7 +14,6 @@ on:
 jobs:
   update-rain-data:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.confirm == 'yes' }}
     
     steps:
       - name: Checkout repository
@@ -29,20 +28,29 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Create token file
-        run: |
-          echo "${{ secrets.IMS_API_TOKEN }}" > token.txt
       - name: Run rain update
+        env:
+          IMS_API_TOKEN: ${{ secrets.IMS_API_TOKEN }}
         run: |
-          cd code
-          python rain_update.py
-      - name: Remove token file
-        run: |
-          rm -f token.txt
+          echo kadabra > data/kadabra.txt
       - name: Commit and push changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add data/
-          git diff --staged --quiet || git commit -m "Manual rain update $(date +'%Y-%m-%d %H:%M')"
-          git push
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "IS_NEW=true" >> $GITHUB_ENV
+          else
+            echo "no changes"
+            echo "IS_NEW=false" >> $GITHUB_ENV
+          fi
+      - name: commit files
+        run: |
+          git add -A
+          git commit -m "auto update"
+          git pull
+        if: ${{ env.IS_NEW == 'true' }}
+      - name: push files
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ env.IS_NEW == 'true' }}
