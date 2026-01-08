@@ -1,4 +1,5 @@
 token.txt
-.*
 code/*pycache*
 */*.pyc
+.vscode
+*csv#

@@ -1,0 +1,40 @@
+name: Rain Data Update
+on:
+  schedule:
+    # Runs at 01:00, 07:00, 13:00, 19:00 UTC (every 6 hours starting from 1:00 AM)
+    - cron: '0 1,7,13,19 * * *'
+  workflow_dispatch:  # Allows manual triggering from the Actions tab
+jobs:
+  update-rain-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Create token file
+        run: |
+          echo "${{ secrets.IMS_API_TOKEN }}" > token.txt
+      - name: Run rain update
+        run: |
+          cd code
+          python rain_update.py
+      - name: Remove token file
+        run: |
+          rm -f token.txt
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/
+          git diff --staged --quiet || git commit -m "Update rain data $(date +'%Y-%m-%d %H:%M')"
+          git push
