@@ -141,7 +141,7 @@ def update_activity(new=False):
         #check latest for 2025 active stations
         if str(df_activity.at[ista, 'latest']) > '2025-01-01T00:00:00':
             fail = False
-            for itry in range(20):
+            for itry in range(40):
                 response = requests.request("GET", url, headers=headers)
                 txt = response.text.encode('utf8')
                 try:
@@ -152,7 +152,7 @@ def update_activity(new=False):
                 except (json.JSONDecodeError, KeyError, IndexError):
                     # df_activity.at[ista, 'latest'] = ''
                     fail = True
-                    time.sleep(0.3)
+                    time.sleep(0.1)
             if fail:
                 print(f'failed to get latest for station {stationid}')
         msg = f'checking activity for station {ista+1}/{len(df_sta)}'
