@@ -7,6 +7,7 @@ import numpy as np
 import time
 from glob import glob
 from datetime import datetime, timedelta
+import re
 # https://data.gov.il/dataset/481
 # https://ims.gov.il/sites/default/files/2023-01/API%20explanation_1.pdf
 # https://ims.gov.il/he/ObservationDataAPI
@@ -329,18 +330,34 @@ def rain_1h(stations=None, from_date='2025-10-07', to_date='2025-10-10', save_cs
     print()  # Final newline after loop completes
     return df_rain
 
-def shrink_rain_data(year='2024'):
+def round_data(file):
     """
-    Removes rows with all NaN values from yearly rain data to reduce file size.
-    Inputs:
-        year (str): Year to process (e.g., '2024'). Default is '2024'.
-    Outputs:
-        pandas.DataFrame: DataFrame with only rows containing at least one non-NaN rain value
+    Rounds all floats in a CSV file to 1 decimal place using text manipulation.
+    Uses proper mathematical rounding (not truncation).
     """
-    df_rain = pd.read_csv(f'data/rain_{year}.csv')
-    rows_to_keep = np.isnan(df_rain.iloc[:, 1:]).all(axis=1) == False
-    df_rain = df_rain[rows_to_keep]
-    return df_rain
+    def round_match(match):
+        """Replacement function that properly rounds the float."""
+        num_str = match.group(0)
+        rounded = round(float(num_str), 1)
+        return f'{rounded:.1f}'
+    # Calculate sums before rounding
+    df0 = pd.read_csv(file)
+    sums0 = np.round(np.nansum(df0.values[:,1:], axis=0).astype(float), 1)
+    with open(file, 'r') as f:
+        text = f.read()
+    # Match floats with 2+ decimal places and round them properly
+    result = re.sub(r'\d+\.\d{2,}', round_match, text)
+    with open('tmp.csv', 'w') as f:
+        f.write(result)
+    # Calculate sums after rounding
+    df1 = pd.read_csv('tmp.csv')
+    sums1 = np.round(np.nansum(df1.values[:,1:], axis=0).astype(float), 1)
+    if np.all(sums0 == sums1):
+        os.remove(file)
+        os.rename('tmp.csv', file)
+    else:
+        print('Sums do not match, file not overwritten')
+        os.remove('tmp.csv')
 
 
 if __name__ == '__main__':
@@ -372,3 +389,16 @@ if __name__ == '__main__':
     # df_all = rain_1h(from_date='2023-10-01', to_date='2023-10-10')
     # df_all.to_csv('~/Documents/ims.csv', index=False)
     # print(np.sum(df_all.values[:,1:], axis=0))
+
+# def shrink_rain_data(year='2024'):
+#     """
+#     Removes rows with all NaN values from yearly rain data to reduce file size.
+#     Inputs:
+#         year (str): Year to process (e.g., '2024'). Default is '2024'.
+#     Outputs:
+#         pandas.DataFrame: DataFrame with only rows containing at least one non-NaN rain value
+#     """
+#     df_rain = pd.read_csv(f'data/rain_{year}.csv')
+#     rows_to_keep = np.isnan(df_rain.iloc[:, 1:]).all(axis=1) == False
+#     df_rain = df_rain[rows_to_keep]
+#     return df_rain

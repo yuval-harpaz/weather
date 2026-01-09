@@ -62,3 +62,10 @@ else:
         print(f'\rUpdated rain data for station {ista+1} of {len(still_active)}: {sta}', end='', flush=True)
 print('saving rain update')
 df_rain.to_csv(opcsv, index=False)
+
+'''TODO: 
+- round to 2 decimals
+- try complete past data
+- make winter by winter table, update web page
+- collect min max temp
+'''
