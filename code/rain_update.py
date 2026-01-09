@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 from datetime import datetime
 sys.path.append(os.environ['HOME']+'/weather/code')
-from weather import rain_1h, update_stations, update_activity
+from weather import rain_1h, update_stations, update_activity, round_data
 import numpy as np
 update_stations()
 # update_activity()
@@ -78,10 +78,6 @@ for year in [current_year-1, current_year]:
     # half1: Sept 1 of previous year to Jan 1 of current year
     df1 = df_prev[df_prev['datetime'] >= f'{year-1}-09-01']
     df_combined = pd.concat([df1, df2])
-    idate = np.where(np.array([md[5:10] for md in df_combined['datetime']]) == '01-03')[0][-1]
-    month_day_okay = np.array([False]*len(df_combined))
-    month_day_okay[:idate+1] = True
-    df_combined = df_combined[month_day_okay]
     for station in df_combined.columns[1:]:
         total = np.nansum(df_combined[station])
         winters.at[len(winters)-1, station] = total
