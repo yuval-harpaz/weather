@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>Winter Rainfall Medians Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="logo.jpg">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+  <!-- Common map styles -->
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .bar-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .bar-container {
+      width: 5px;
+      height: 150px;
+      background-color: rgba(200, 200, 200, 0.3);
+      border: 1px solid #666;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      position: relative;
+    }
+    .bar-fill {
+      width: 100%;
+      transition: height 0.3s ease;
+    }
+    .median-line {
+      position: absolute;
+      bottom: 75px;
+      left: -5px;
+      width: 15px;
+      height: 2px;
+      background-color: #000;
+      z-index: 10;
+    }
+    .bar-label {
+      font-size: 10px;
+      font-weight: bold;
+      margin-top: 2px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .tooltip-content {
+      text-align: right;
+      direction: rtl;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .tooltip-content strong {
+      font-size: 14px;
+    }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+    .loading-overlay.hidden {
+      display: none;
+    }
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .loading-text {
+      margin-top: 20px;
+      font-size: 18px;
+      color: #333;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+<div id="loading-overlay" class="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">טוען נתונים...</div>
+</div>
+<div id="floating-title">
+  <h1>גשם מצטבר בחורף הנוכחי בהשוואה לחציון של 10 שנים</h1>
+  <div class="data-source">
+    <span>נתונים מ</span>
+    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+      <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo">
+    </a>
+  </div>
+</div>
+<div id="map"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<script>
+// Initialize map centered on Israel
+const map = L.map('map').setView([31.5, 35.0], 8);
+
+// Tile layer
+L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
+  attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
+}).addTo(map);
+
+// Parse location string from CSV
+function parseLocation(locStr) {
+  try {
+    const latMatch = locStr.match(/latitude['"]*:\s*([\d.]+)/);
+    const lngMatch = locStr.match(/longitude['"]*:\s*([\d.]+)/);
+    if (latMatch && lngMatch) {
+      return {
+        lat: parseFloat(latMatch[1]),
+        lng: parseFloat(lngMatch[1])
+      };
+    }
+  } catch (e) {
+    console.error('Error parsing location:', locStr, e);
+  }
+  return null;
+}
+
+// Calculate median
+function calculateMedian(values) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+}
+
+// Calculate winter rainfall (Sep 1 to Sep 1 next year)
+function calculateWinterRainfall(data, stationName) {
+  const winters = {};
+  
+  data.forEach(row => {
+    if (!row.datetime) return;
+    
+    const date = new Date(row.datetime);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // 1-12
+    
+    // Determine winter year (Sep 1 YYYY to Aug 31 YYYY+1 is winter YYYY-YYYY+1)
+    let winterYear;
+    if (month >= 9) {
+      winterYear = `${year}-${year + 1}`;
+    } else {
+      winterYear = `${year - 1}-${year}`;
+    }
+    
+    const rainfall = parseFloat(row[stationName]);
+    if (!isNaN(rainfall) && rainfall > 0) {
+      if (!winters[winterYear]) {
+        winters[winterYear] = 0;
+      }
+      winters[winterYear] += rainfall;
+    }
+  });
+  
+  return winters;
+}
+
+// Create bar marker
+function createBarMarker(lat, lng, stationName, currentAmount, median10y, percentage, currentWinter) {
+  // Median height represents 100%
+  const medianHeight = 75; // pixels - represents 100%
+  let actualHeight;
+  let containerHeight;
+  let medianLinePosition;
+  
+  // Scale bar height proportionally to percentage
+  actualHeight = (percentage / 100) * medianHeight;
+  // Cap at max height
+  actualHeight = Math.min(actualHeight, 150);
+  
+  // Container height varies based on percentage
+  if (percentage < 100) {
+    // Below median: container ends at median line, leaving empty space above colored part
+    containerHeight = medianHeight;
+    medianLinePosition = 'top: -2px;'; // Line at top of container (adjusted slightly up)
+  } else {
+    // Above median: container matches bar height, no empty space
+    containerHeight = actualHeight;
+    medianLinePosition = `bottom: ${medianHeight + 2}px;`; // Line at 77px from bottom (adjusted slightly up)
+  }
+  
+  // Color based on percentage
+  let color;
+  if (percentage < 50) {
+    color = '#e74c3c'; // Red - very low
+  } else if (percentage < 75) {
+    color = '#f39c12'; // Orange - low
+  } else if (percentage < 100) {
+    color = '#f1c40f'; // Yellow - below median
+  } else if (percentage < 125) {
+    color = '#2ecc71'; // Green - above median
+  } else {
+    color = '#3498db'; // Blue - high
+  }
+  
+  const icon = L.divIcon({
+    className: 'bar-marker',
+    html: `
+      <div class="bar-container" style="height: ${containerHeight}px;">
+        <div class="median-line" style="${medianLinePosition}"></div>
+        <div class="bar-fill" style="height: ${actualHeight}px; background-color: ${color};"></div>
+      </div>
+      <div class="bar-label">${Math.round(percentage)}%</div>
+    `,
+    iconSize: [5, containerHeight + 10],
+    iconAnchor: [2.5, containerHeight + 10]
+  });
+  
+  const tooltipContent = `
+    <div class="tooltip-content">
+      <strong>${stationName}</strong><br>
+      <strong>חורף נוכחי (${currentWinter}):</strong> ${currentAmount.toFixed(1)} מ"מ<br>
+      <strong>חציון 10 שנים:</strong> ${median10y.toFixed(1)} מ"מ<br>
+      <strong>אחוז מהחציון:</strong> ${percentage.toFixed(1)}%
+    </div>
+  `;
+  
+  const marker = L.marker([lat, lng], { icon: icon }).addTo(map);
+  marker.bindTooltip(tooltipContent, {
+    direction: 'left',
+    offset: [190, -20],
+    opacity: 0.9
+  });
+  
+  return marker;
+}
+
+// Load all rain data files
+async function loadAllRainData() {
+  // Calculate current winter and required years dynamically
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1; // 1-12
+  
+  // Determine current winter year
+  let currentWinterStartYear;
+  if (currentMonth >= 9) {
+    currentWinterStartYear = currentYear;
+  } else {
+    currentWinterStartYear = currentYear - 1;
+  }
+  
+  // Need data from 11 years back to cover 10 previous winters + current winter
+  const startYear = currentWinterStartYear - 10;
+  const endYear = currentWinterStartYear + 1;
+  const allData = [];
+  
+  console.log('Loading rain data...');
+  
+  for (let year = startYear; year <= endYear; year++) {
+    try {
+      const url = `https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/rain_${year}.csv`;
+      const response = await fetch(url);
+      const csvText = await response.text();
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      allData.push(...parsed.data);
+      console.log(`Loaded ${year}`);
+    } catch (error) {
+      console.error(`Error loading ${year}:`, error);
+    }
+  }
+  
+  console.log(`Total records loaded: ${allData.length}`);
+  return allData;
+}
+
+// Main execution
+Promise.all([
+  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/ims_stations.csv').then(r => r.text()),
+  loadAllRainData()
+]).then(([stationsCsv, rainData]) => {
+  const stationsData = Papa.parse(stationsCsv, { header: true, skipEmptyLines: true }).data;
+  
+  // Get all unique station names from rain data
+  const stationNames = new Set();
+  if (rainData.length > 0) {
+    Object.keys(rainData[0]).forEach(key => {
+      if (key !== 'datetime') {
+        stationNames.add(key);
+      }
+    });
+  }
+  
+  console.log(`Found ${stationNames.size} stations in rain data`);
+  
+  // Find latest datetime in the data
+  let latestDatetime = null;
+  rainData.forEach(row => {
+    if (row.datetime) {
+      const date = new Date(row.datetime);
+      if (!latestDatetime || date > latestDatetime) {
+        latestDatetime = date;
+      }
+    }
+  });
+  
+  // Update the floating title with latest update time
+  if (latestDatetime) {
+    const formattedDate = latestDatetime.toLocaleDateString('he-IL', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit'
+    });
+    const dataSourceDiv = document.querySelector('.data-source');
+    if (dataSourceDiv) {
+      dataSourceDiv.innerHTML += `<br><span style="font-size: 0.85em;">עודכן לאחרונה: ${formattedDate}</span>`;
+    }
+  }
+  
+  // Create a map of stations with their locations
+  const stationLocations = {};
+  stationsData.forEach(row => {
+    const location = parseLocation(row.location);
+    if (location && row.name) {
+      stationLocations[row.name] = {
+        lat: location.lat,
+        lng: location.lng,
+        active: row.active === 'True'
+      };
+    }
+  });
+  
+  // Calculate current winter and required winters dynamically
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  
+  let currentWinterStartYear;
+  if (currentMonth >= 9) {
+    currentWinterStartYear = currentYear;
+  } else {
+    currentWinterStartYear = currentYear - 1;
+  }
+  
+  const currentWinter = `${currentWinterStartYear}-${currentWinterStartYear + 1}`;
+  
+  // Generate array of 10 previous winters
+  const requiredWinters = [];
+  for (let i = 10; i >= 1; i--) {
+    const winterStart = currentWinterStartYear - i;
+    requiredWinters.push(`${winterStart}-${winterStart + 1}`);
+  }
+  
+  const medianYearRange = `${currentWinterStartYear - 10}-${currentWinterStartYear}`;
+  
+  let validStations = 0;
+  
+  // For each station with rain data and location
+  stationNames.forEach(stationName => {
+    if (!stationLocations[stationName]) {
+      return; // Skip stations without location data
+    }
+    
+    const winterData = calculateWinterRainfall(rainData, stationName);
+    
+    // Check if station has all required winters
+    const hasAllWinters = requiredWinters.every(winter => winter in winterData);
+    const hasCurrentWinter = currentWinter in winterData;
+    
+    if (!hasAllWinters || !hasCurrentWinter) {
+      return; // Skip stations without complete data
+    }
+    
+    // Calculate median of previous 10 winters
+    const previous10Values = requiredWinters.map(winter => winterData[winter]);
+    const median10y = calculateMedian(previous10Values);
+    
+    if (median10y === 0) {
+      return; // Skip if median is zero
+    }
+    
+    const currentAmount = winterData[currentWinter];
+    const percentage = (currentAmount / median10y) * 100;
+    
+    const location = stationLocations[stationName];
+    
+    createBarMarker(
+      location.lat,
+      location.lng,
+      stationName,
+      currentAmount,
+      median10y,
+      percentage,
+      currentWinter
+    );
+    
+    validStations++;
+  });
+  
+  console.log(`Added ${validStations} stations to map`);
+  console.log(`Current winter: ${currentWinter}`);
+  console.log(`Median year range: ${medianYearRange}`);
+  
+  // Hide loading overlay
+  const loadingOverlay = document.getElementById('loading-overlay');
+  if (loadingOverlay) {
+    loadingOverlay.classList.add('hidden');
+  }
+  
+  // Add legend
+  const legend = L.control({ position: 'topright' });
+  legend.onAdd = function(map) {
+    const div = L.DomUtil.create('div', 'legend');
+    div.innerHTML = `
+      <div dir="rtl" style="text-align: right;">
+        <strong>אחוז מהחציון</strong><br>
+        <div style="margin: 10px 0; font-size: 0.9em;">
+          <div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 15px; height: 15px; background-color: #e74c3c; margin-left: 5px;"></span>
+            0-50%
+          </div>
+          <div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 15px; height: 15px; background-color: #f39c12; margin-left: 5px;"></span>
+            50-75%
+          </div>
+          <div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 15px; height: 15px; background-color: #f1c40f; margin-left: 5px;"></span>
+            75-100%
+          </div>
+          <div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 15px; height: 15px; background-color: #2ecc71; margin-left: 5px;"></span>
+            100-125% (מעל החציון)
+          </div>
+          <div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 15px; height: 15px; background-color: #3498db; margin-left: 5px;"></span>
+            + 125% (הרבה מעל החציון)
+          </div>
+        </div>
+        <p style="font-size: 0.85em; margin: 10px 0 0 0;">
+          חציון מבוסס על 10 החורפים הקודמים<br>
+          (${medianYearRange})
+        </p>
+      </div>
+    `;
+    return div;
+  };
+  legend.addTo(map);
+})
+.catch(error => {
+  console.error('Error loading data:', error);
+});
+
+</script>
+
+</body>
+</html>
