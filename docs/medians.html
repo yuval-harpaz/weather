@@ -238,10 +238,39 @@
     // Main execution
     Promise.all([
       fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/ims_stations.csv').then(r => r.text()),
-      fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/sum_rain_sep_to_aug.csv').then(r => r.text())
-    ]).then(([stationsCsv, wintersCsv]) => {
+      fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/sum_rain_sep_to_aug.csv').then(r => r.text()),
+      fetch(`https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/rain_${new Date().getFullYear()}.csv`).then(r => r.text()).catch(err => {
+        // If current year file doesn't exist yet, try previous year
+        console.warn('Current year rain file not found, trying previous year');
+        return fetch(`https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/rain_${new Date().getFullYear() - 1}.csv`).then(r => r.text());
+      })
+    ]).then(([stationsCsv, wintersCsv, currentRainCsv]) => {
       const stationsData = Papa.parse(stationsCsv, { header: true, skipEmptyLines: true }).data;
       const wintersData = Papa.parse(wintersCsv, { header: true, skipEmptyLines: true }).data;
+      const currentRainData = Papa.parse(currentRainCsv, { header: true, skipEmptyLines: true }).data;
+
+      // Find latest datetime in the current rain data
+      let latestDatetime = null;
+      currentRainData.forEach(row => {
+        if (row.datetime) {
+          const date = new Date(row.datetime);
+          if (!latestDatetime || date > latestDatetime) {
+            latestDatetime = date;
+          }
+        }
+      });
+
+      if (latestDatetime) {
+        const formattedDate = latestDatetime.toLocaleDateString('he-IL', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const dataSourceDiv = document.querySelector('.data-source');
+        if (dataSourceDiv) {
+          dataSourceDiv.innerHTML += `<br><span style="font-size: 0.85em;">עודכן לאחרונה: ${formattedDate}</span>`;
+        }
+      }
 
       console.log(`Loaded ${wintersData.length} winters of data`);
 
