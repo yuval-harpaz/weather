@@ -86,6 +86,5 @@ winters.to_csv('data/sum_rain_sep_to_aug.csv', index=False)
 round_data('data/sum_rain_sep_to_aug.csv')
 '''TODO: 
 - try complete past data
-- make winter by winter table, update web page
 - collect min max temp
 '''

@@ -1,15 +1,18 @@
-# import os
+import os
+import sys
+sys.path.append(os.environ['HOME']+'/weather/code')
 # import pandas as pd
 from weather import rain_1h, round_data
 import pandas as pd
 import numpy as np
 from glob import glob
-
-for year in range(1992, 1980, -1):
+# get all the data
+years = [1947]
+for year in years:
     y = str(year)
     df_rain = rain_1h(from_date=f'{y}-01-01', to_date=f'{y}-12-31')
 
-
+# sum winters
 df_sta = pd.read_csv('data/ims_stations.csv')
 files = sorted(glob('data/rain_*.csv'))
 years = [int(f.split('_')[1].split('.')[0]) for f in files]
@@ -35,3 +38,6 @@ for year in years:
     print(year)
 winters.to_csv('data/sum_rain_sep_to_aug.csv', index=False)
 round_data('data/sum_rain_sep_to_aug.csv')
+
+
+

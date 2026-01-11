@@ -49,3 +49,19 @@ for year in range(2015, 2027):
     df_prev = df
 
 print(winters[-1]/np.median(winters[:-1]))
+
+
+# check Negev 2015-2025
+df_stations = pd.read_csv('data/ims_stations.csv')
+df_stations = df_stations[df_stations['regionId'] == 12]
+fall = np.zeros((10, 4))
+for iyear, year in enumerate(range(2015, 2025)):
+    df = pd.read_csv(f'data/rain_{year}.csv')
+    #filter stations
+    keep_columns = [True] + [s in df_stations['name'].tolist() for s in df.columns[1:]]
+    df = df.iloc[:, keep_columns]
+    for imonth, month in enumerate(range(9, 13)):
+        ismonth = np.array([md[5:7] for md in df['datetime']]) == f'{month:02d}'
+        df_month = df[ismonth]
+        fall[iyear, imonth] = np.nansum(df_month[station])
+
