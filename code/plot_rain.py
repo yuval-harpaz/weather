@@ -21,6 +21,7 @@ month_names = {
 }
 
 regions = df['Region'].unique()
+regions = regions[[6,4,1,0,8,2,5,7,3]]
 n_regions = len(regions)
 cols = 3
 rows = (n_regions + cols - 1) // cols
