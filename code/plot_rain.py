@@ -7,14 +7,10 @@ import numpy as np
 df = pd.read_csv('data/regional_rain_per_month.csv')
 
 # Define winter periods
-current_winter = '2025-2026'
 # Last 10 winters before current
 winters = sorted(df['Winter'].unique())
-if current_winter in winters:
-    idx = winters.index(current_winter)
-    hist_winters = winters[max(0, idx-10):idx]
-else:
-    hist_winters = winters[-10:]
+current_winter = winters[-1]
+hist_winters = winters[-11:-1]
 
 # Define month order (Sept to Aug)
 month_order = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8]
