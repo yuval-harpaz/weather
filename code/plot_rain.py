@@ -32,7 +32,7 @@ fig = make_subplots(
     vertical_spacing=0.1,
     horizontal_spacing=0.08
 )
-debug = False
+debug = True
 for iregion, region in enumerate(regions):
     if debug:
         iregion = 7
@@ -59,6 +59,31 @@ for iregion, region in enumerate(regions):
     med_cum_rain = np.median(cum_rain, axis=0)
     min_cum_rain = cum_rain[np.argmin(cum_rain[:, -1]), :]
     max_cum_rain = cum_rain[np.argmax(cum_rain[:, -1]), :]
+    # 1. Historical Range and Median
+    fig.add_trace(
+        go.Scatter(
+            x=[month_names[m] for m in month_order],
+            y=max_cum_rain,
+            mode='lines',
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo='skip'
+        ),
+        row=row, col=col
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[month_names[m] for m in month_order],
+            y=min_cum_rain,
+            name='10-Year Range',
+            mode='lines',
+            line=dict(width=0),
+            fill='tonexty',
+            fillcolor='rgba(200, 200, 200, 0.3)',
+            showlegend=(iregion == 0)
+        ),
+        row=row, col=col
+    )
     fig.add_trace(
         go.Scatter(
             x=[month_names[m] for m in month_order],
