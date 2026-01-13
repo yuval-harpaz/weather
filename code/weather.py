@@ -187,7 +187,11 @@ def query_rain(station='HAFEZ HAYYIM', from_date='2025-10-07', to_date='2025-10-
         url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/{channel}?from={from_date.replace("-","/")}&to={to_date.replace("-","/")}'
     data = None
     for itry in range(10):
-        response = requests.request("GET", url, headers=headers)
+        try:
+            response = requests.request("GET", url, headers=headers)
+        except:
+            print(f'failed to get data from {url}')
+            continue
         txt = response.text.encode('utf8')
         if len(txt) == 0 or 'error.png' in str(txt):
             time.sleep(0.1)
@@ -359,6 +363,20 @@ def round_data(file):
         print('Sums do not match, file not overwritten')
         os.remove('tmp.csv')
 
+def smooth(vector, window=24*6, method='conv'):
+    offset =np.ceil(window/2) - 1
+    vector[np.isnan(vector)] = 0
+    if method == 'conv':
+        smoothed = np.convolve(vector, np.ones(window)/window, mode='same')
+    elif method == 'sum':
+        smoothed = vector.copy()
+        for ii in range(int(offset), len(vector) - int(window-offset)):
+            smoothed[ii] = np.sum(vector[ii-int(offset):ii+int(offset)+1])
+    else:
+        smoothed = vector.copy()
+        for ii in range(offset, len(vector) - (window-offset)):
+            smoothed[ii] = np.mean(vector[ii-offset:ii+offset+1])
+    return smoothed
 
 if __name__ == '__main__':
     # update_stations()
