@@ -6,7 +6,7 @@ sys.path.append(os.environ['HOME']+'/weather/code')
 from weather import *
 import numpy as np
 from glob import glob
-
+data = rain_1h(stations=['JERUSALEM CENTRE_1m'], from_date='2026-01-12', to_date='2026-01-14', save_csv=True)
 df_active = pd.read_csv('data/ims_activity.csv')
 jers = df_active['name'][df_active['name'].str.contains('Jerusalem'.upper())].values
 start = []
