@@ -253,6 +253,10 @@ def rain_1h(stations=None, from_date='2025-10-07', to_date='2025-10-10', save_cs
                 opcsv = f'data/rain_{from_date}_to_{to_date}.csv'
             else:
                 opcsv = ''
+        elif type(save_csv) == str:
+            opcsv = save_csv
+        else:
+            opcsv = ''
     df_activity = pd.read_csv('data/ims_activity.csv')
     hours = hour_vector(from_date, to_date)
     # if hours extend beyond now, limit to now
