@@ -195,10 +195,13 @@ def query_rain(station='HAFEZ HAYYIM', from_date='2025-10-07', to_date='2025-10-
         txt = response.text.encode('utf8')
         if len(txt) == 0 or 'error.png' in str(txt):
             time.sleep(0.1)
-        else:                
-            data = json.loads(txt)
-            data = data['data']
-            break
+        else:
+            if b'Rain' in txt:
+                data = json.loads(txt)
+                data = data['data']
+                break
+            else:
+                print(f'strangest txt, no Rain and no error.png: {txt}')
     return data
 
 def hour_vector(from_date, to_date):
@@ -244,7 +247,15 @@ def rain_1h(stations=None, from_date='2025-10-07', to_date='2025-10-10', save_cs
     if from_date[5:] == '01-01' and to_date[5:] == '12-31':
         yearly = True
         year = from_date[:4]
-        opcsv = f'data/rain_{year}.csv'
+        if type(save_csv) == bool:
+            if save_csv:
+                opcsv = f'data/rain_{year}.csv'
+            else:
+                opcsv = ''
+        elif type(save_csv) == str:
+            opcsv = save_csv
+        else:
+            opcsv = ''
     else:
         yearly = False
         year = None

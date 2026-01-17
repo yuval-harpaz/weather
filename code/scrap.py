@@ -6,7 +6,8 @@ sys.path.append(os.environ['HOME']+'/weather/code')
 from weather import *
 import numpy as np
 from glob import glob
-data = rain_1h(stations=['JERUSALEM GIVAT RAM', 'JERUSALEM CENTRE', 'JERUSALEM GIVAT RAM_1m', 'JERUSALEM CENTRE_1m'], from_date='2025-09-01', to_date='2026-01-14', save_csv='~/Documents/jlm.csv')
+data = rain_1h(stations=['JERUSALEM GIVAT RAM', 'JERUSALEM CENTRE', 'JERUSALEM GIVAT RAM_1m', 'JERUSALEM CENTRE_1m'], from_date='2025-09-01', to_date='2026-01-16', save_csv='~/Documents/jlm.csv')
+print(np.nansum(data.values[:, 1:], axis=0))
 
 # df_active = pd.read_csv('data/ims_activity.csv')
 # jers = df_active['name'][df_active['name'].str.contains('Jerusalem'.upper())].values
