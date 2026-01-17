@@ -1,8 +1,8 @@
 name: Rain Data Update
 on:
   schedule:
-    # Runs at 03:00, 09:00, 15:00, 21:00 UTC (every 6 hours starting from 1:00 AM)
-    - cron: '0 3,9,15,21 * * *'
+    # Runs at 23:00 UTC = 1:00 AM Israel time (winter, UTC+2)
+    - cron: '0 23 * * *'
   workflow_dispatch:  # Allows manual triggering from the Actions tab
 jobs:
   update-rain-data:
