@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from glob import glob
 # get all the data
-years = [1947]
+years = [2025]
 for year in years:
     y = str(year)
     df_rain = rain_1h(from_date=f'{y}-01-01', to_date=f'{y}-12-31')

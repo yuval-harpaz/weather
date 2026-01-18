@@ -378,6 +378,174 @@ def round_data(file):
         print('Sums do not match, file not overwritten')
         os.remove('tmp.csv')
 
+
+def query_temp(station='HAFEZ HAYYIM', from_date='2025-10-07', to_date='2025-10-10', monitor='TDmin'):
+    """
+    Queries temperature data from IMS API for a specific station and date range.
+    
+    Inputs:
+        station (str): Station name (e.g., 'HAFEZ HAYYIM'). Default is 'HAFEZ HAYYIM'.
+        from_date (str): Start date in 'YYYY-MM-DD' format. Default is '2025-10-07'.
+        to_date (str): End date in 'YYYY-MM-DD' format. Default is '2025-10-10'.
+        monitor (str): Monitor type ('TDmin' or 'TDmax'). Default is 'TDmin'.
+    
+    Outputs:
+        list or None: List of dictionaries containing temperature data from API, or None if station 
+                     doesn't have the specified monitor or query fails.
+    """
+    stationid = df_sta['stationId'].values[df_sta['name'] == station][0]
+    monitors = df_sta['monitors'].values[df_sta['name'] == station][0]
+    if not f"'{monitor}'" in monitors:
+        # print(f'station {station} has no {monitor} monitor')
+        return None
+    imonitor = monitors.index(f"'{monitor}'")
+    tmp = monitors[:imonitor]
+    channel = int(tmp[::-1][tmp[::-1].index(","):tmp[::-1].index(":'dI")][1:].strip()[::-1])
+    url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/{channel}?from={from_date.replace("-","/")}&to={to_date.replace("-","/")}'
+    data = None
+    for itry in range(10):
+        try:
+            response = requests.request("GET", url, headers=headers)
+        except:
+            print(f'failed to get data from {url}')
+            continue
+        txt = response.text.encode('utf8')
+        if len(txt) == 0 or 'error.png' in str(txt):
+            time.sleep(0.1)
+        else:
+            if monitor.encode() in txt:
+                data = json.loads(txt)
+                data = data['data']
+                break
+    return data
+
+
+def temp_1h(monitor='TDmin', stations=None, from_date='2025-01-01', to_date='2025-12-31', save_csv=True):
+    """
+    Collects hourly temperature data for specified stations and date range.
+    
+    Inputs:
+        monitor (str): Temperature monitor type ('TDmin' or 'TDmax'). Default is 'TDmin'.
+        stations (list or None): List of station names to query. If None, queries all stations.
+        from_date (str): Start date in 'YYYY-MM-DD' format. Default is '2025-01-01'.
+        to_date (str): End date in 'YYYY-MM-DD' format. Default is '2025-12-31'.
+        save_csv (bool or str): If True, saves to default CSV path; if string, uses as custom path;
+                               if False, doesn't save. Default is True.
+    
+    Outputs:
+        pandas.DataFrame: DataFrame with 'datetime' column and one column per station containing 
+                         hourly temperature values. Saves to CSV file in data/ directory.
+    """
+    monitor_prefix = 'temp_min' if monitor == 'TDmin' else 'temp_max'
+    
+    if from_date[5:] == '01-01' and to_date[5:] == '12-31':
+        yearly = True
+        year = from_date[:4]
+        if type(save_csv) == bool:
+            if save_csv:
+                opcsv = f'data/{monitor_prefix}_{year}.csv'
+            else:
+                opcsv = ''
+        elif type(save_csv) == str:
+            opcsv = save_csv
+        else:
+            opcsv = ''
+    else:
+        yearly = False
+        year = None
+        if type(save_csv) == bool:
+            if save_csv:
+                opcsv = f'data/{monitor_prefix}_{from_date}_to_{to_date}.csv'
+            else:
+                opcsv = ''
+        elif type(save_csv) == str:
+            opcsv = save_csv
+        else:
+            opcsv = ''
+    
+    df_activity = pd.read_csv('data/ims_activity.csv')
+    hours = hour_vector(from_date, to_date)
+    # if hours extend beyond now, limit to now
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    if hours[-1] > now_str:
+        hours = [h for h in hours if h <= now_str]
+    if stations is None:
+        stations = df_sta['name'].values
+    
+    if os.path.exists(opcsv):
+        df_temp = pd.read_csv(opcsv)
+    else:
+        df_temp = pd.DataFrame(columns=['datetime'])
+        df_temp['datetime'] = hours
+        if save_csv:
+            df_temp.to_csv(opcsv, index=False)
+    
+    count = 0
+    for station in stations:
+        count += 1
+        # Skip _1m stations for temperature
+        if '_1m' in station:
+            continue
+        t1 = time.time()
+        if save_csv:
+            df_temp = pd.read_csv(opcsv)
+        
+        if station in df_temp.columns:
+            msg = f'{station} already in {monitor} data'
+            print(f'\r{msg:<80}', end='', flush=True)
+            continue
+        
+        # check if station has the temperature monitor
+        monitors_str = df_sta['monitors'].values[df_sta['name'] == station][0]
+        if f"'{monitor}'" not in monitors_str:
+            continue
+        
+        earliest = df_activity['earliest'].values[df_activity['name'] == station][0]
+        latest = df_activity['latest'].values[df_activity['name'] == station][0]
+        if from_date < '2026':
+            if from_date > latest or to_date < earliest:
+                continue
+        
+        data = query_temp(station=station, from_date=from_date, to_date=to_date, monitor=monitor)
+        if data is None:
+            continue
+        
+        # Filter valid data
+        data = [d for d in data if d['channels'][0]['valid'] == True and d['channels'][0]['status'] == 1]
+        if len(data) == 0:
+            continue
+        
+        df_temp[station] = np.nan
+        for idata in range(len(data)):
+            date_time = data[idata]['datetime'][:16].replace('T', ' ')
+            date_time = date_time[:-3]+':00'  # round to hour
+            row_idx = np.where(df_temp['datetime'].values == date_time)[0]
+            if len(row_idx) == 0:
+                continue
+            row = row_idx[0]
+            value = np.round(data[idata]['channels'][0]['value'], 1)
+            # For TDmin keep minimum, for TDmax keep maximum
+            current = df_temp.at[row, station]
+            if np.isnan(current):
+                df_temp.at[row, station] = value
+            elif monitor == 'TDmin' and value < current:
+                df_temp.at[row, station] = value
+            elif monitor == 'TDmax' and value > current:
+                df_temp.at[row, station] = value
+        
+        t2 = time.time()
+        if yearly:
+            msg = f'updated {from_date[:4]} {monitor} for {station} {t2 - t1:.2f}s ({count}/{len(stations)})'
+        else:
+            msg = f'updated {monitor} for {station} {t2 - t1:.2f}s ({count}/{len(stations)})'
+        print(f'\r{msg:<80}', end='', flush=True)
+        if save_csv:
+            df_temp.to_csv(opcsv, index=False)
+    
+    print()  # Final newline after loop completes
+    return df_temp
+
+
 def smooth(vector, window=24*6, method='conv'):
     offset =np.ceil(window/2) - 1
     vector[np.isnan(vector)] = 0
