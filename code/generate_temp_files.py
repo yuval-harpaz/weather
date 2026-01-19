@@ -11,12 +11,12 @@ from glob import glob
 years = range(2015, 2027)
 for year in years:
     y = str(year)
-    if not os.path.isfile(f'data/temp_min_{y}.csv'):
-        print(f"Collecting TDmin for {year}...")
-        df_min = temp_1h(monitor='TDmin', from_date=f'{y}-01-01', to_date=f'{y}-12-31')
-    if not os.path.isfile(f'data/temp_max_{y}.csv'):
-        print(f"Collecting TDmax for {year}...")
-        df_max = temp_1h(monitor='TDmax', from_date=f'{y}-01-01', to_date=f'{y}-12-31')
+    # if not os.path.isfile(f'data/temp_min_{y}.csv'):
+    print(f"Collecting TDmin for {year}...")
+    df_min = temp_1h(monitor='TDmin', from_date=f'{y}-01-01', to_date=f'{y}-12-31')
+    # if not os.path.isfile(f'data/temp_max_{y}.csv'):
+    print(f"Collecting TDmax for {year}...")
+    df_max = temp_1h(monitor='TDmax', from_date=f'{y}-01-01', to_date=f'{y}-12-31')
 
 # Sum TDmin for winters (Sept-Aug, like rain)
 print("\nSummarizing TDmin winters (Sept-Aug)...")
@@ -37,15 +37,15 @@ for year in years:
     df_combined = pd.concat([df1, df2])
     for station in df_combined.columns[1:]:
         # Use mean for temperature instead of sum
-        mean_val = np.nanmean(df_combined[station])
-        winters_min.at[row, station] = mean_val
+        min_val = np.nanmin(df_combined[station])
+        winters_min.at[row, station] = min_val
     df_prev = df
     print(f"Processed TDmin winter {year-1}-{year}")
 
 if len(winters_min) > 0:
-    winters_min.to_csv('data/temp_min_sep_to_aug.csv', index=False)
-    round_data('data/temp_min_sep_to_aug.csv')
-    print("Saved temp_min_sep_to_aug.csv")
+    winters_min.to_csv('data/min_temp_sep_to_aug.csv', index=False)
+    round_data('data/min_temp_sep_to_aug.csv')
+    print("Saved min_temp_sep_to_aug.csv")
 
 # Sum TDmax for summer cycles (March-Feb)
 print("\nSummarizing TDmax summers (March-Feb)...")
@@ -68,14 +68,14 @@ for year in years:
     df_combined = pd.concat([df1, df2])
     for station in df_combined.columns[1:]:
         # Use mean for temperature
-        mean_val = np.nanmean(df_combined[station])
-        summers_max.at[row, station] = mean_val
+        max_val = np.nanmax(df_combined[station])
+        summers_max.at[row, station] = max_val
     df_prev = df
     print(f"Processed TDmax summer {year-1}-{year}")
 
 if len(summers_max) > 0:
-    summers_max.to_csv('data/temp_max_mar_to_feb.csv', index=False)
-    round_data('data/temp_max_mar_to_feb.csv')
-    print("Saved temp_max_mar_to_feb.csv")
+    summers_max.to_csv('data/max_temp_mar_to_feb.csv', index=False)
+    round_data('data/max_temp_mar_to_feb.csv')
+    print("Saved max_temp_mar_to_feb.csv")
 
 print("\nDone!")

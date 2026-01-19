@@ -4,3 +4,4 @@ code/*pycache*
 .vscode
 *csv#
 tmp*
+*output.log
