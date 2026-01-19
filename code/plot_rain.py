@@ -30,8 +30,9 @@ curr_day = now.day
 _, days_in_month = calendar.monthrange(now.year, curr_month)
 month_fraction = curr_day / days_in_month
 
-regions = df['Region'].unique()
-regions = regions[[6,4,1,0,8,2,5,7,3]]
+# regions = df['Region'].unique()
+# regions = regions[[6,4,1,0,8,2,5,7,3]]
+regions = ['מישור חוף צפוני','כרמל וחיפה','גליל וגולן','גוש דן והשרון','יהודה ושומרון','עמקי הצפון','מישור חוף דרומי','נגב','ים המלח והערבה']
 n_regions = len(regions)
 cols = 3
 rows = (n_regions + cols - 1) // cols
