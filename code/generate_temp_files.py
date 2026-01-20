@@ -8,7 +8,7 @@ from glob import glob
 
 # Generate yearly temperature files
 # years = [2025]
-years = range(2015, 2027)
+years = range(2010, 2015)
 for year in years:
     y = str(year)
     # if not os.path.isfile(f'data/temp_min_{y}.csv'):
