@@ -103,24 +103,32 @@ def update_regions():
     if len(df_reg_new) > 0:
         df_reg.to_csv('data/ims_regions.csv', index=False)
 
-def update_activity(new=False):
+def update_activity(new=False, ignore_old=True):
     """
     Updates station activity data with earliest and latest observation times.
     
     Inputs:
         new (bool): If True, creates new activity DataFrame; if False, updates existing
                    data/ims_activity.csv. Default is False.
+        ignore_old (bool): If True, ignores stations that where last active 2 years ago
     
     Outputs:
         None (saves updated data to data/ims_activity.csv)
     """
     if new:
+        if ignore_old:
+            raise Exception('ignore_old=True is not supported for new=True')
         df_activity = pd.DataFrame(columns=['stationId', 'name', 'earliest', 'latest'])
         df_activity['stationId'] = df_sta['stationId']
         df_activity['name'] = df_sta['name']
     else:
         df_activity = pd.read_csv('data/ims_activity.csv')
-    for ista in range(len(df_sta)):
+    if ignore_old:
+        current_year = datetime.now().year
+        iactive = np.where(df_activity['latest'] > f'{current_year-2}')[0]
+    else:
+        iactive = range(len(df_sta))
+    for ista in iactive:
         stationid = df_sta['stationId'].values[ista]
         # check earliest if not empty cell
         if type(df_activity.at[ista, 'earliest']) != str or len(df_activity.at[ista, 'earliest']) == 0:

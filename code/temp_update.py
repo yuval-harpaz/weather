@@ -9,9 +9,9 @@ home = os.environ['HOME']
 sys.path.append(f'{home}/weather/code')
 from weather import temp_1h, update_stations, update_activity, round_data
 
-# Update station metadata
-update_stations()
-update_activity()
+# # Update station metadata
+# update_stations()
+# update_activity()
 
 # Get current date info
 now = datetime.now()
@@ -38,7 +38,7 @@ def update_monitor(monitor_type):
         print(f"Updating {monitor_type} {y} incrementally...")
         df_temp = pd.read_csv(opcsv)
         
-        # Identify stations that should have this monitor and are active
+        # Identify stations that should have this monitor and where active when laast checked
         latest_act = df_act['latest'].max()[:10]
         active_stations = df_act[df_act['latest'] >= latest_act]['name'].tolist()
         
