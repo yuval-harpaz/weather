@@ -6,8 +6,13 @@ sys.path.append(os.environ['HOME']+'/weather/code')
 from weather import *
 import numpy as np
 from glob import glob
+data = query_temp(station='EZUZ', from_date='2016-02-22', to_date='2016-02-22', monitor='TDmin')
+for ii in range(len(data['data'])):
+    value = data['data'][ii]['channels'][0]['value']
+    if value < 0:
+        print(data['data'][ii]['datetime'], 'value: ', value, 'valid: ', data['data'][ii]['channels'][0]['valid'])
+# update_activity(ignore_old=True)
 
-update_activity(ignore_old=True)
 # data = rain_1h(stations=['JERUSALEM GIVAT RAM', 'JERUSALEM CENTRE', 'JERUSALEM GIVAT RAM_1m', 'JERUSALEM CENTRE_1m'], from_date='2025-09-01', to_date='2026-01-19', save_csv='~/Documents/jlm.csv')
 # print(np.nansum(data.values[:, 1:], axis=0))
 # for year in range(2015, 2026):

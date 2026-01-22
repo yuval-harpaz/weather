@@ -114,7 +114,6 @@ def process_temp_data(monitor_type):
     output_df = output_df.sort_values(['Cycle', 'MonthOrder', 'Region']).drop(columns=['MonthOrder'])
     
     output_df.to_csv(output_file, index=False)
-    round_data(output_file)
     print(f"Saved {output_file}")
 
 if __name__ == "__main__":
