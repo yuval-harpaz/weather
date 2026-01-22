@@ -12,12 +12,16 @@
     body {
       font-family: Arial, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
       background-color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     #plot {
       width: 100%;
+      max-width: 1000px;
       height: 100vh;
     }
 
@@ -344,7 +348,8 @@
         layout.updatemenus[0].buttons[0].args = [scale0_900];
         layout.updatemenus[0].buttons[1].args = [autoscale];
 
-        Plotly.newPlot('plot', traces, layout);
+        const config = { responsive: true };
+        Plotly.newPlot('plot', traces, layout, config);
 
       } catch (error) {
         console.error("Error loading or plotting data:", error);
