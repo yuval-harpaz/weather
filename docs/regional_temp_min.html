@@ -182,8 +182,21 @@
                     const currRaw = data.filter(d => d.Region === region && d.Cycle === currentCycle);
                     currRaw.sort((a, b) => monthOrder.indexOf(a.Month) - monthOrder.indexOf(b.Month));
 
-                    const currX = currRaw.map(d => monthOrder.indexOf(d.Month));
-                    const currY = currRaw.map(d => d.Temp);
+                    const currX = [];
+                    const currY = [];
+                    const currText = [];
+
+                    currRaw.forEach((d, index) => {
+                        currX.push(monthOrder.indexOf(d.Month));
+                        currY.push(d.Temp);
+
+                        // Hover Text
+                        let label = monthNames[d.Month];
+                        if (index === currRaw.length - 1 && d.Month === currMonth) {
+                            label = `${monthNames[d.Month]} ${currDay}`;
+                        }
+                        currText.push(label);
+                    });
 
                     if (currRaw.length > 0) {
                         const lastRec = currRaw[currRaw.length - 1];
@@ -235,6 +248,8 @@
                     traces.push({
                         x: currX,
                         y: currY,
+                        text: currText,
+                        hovertemplate: '%{text}<br>%{y:.1f} °C<extra></extra>',
                         name: currentCycle,
                         mode: 'lines',
                         line: { color: 'blue', width: 3 },

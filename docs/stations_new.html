@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>נתוני תחנות</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link rel="icon" href="logo.jpg">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 200px;
+            flex: 1;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        #plot {
+            width: 100%;
+            max-width: 1000px;
+            height: 600px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Select2 RTL support tweaks */
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            direction: rtl;
+            text-align: right;
+        }
+
+        .select2-results__option {
+            direction: rtl;
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="measureSelect">מדד:</label>
+            <select id="measureSelect" style="width: 100%;">
+                <option value="Rain" selected>גשם (Rain)</option>
+                <option value="MinTemp">טמפרטורת מינימום (Min Temp)</option>
+                <option value="MaxTemp">טמפרטורת מקסימום (Max Temp)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="stationSelect">תחנה:</label>
+            <select id="stationSelect" style="width: 100%;">
+                <!-- Populated by JS -->
+            </select>
+        </div>
+    </div>
+
+    <div id="plot"></div>
+
+    <div class="footer">
+        <span>נתונים מ</span>
+        <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
+            style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
+                style="height: 16px; margin-right: 5px;">
+        </a>
+    </div>
+
+    <script>
+        // Config
+        const dataUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/station_monthly.csv';
+        const stationsUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv';
+
+        // State
+        let allData = [];
+        let stationsMeta = [];
+        let currentMeasure = 'Rain';
+        let currentStation = 'JERUSALEM CENTRE';
+
+        const monthNames = {
+            1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+            7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'
+        };
+
+        // Initialize
+        $(document).ready(function () {
+            $('#measureSelect').select2({ minimumResultsForSearch: Infinity });
+            $('#stationSelect').select2();
+
+            // Load Data
+            Promise.all([
+                d3.csv(dataUrl),
+                d3.csv(stationsUrl)
+            ]).then(([data, stations]) => {
+                // Parse numbers
+                data.forEach(d => {
+                    d.Value = +d.Value;
+                    d.Month = +d.Month;
+                });
+
+                allData = data;
+                stationsMeta = stations;
+
+                initStationsList();
+                updatePlot();
+            }).catch(err => {
+                console.error("Error loading data:", err);
+                $('#plot').html('<div style="padding:20px; color:red;">Error loading data. See console for details.</div>');
+            });
+
+            // Event Listeners
+            $('#measureSelect').on('change', function () {
+                currentMeasure = $(this).val();
+                updatePlot();
+            });
+
+            $('#stationSelect').on('change', function () {
+                currentStation = $(this).val();
+                updatePlot();
+            });
+        });
+
+        function initStationsList() {
+            // Get unique stations from data (to ensure they have data)
+            // Or use metadata? Metadata has Hebrew names which is nice.
+            // Let's use metadata but filter by those present in allData? 
+            // Or just list all from metadata.
+
+            // Map english name to hebrew name
+            const stationMap = new Map();
+            stationsMeta.forEach(s => {
+                stationMap.set(s.name.trim(), s.hebrew_name || s.name); // Fallback to english if Hebrew missing
+            });
+
+            // Get list of stations actually in the data
+            const dataStations = [...new Set(allData.map(d => d.Station))].sort();
+
+            const select = $('#stationSelect');
+            select.empty();
+
+            dataStations.forEach(s => {
+                const hebName = stationMap.get(s) || s;
+                const option = new Option(`${hebName} (${s})`, s, false, s === currentStation);
+                select.append(option);
+            });
+
+            // Trigger change to ensure select2 updates selection if valid
+            select.trigger('change');
+        }
+
+        function updatePlot() {
+            if (!allData.length) return;
+
+            // Filter data
+            const measureData = allData.filter(d => d.Measure === currentMeasure && d.Station === currentStation);
+
+            if (measureData.length === 0) {
+                Plotly.newPlot('plot', [], {
+                    title: { text: 'אין נתונים לתחנה/מדד זה' }
+                });
+                return;
+            }
+
+            // Determine Logic based on Measure
+            let monthOrder;
+            if (currentMeasure === 'Rain' || currentMeasure === 'MinTemp') {
+                monthOrder = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8];
+            } else {
+                monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2];
+            }
+
+            // Identify Cycles
+            const cycles = [...new Set(measureData.map(d => d.Cycle))].sort();
+            const currentCycle = cycles[cycles.length - 1];
+            // Last 10 full cycles (excluding current)
+            const histCycles = cycles.slice(Math.max(0, cycles.length - 11), cycles.length - 1);
+
+            // Calculate Median/Stats
+            const stats = [];
+
+            // Helper to get data vector for a cycle aligned to monthOrder
+            function getCycleVector(cycle) {
+                const cData = measureData.filter(d => d.Cycle === cycle);
+                return monthOrder.map(m => {
+                    const rec = cData.find(d => d.Month === m);
+                    return rec ? rec.Value : null;
+                });
+            }
+
+            // Transpose historical data
+            const histVectors = histCycles.map(c => getCycleVector(c));
+
+            // For Rain, we typically want Cumulative for the "Median Year" plot? 
+            // "Display a chart of monthly rain / temp against median year in a similar fashion."
+            // The regional rain plot is cumulative. The regional temp plots are absolute.
+            // Let's stick to that convention: Rain = Cumulative, Temp = Absolute.
+
+            const isCumulative = currentMeasure === 'Rain';
+
+            // Prepare X axis labels
+            const xLabels = monthOrder.map(m => monthNames[m]);
+
+            // Calculate Medians per month (or cumulative step)
+            const medianLine = [];
+            const minLine = []; // For range
+            const maxLine = []; // For range
+
+            if (isCumulative) {
+                // For cumulative, we calculate cumulative for each historical year FIRST, then take median of those curves.
+                const histCum = histVectors.map(vec => {
+                    let sum = 0;
+                    return vec.map(v => {
+                        // Treat null as 0 for sum? Or skip? 
+                        // If data missing in middle of winter, cumulative is hard. Assume 0 or carry forward.
+                        // Imputation: 0 is safest for rain sum.
+                        const val = v === null ? 0 : v;
+                        sum += val;
+                        return sum;
+                    });
+                });
+
+                // Now compute stats on cumulative measures
+                for (let i = 0; i < 12; i++) {
+                    const vals = histCum.map(row => row[i]);
+                    medianLine.push(d3.median(vals));
+                    minLine.push(d3.min(vals));
+                    maxLine.push(d3.max(vals));
+                }
+            } else {
+                // Absolute (Temp)
+                // Just stats on monthly values
+                for (let i = 0; i < 12; i++) {
+                    const vals = histVectors.map(row => row[i]).filter(v => v !== null); // Ignore nulls
+                    if (vals.length) {
+                        medianLine.push(d3.median(vals));
+                        minLine.push(d3.min(vals));
+                        maxLine.push(d3.max(vals));
+                    } else {
+                        medianLine.push(null);
+                        minLine.push(null);
+                        maxLine.push(null);
+                    }
+                }
+            }
+
+            // Current Cycle Data
+            const currRaw = measureData.filter(d => d.Cycle === currentCycle);
+            // Sort by month order
+            currRaw.sort((a, b) => monthOrder.indexOf(a.Month) - monthOrder.indexOf(b.Month));
+
+            let currY = [];
+            let currX = [];
+            let currText = [];
+
+            // Current Date Info for "MMM DD" logic
+            const now = new Date();
+            const currMonthReal = now.getMonth() + 1;
+            const currDayReal = now.getDate();
+            const daysInMonth = new Date(now.getFullYear(), currMonthReal, 0).getDate();
+            const monthFraction = currDayReal / daysInMonth;
+
+            if (isCumulative) {
+                let sum = 0;
+                // We need to iterate monthOrder to respect X axis slots, 
+                // but currRaw might have gaps.
+                // Actually, Plotly lines skip nulls.
+                // We want to map currRaw to the 0..11 x-axis.
+
+                currRaw.forEach((d, idx) => {
+                    const mIdx = monthOrder.indexOf(d.Month);
+                    if (mIdx === -1) return;
+
+                    sum += d.Value;
+
+                    let xVal = mIdx;
+                    // Last point adjustment
+                    let hoverLabel = monthNames[d.Month];
+
+                    // Check if this is the very last available data point AND matches current real time
+                    // (Assuming data is up to date)
+                    if (idx === currRaw.length - 1 && d.Month === currMonthReal) {
+                        xVal = mIdx - 1 + monthFraction; // e.g. Jan is index 4. If current is Jan 15, x is 3.5 roughly? 
+                        // Wait, logic in regional_rain:
+                        // Jan is index 4 (Sept=0, Oct=1, Nov=2, Dec=3, Jan=4).
+                        // If we are in Jan, and have data for Jan, usually monthly aggregated data means "Full Jan Data".
+                        // BUT if we are MID-Jan, and the script ran recently, we have partial Jan data.
+                        // The regional plot logic assumes we are plotting partial current month.
+                        // x adjustment: x = index - 1 + fraction.
+                        // index 4 (Jan). Previous entire month was Dec (3). We are fraction into Jan. So 3 + fraction.
+                        // Correct.
+                        hoverLabel = `${monthNames[d.Month]} ${currDayReal}`;
+                    }
+
+                    currX.push(xVal);
+                    currY.push(sum);
+                    currText.push(hoverLabel);
+                });
+            } else {
+                // Absolute
+                currRaw.forEach((d, idx) => {
+                    const mIdx = monthOrder.indexOf(d.Month);
+                    if (mIdx === -1) return;
+
+                    let xVal = mIdx;
+                    let hoverLabel = monthNames[d.Month];
+
+                    if (idx === currRaw.length - 1 && d.Month === currMonthReal) {
+                        xVal = mIdx - 1 + monthFraction;
+                        hoverLabel = `${monthNames[d.Month]} ${currDayReal}`;
+                    }
+
+                    currX.push(xVal);
+                    currY.push(d.Value);
+                    currText.push(hoverLabel);
+                });
+            }
+
+            // Traces
+            const traces = [];
+
+            // 1. Range (Min/Max 10y)
+            traces.push({
+                x: [...Array(12).keys()],
+                y: maxLine,
+                mode: 'lines',
+                line: { width: 0 },
+                showlegend: false,
+                hoverinfo: 'skip'
+            });
+
+            traces.push({
+                x: [...Array(12).keys()],
+                y: minLine,
+                mode: 'lines',
+                line: { width: 0 },
+                fill: 'tonexty',
+                fillcolor: 'rgba(200, 200, 200, 0.3)',
+                name: 'טווח 10 שנים'
+            });
+
+            // 2. Median 10y
+            traces.push({
+                x: [...Array(12).keys()],
+                y: medianLine,
+                mode: 'lines',
+                line: { color: 'gray', dash: 'dash' },
+                name: 'חציון 10 שנים'
+            });
+
+            // 3. Current
+            traces.push({
+                x: currX,
+                y: currY,
+                mode: 'lines+markers',
+                line: { color: 'blue', width: 3 },
+                name: currentCycle,
+                text: currText,
+                hovertemplate: '%{text}<br>%{y:.1f}<extra></extra>'
+            });
+
+
+            // Layout
+            const layout = {
+                title: {
+                    text: `נתוני ${currentMeasure === 'Rain' ? 'גשם מצטבר' : (currentMeasure === 'MinTemp' ? 'טמפרטורת מינימום' : 'טמפרטורת מקסימום')} - ${currentStation}`,
+                    x: 0.95,
+                    xanchor: 'right'
+                },
+                xaxis: {
+                    tickvals: [...Array(12).keys()],
+                    ticktext: xLabels,
+                    title: 'חודש'
+                },
+                yaxis: {
+                    title: currentMeasure === 'Rain' ? 'מ"מ' : '°C'
+                },
+                dir: 'rtl'
+            };
+
+            const config = { responsive: true };
+            Plotly.newPlot('plot', traces, layout, config);
+        }
+
+    </script>
+</body>
+
+</html>

@@ -196,10 +196,21 @@
 
           const currX = currRaw.map(d => monthOrder.indexOf(d.Month));
           const currY = [];
+          const currText = [];
           let cSum = 0;
-          currRaw.forEach(d => {
+          currRaw.forEach((d, index) => {
             cSum += d.Rain;
             currY.push(cSum);
+
+            // Determine hover text
+            // Default: Month Name (e.g., 'Jan')
+            let label = monthNames[d.Month];
+
+            // If this is the last point and matches the current real-world month, show specific date
+            if (index === currRaw.length - 1 && d.Month === currMonth) {
+              label = `${monthNames[d.Month]} ${currDay}`;
+            }
+            currText.push(label);
           });
 
           // Adjust last point if needed
@@ -255,6 +266,8 @@
           traces.push({
             x: currX,
             y: currY,
+            text: currText,
+            hovertemplate: '%{text}<br>%{y:.1f} mm<extra></extra>',
             name: currentWinter,
             mode: 'lines',
             line: { color: 'blue', width: 3 },
