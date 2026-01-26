@@ -35,7 +35,8 @@ jobs:
         run: |
           python code/temp_update.py
           python code/temp_per_month.py
-          python code/plot_regional_temp.py
+          python code/generate_station_monthly.py
+          # python code/plot_regional_temp.py
       
       - name: Commit and push changes
         run: |

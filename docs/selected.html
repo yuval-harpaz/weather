@@ -50,13 +50,15 @@
             color: #333;
         }
 
-        #plot {
+        #plot,
+        #hourlyPlot {
             width: 100%;
-            max-width: 1000px;
-            height: 600px;
+            max-width: 700px;
+            height: 500px;
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
         }
 
         .footer {
@@ -101,6 +103,7 @@
     </div>
 
     <div id="plot"></div>
+    <div id="hourlyPlot"></div>
 
     <div class="footer">
         <span>נתונים מ</span>
@@ -115,12 +118,16 @@
         // Config
         const dataUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/station_monthly.csv';
         const stationsUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv';
+        const rawDataBase = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
 
         // State
         let allData = [];
         let stationsMeta = [];
         let currentMeasure = 'Rain';
         let currentStation = 'JERUSALEM CENTRE';
+
+        // Cache for raw hourly data: { 'Rain_2024': [rows...], 'MinTemp_2025': ... }
+        let rawDataCache = {};
 
         const monthNames = {
             1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
@@ -147,7 +154,7 @@
                 stationsMeta = stations;
 
                 initStationsList();
-                updatePlot();
+                updatePlot(); // This will trigger updateHourlyPlot too if we chain it
             }).catch(err => {
                 console.error("Error loading data:", err);
                 $('#plot').html('<div style="padding:20px; color:red;">Error loading data. See console for details.</div>');
@@ -166,18 +173,11 @@
         });
 
         function initStationsList() {
-            // Get unique stations from data (to ensure they have data)
-            // Or use metadata? Metadata has Hebrew names which is nice.
-            // Let's use metadata but filter by those present in allData? 
-            // Or just list all from metadata.
-
-            // Map english name to hebrew name
             const stationMap = new Map();
             stationsMeta.forEach(s => {
-                stationMap.set(s.name.trim(), s.hebrew_name || s.name); // Fallback to english if Hebrew missing
+                stationMap.set(s.name.trim(), s.hebrew_name || s.name);
             });
 
-            // Get list of stations actually in the data
             const dataStations = [...new Set(allData.map(d => d.Station))].sort();
 
             const select = $('#stationSelect');
@@ -189,14 +189,16 @@
                 select.append(option);
             });
 
-            // Trigger change to ensure select2 updates selection if valid
             select.trigger('change');
         }
 
         function updatePlot() {
             if (!allData.length) return;
 
-            // Filter data
+            // Trigger Hourly Update
+            updateHourlyPlot();
+
+            // Filter data for Monthly Plot
             const measureData = allData.filter(d => d.Measure === currentMeasure && d.Station === currentStation);
 
             if (measureData.length === 0) {
@@ -235,11 +237,6 @@
             // Transpose historical data
             const histVectors = histCycles.map(c => getCycleVector(c));
 
-            // For Rain, we typically want Cumulative for the "Median Year" plot? 
-            // "Display a chart of monthly rain / temp against median year in a similar fashion."
-            // The regional rain plot is cumulative. The regional temp plots are absolute.
-            // Let's stick to that convention: Rain = Cumulative, Temp = Absolute.
-
             const isCumulative = currentMeasure === 'Rain';
 
             // Prepare X axis labels
@@ -255,9 +252,6 @@
                 const histCum = histVectors.map(vec => {
                     let sum = 0;
                     return vec.map(v => {
-                        // Treat null as 0 for sum? Or skip? 
-                        // If data missing in middle of winter, cumulative is hard. Assume 0 or carry forward.
-                        // Imputation: 0 is safest for rain sum.
                         const val = v === null ? 0 : v;
                         sum += val;
                         return sum;
@@ -273,9 +267,8 @@
                 }
             } else {
                 // Absolute (Temp)
-                // Just stats on monthly values
                 for (let i = 0; i < 12; i++) {
-                    const vals = histVectors.map(row => row[i]).filter(v => v !== null); // Ignore nulls
+                    const vals = histVectors.map(row => row[i]).filter(v => v !== null);
                     if (vals.length) {
                         medianLine.push(d3.median(vals));
                         minLine.push(d3.min(vals));
@@ -290,14 +283,12 @@
 
             // Current Cycle Data
             const currRaw = measureData.filter(d => d.Cycle === currentCycle);
-            // Sort by month order
             currRaw.sort((a, b) => monthOrder.indexOf(a.Month) - monthOrder.indexOf(b.Month));
 
             let currY = [];
             let currX = [];
             let currText = [];
 
-            // Current Date Info for "MMM DD" logic
             const now = new Date();
             const currMonthReal = now.getMonth() + 1;
             const currDayReal = now.getDate();
@@ -306,11 +297,6 @@
 
             if (isCumulative) {
                 let sum = 0;
-                // We need to iterate monthOrder to respect X axis slots, 
-                // but currRaw might have gaps.
-                // Actually, Plotly lines skip nulls.
-                // We want to map currRaw to the 0..11 x-axis.
-
                 currRaw.forEach((d, idx) => {
                     const mIdx = monthOrder.indexOf(d.Month);
                     if (mIdx === -1) return;
@@ -318,21 +304,10 @@
                     sum += d.Value;
 
                     let xVal = mIdx;
-                    // Last point adjustment
                     let hoverLabel = monthNames[d.Month];
 
-                    // Check if this is the very last available data point AND matches current real time
-                    // (Assuming data is up to date)
                     if (idx === currRaw.length - 1 && d.Month === currMonthReal) {
-                        xVal = mIdx - 1 + monthFraction; // e.g. Jan is index 4. If current is Jan 15, x is 3.5 roughly? 
-                        // Wait, logic in regional_rain:
-                        // Jan is index 4 (Sept=0, Oct=1, Nov=2, Dec=3, Jan=4).
-                        // If we are in Jan, and have data for Jan, usually monthly aggregated data means "Full Jan Data".
-                        // BUT if we are MID-Jan, and the script ran recently, we have partial Jan data.
-                        // The regional plot logic assumes we are plotting partial current month.
-                        // x adjustment: x = index - 1 + fraction.
-                        // index 4 (Jan). Previous entire month was Dec (3). We are fraction into Jan. So 3 + fraction.
-                        // Correct.
+                        xVal = mIdx - 1 + monthFraction;
                         hoverLabel = `${monthNames[d.Month]} ${currDayReal}`;
                     }
 
@@ -341,7 +316,6 @@
                     currText.push(hoverLabel);
                 });
             } else {
-                // Absolute
                 currRaw.forEach((d, idx) => {
                     const mIdx = monthOrder.indexOf(d.Month);
                     if (mIdx === -1) return;
@@ -360,10 +334,7 @@
                 });
             }
 
-            // Traces
             const traces = [];
-
-            // 1. Range (Min/Max 10y)
             traces.push({
                 x: [...Array(12).keys()],
                 y: maxLine,
@@ -383,7 +354,6 @@
                 name: 'טווח 10 שנים'
             });
 
-            // 2. Median 10y
             traces.push({
                 x: [...Array(12).keys()],
                 y: medianLine,
@@ -392,7 +362,6 @@
                 name: 'חציון 10 שנים'
             });
 
-            // 3. Current
             traces.push({
                 x: currX,
                 y: currY,
@@ -403,8 +372,6 @@
                 hovertemplate: '%{text}<br>%{y:.1f}<extra></extra>'
             });
 
-
-            // Layout
             const layout = {
                 title: {
                     text: `נתוני ${currentMeasure === 'Rain' ? 'גשם מצטבר' : (currentMeasure === 'MinTemp' ? 'טמפרטורת מינימום' : 'טמפרטורת מקסימום')} - ${currentStation}`,
@@ -424,6 +391,108 @@
 
             const config = { responsive: true };
             Plotly.newPlot('plot', traces, layout, config);
+        }
+
+        async function updateHourlyPlot() {
+            // Determine file prefix based on measure
+            let filePrefix;
+            let valKey = currentStation;
+
+            if (currentMeasure === 'Rain') filePrefix = 'rain';
+            else if (currentMeasure === 'MinTemp') filePrefix = 'temp_min';
+            else if (currentMeasure === 'MaxTemp') filePrefix = 'temp_max';
+            else { // Hourly data not available for other measures
+                Plotly.newPlot('hourlyPlot', [], {
+                    title: { text: 'נתונים שעתיים אינם זמינים עבור מדד זה' }
+                });
+                return;
+            }
+
+            const now = new Date();
+            const currentYear = now.getFullYear();
+
+            // Calculate 31 days ago
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 31);
+
+            const startYear = startDate.getFullYear();
+
+            // Needed years
+            const neededYears = new Set([startYear, currentYear]);
+
+            const promises = [];
+            neededYears.forEach(y => {
+                const key = `${filePrefix}_${y}`;
+                if (!rawDataCache[key]) {
+                    const url = `${rawDataBase}/${key}.csv`;
+                    const p = d3.csv(url).then(data => {
+                        rawDataCache[key] = data;
+                        return data;
+                    }).catch(e => {
+                        console.warn(`Failed to load ${url}`, e);
+                        return [];
+                    });
+                    promises.push(p);
+                } else {
+                    promises.push(Promise.resolve(rawDataCache[key]));
+                }
+            });
+
+            Promise.all(promises).then(() => {
+                // Combine data
+                let combined = [];
+                // Sort keys to ensure chronological order (rough)
+                const keys = Array.from(neededYears).sort().map(y => `${filePrefix}_${y}`);
+                keys.forEach(k => {
+                    if (rawDataCache[k]) combined = combined.concat(rawDataCache[k]);
+                });
+
+                // Filter for Station and Date Range
+                // Parse dates
+                const parseTime = d3.timeParse("%Y-%m-%d %H:%M");
+
+                const filtered = combined.map(d => {
+                    return {
+                        date: parseTime(d.datetime),
+                        val: d[currentStation] ? +d[currentStation] : null
+                    };
+                }).filter(d => d.date && d.val !== null && d.date >= startDate && d.date <= now);
+
+                // Sort just in case
+                filtered.sort((a, b) => a.date - b.date);
+
+                // Render
+                const x = filtered.map(d => d.date);
+                const y = filtered.map(d => d.val);
+
+                const trace = {
+                    x: x,
+                    y: y,
+                    type: currentMeasure === 'Rain' ? 'bar' : 'scatter',
+                    mode: 'lines',
+                    marker: { color: 'blue' },
+                    name: currentStation
+                };
+
+                const layout = {
+                    title: {
+                        text: 'נתונים ל-31 ימים אחרונים (רזולוציה שעתית)',
+                        x: 0.95,
+                        xanchor: 'right'
+                    },
+                    yaxis: { title: currentMeasure === 'Rain' ? 'מ"מ' : '°C' },
+                    xaxis: { title: 'זמן' },
+                    margin: { t: 40, r: 20, l: 40, b: 40 },
+                    dir: 'rtl'
+                };
+
+                Plotly.newPlot('hourlyPlot', [trace], layout, { responsive: true });
+            }).catch(err => {
+                console.error("Error loading hourly data:", err);
+                Plotly.newPlot('hourlyPlot', [], {
+                    title: { text: 'שגיאה בטעינת נתונים שעתיים' }
+                });
+            });
         }
 
     </script>
