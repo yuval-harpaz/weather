@@ -61,6 +61,8 @@ def update_stations():
     """
     url = 'https://api.ims.gov.il/v1/Envista/stations'
     response = requests.request("GET", url, headers=headers)
+    if response.status_code != 200:
+        raise Exception(f'IMS API returned status code {response.status_code}')
     data = json.loads(response.text.encode('utf8'))
     df_sta = pd.DataFrame(data)
     prev = pd.read_csv('data/ims_stations.csv')
