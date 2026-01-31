@@ -1,8 +1,8 @@
 name: Rain Data Update
 on:
   schedule:
-    # Runs at 23:00 UTC = 1:00 AM Israel time (winter, UTC+2)
-    - cron: '0 23 * * *'
+    # Runs at 23:00 UTC = 1:00, 7:00 AM Israel time (winter, UTC+2)
+    - cron: '0 23,5 * * *'
   workflow_dispatch:  # Allows manual triggering from the Actions tab
 jobs:
   update-rain-data:
@@ -29,7 +29,6 @@ jobs:
         run: |
           python code/rain_update.py
           python code/rain_per_month.py
-          python code/plot_rain.py
       - name: Commit and push changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
