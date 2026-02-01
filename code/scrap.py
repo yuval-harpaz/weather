@@ -14,8 +14,11 @@ df1 = pd.read_csv('data/rain_2021.csv')
 df0 = df0[df0['datetime'] >= '2020-09-01']
 df1 = df1[df1['datetime'] < '2021-09-01']
 df = pd.concat([df0, df1])
-
-regions = pd.read_csv('data/ims_regions.csv')
-j_s = regions['stations'][7]
-sta = j_s.split("'name': '")[1:]
-sta = [s[:s.index("'")] for s in sta if "Rain" not in s]
+stations = pd.read_csv('data/ims_stations.csv')
+stations = np.sort(stations[stations['regionId'] == 7]['name'].tolist())
+# winter = pd.DataFrame(columns=[])
+for station in stations:
+    if station not in df.columns:
+        continue
+    print(f"{station}: {np.nansum(df[station])}")
+    

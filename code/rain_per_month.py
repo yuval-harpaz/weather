@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import pandas as pd
 import numpy as np
 from glob import glob
@@ -110,7 +111,9 @@ def compute_month_data(df_winter, m, winter_name):
         if available_stations:
             region_station_sums = monthly_sums[available_stations].fillna(0)
             if not region_station_sums.empty:
-                median_rain = region_station_sums.median()
+                # Compute median only for stations with rain > 0
+                positive_sums = region_station_sums[region_station_sums > 0]
+                median_rain = positive_sums.median() if not positive_sums.empty else 0.0
                 results.append({
                     'Region': region_name,
                     'Winter': winter_name,
@@ -135,103 +138,117 @@ def update_month_in_df(df_existing, new_data, winter, month):
     return df_existing
 
 
-# Current date info
-now = datetime.now()
-current_year = now.year
-current_month = now.month
+def main():
+    parser = argparse.ArgumentParser(description='Update regional rain per month data.')
+    parser.add_argument('-f', '--force', action='store_true', help='Force recomputation even if no new data')
+    args = parser.parse_args()
 
-# Get current and previous month info
-current_winter, curr_m = get_winter_and_month_for_date(current_year, current_month)
+    # Current date info
+    now = datetime.now()
+    current_year = now.year
+    current_month = now.month
 
-# Previous month
-prev_month_idx = target_months.index(current_month) - 1 if current_month in target_months else -1
-if prev_month_idx < 0:
-    # Current is September, previous is August of previous winter
-    prev_winter = f"{current_year-1}-{current_year}"
-    prev_m = 8
-else:
-    prev_m = target_months[prev_month_idx]
-    if prev_m >= 9:
-        prev_winter = current_winter
+    # Get current and previous month info
+    current_winter, curr_m = get_winter_and_month_for_date(current_year, current_month)
+
+    # Previous month
+    prev_month_idx = target_months.index(current_month) - 1 if current_month in target_months else -1
+    if prev_month_idx < 0:
+        # Current is September, previous is August of previous winter
+        prev_winter = f"{current_year-1}-{current_year}"
+        prev_m = 8
     else:
+        prev_m = target_months[prev_month_idx]
         prev_winter = current_winter
 
-print(f"Current: {current_winter}, month {curr_m}")
-print(f"Previous: {prev_winter}, month {prev_m}")
+    print(f"Current: {current_winter}, month {curr_m}")
+    print(f"Previous: {prev_winter}, month {prev_m}")
 
-# Load existing data
-if os.path.exists(output_file):
-    df_existing = pd.read_csv(output_file)
-else:
-    print("No existing data found. Run full generation first.")
-    exit(1)
+    # Load existing data
+    if os.path.exists(output_file):
+        df_existing = pd.read_csv(output_file)
+    else:
+        print("No existing data found. Run full generation first.")
+        exit(1)
 
-# Load winter data for previous and current months
-df_prev_winter = load_winter_data(prev_winter)
-df_curr_winter = load_winter_data(current_winter)
+    # Load winter data for previous and current months
+    df_prev_winter = load_winter_data(prev_winter)
+    df_curr_winter = load_winter_data(current_winter)
 
-updated = False
+    updated = False
 
-# Check and update previous month
-if df_prev_winter is not None:
-    new_prev_data = compute_month_data(df_prev_winter, prev_m, prev_winter)
-    
-    # Compare with existing data
-    existing_prev = df_existing[(df_existing['Winter'] == prev_winter) & 
-                                 (df_existing['Month'] == prev_m)]
-    
-    if len(new_prev_data) > 0:
-        # Create comparison dataframes
-        df_new_prev = pd.DataFrame(new_prev_data).sort_values('Region').reset_index(drop=True)
-        df_old_prev = existing_prev.sort_values('Region').reset_index(drop=True)
+    # Check and update previous month
+    if df_prev_winter is not None:
+        new_prev_data = compute_month_data(df_prev_winter, prev_m, prev_winter)
         
-        # Compare Rain values
-        if len(df_new_prev) != len(df_old_prev):
-            print(f"Previous month {prev_winter}/{prev_m}: region count changed ({len(df_old_prev)} -> {len(df_new_prev)})")
-            df_existing = update_month_in_df(df_existing, new_prev_data, prev_winter, prev_m)
-            updated = True
-        elif not df_new_prev['Rain'].equals(df_old_prev['Rain']):
-            print(f"Previous month {prev_winter}/{prev_m}: rain values updated")
-            df_existing = update_month_in_df(df_existing, new_prev_data, prev_winter, prev_m)
-            updated = True
-        else:
-            print(f"Previous month {prev_winter}/{prev_m}: no changes")
-else:
-    print(f"Cannot load data for previous winter {prev_winter}")
-
-# Check and add current month
-if df_curr_winter is not None:
-    new_curr_data = compute_month_data(df_curr_winter, curr_m, current_winter)
-    
-    existing_curr = df_existing[(df_existing['Winter'] == current_winter) & 
-                                 (df_existing['Month'] == curr_m)]
-    
-    if len(new_curr_data) > 0:
-        if len(existing_curr) == 0:
-            print(f"Current month {current_winter}/{curr_m}: adding new data ({len(new_curr_data)} regions)")
-            df_existing = update_month_in_df(df_existing, new_curr_data, current_winter, curr_m)
-            updated = True
-        else:
-            # Compare and update if different
-            df_new_curr = pd.DataFrame(new_curr_data).sort_values('Region').reset_index(drop=True)
-            df_old_curr = existing_curr.sort_values('Region').reset_index(drop=True)
+        # Compare with existing data
+        existing_prev = df_existing[(df_existing['Winter'] == prev_winter) & 
+                                     (df_existing['Month'] == prev_m)]
+        
+        if len(new_prev_data) > 0:
+            # Create comparison dataframes
+            df_new_prev = pd.DataFrame(new_prev_data).sort_values('Region').reset_index(drop=True)
+            df_old_prev = existing_prev.sort_values('Region').reset_index(drop=True)
             
-            if len(df_new_curr) != len(df_old_curr) or not df_new_curr['Rain'].equals(df_old_curr['Rain']):
-                print(f"Current month {current_winter}/{curr_m}: rain values updated")
+            # Compare Rain values
+            if args.force:
+                print(f"Previous month {prev_winter}/{prev_m}: forcing update")
+                df_existing = update_month_in_df(df_existing, new_prev_data, prev_winter, prev_m)
+                updated = True
+            elif len(df_new_prev) != len(df_old_prev):
+                print(f"Previous month {prev_winter}/{prev_m}: region count changed ({len(df_old_prev)} -> {len(df_new_prev)})")
+                df_existing = update_month_in_df(df_existing, new_prev_data, prev_winter, prev_m)
+                updated = True
+            elif not df_new_prev['Rain'].equals(df_old_prev['Rain']):
+                print(f"Previous month {prev_winter}/{prev_m}: rain values updated")
+                df_existing = update_month_in_df(df_existing, new_prev_data, prev_winter, prev_m)
+                updated = True
+            else:
+                print(f"Previous month {prev_winter}/{prev_m}: no changes")
+    else:
+        print(f"Cannot load data for previous winter {prev_winter}")
+
+    # Check and add current month
+    if df_curr_winter is not None:
+        new_curr_data = compute_month_data(df_curr_winter, curr_m, current_winter)
+        
+        existing_curr = df_existing[(df_existing['Winter'] == current_winter) & 
+                                     (df_existing['Month'] == curr_m)]
+        
+        if len(new_curr_data) > 0:
+            if args.force:
+                print(f"Current month {current_winter}/{curr_m}: forcing update")
+                df_existing = update_month_in_df(df_existing, new_curr_data, current_winter, curr_m)
+                updated = True
+            elif len(existing_curr) == 0:
+                print(f"Current month {current_winter}/{curr_m}: adding new data ({len(new_curr_data)} regions)")
                 df_existing = update_month_in_df(df_existing, new_curr_data, current_winter, curr_m)
                 updated = True
             else:
-                print(f"Current month {current_winter}/{curr_m}: no changes")
+                # Compare and update if different
+                df_new_curr = pd.DataFrame(new_curr_data).sort_values('Region').reset_index(drop=True)
+                df_old_curr = existing_curr.sort_values('Region').reset_index(drop=True)
+                
+                if len(df_new_curr) != len(df_old_curr) or not df_new_curr['Rain'].equals(df_old_curr['Rain']):
+                    print(f"Current month {current_winter}/{curr_m}: rain values updated")
+                    df_existing = update_month_in_df(df_existing, new_curr_data, current_winter, curr_m)
+                    updated = True
+                else:
+                    print(f"Current month {current_winter}/{curr_m}: no changes")
+        else:
+            print(f"Current month {current_winter}/{curr_m}: no data yet")
     else:
-        print(f"Current month {current_winter}/{curr_m}: no data yet")
-else:
-    print(f"Cannot load data for current winter {current_winter}")
+        print(f"Cannot load data for current winter {current_winter}")
 
-# Save if updated
-if updated:
-    df_existing['MonthOrder'] = df_existing['Month'].map(month_order)
-    df_existing = df_existing.sort_values(['Winter', 'MonthOrder', 'Region']).drop(columns=['MonthOrder'])
-    df_existing.to_csv(output_file, index=False)
-    print(f"Saved updates to {output_file}")
-else:
-    print("No updates needed")
+    # Save if updated
+    if updated:
+        df_existing['MonthOrder'] = df_existing['Month'].map(month_order)
+        df_existing = df_existing.sort_values(['Winter', 'MonthOrder', 'Region']).drop(columns=['MonthOrder'])
+        df_existing.to_csv(output_file, index=False)
+        print(f"Saved updates to {output_file}")
+    else:
+        print("No updates needed")
+
+
+if __name__ == "__main__":
+    main()
