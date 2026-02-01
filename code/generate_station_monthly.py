@@ -2,7 +2,9 @@ import os
 import pandas as pd
 from glob import glob
 import numpy as np
-
+'''
+Create data/station_monthly.csv from data/rain_*.csv, data/temp_min_*.csv, data/temp_max_*.csv
+'''
 def get_cycle(date, measure_type):
     """
     Determine cycle (winter year) based on date and measure type.
