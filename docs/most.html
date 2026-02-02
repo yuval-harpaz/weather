@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>שיאי מזג אוויר - 7 ו-31 ימים</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="logo.jpg">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #60a5fa;
+            --temp-max: #ef4444;
+            --temp-min: #3b82f6;
+            --rain: #10b981;
+            --bg: #f8fafc;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        body {
+            background-color: var(--bg);
+            background-image: radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+            font-family: 'Assistant', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--text-main);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.025em;
+        }
+
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .btn-toggle {
+            padding: 12px 32px;
+            border: 1px solid #e2e8f0;
+            border-radius: 9999px;
+            background: white;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--text-muted);
+        }
+
+        .btn-toggle:hover {
+            border-color: var(--primary-light);
+            background: #f1f5f9;
+        }
+
+        .btn-toggle.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+        }
+
+        .last-update {
+            font-size: 0.9em;
+            color: var(--text-muted);
+            margin-top: 20px;
+            font-weight: 500;
+        }
+
+        .records-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+
+        .record-card {
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .record-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        .record-card h2 {
+            margin-top: 0;
+            font-size: 1.25em;
+            font-weight: 700;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .record-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.2s ease;
+        }
+
+        .record-item:last-child {
+            border-bottom: none;
+        }
+
+        .station-name {
+            font-weight: 600;
+            font-size: 1.05em;
+            color: var(--text-main);
+        }
+
+        .record-value {
+            font-weight: 800;
+            font-size: 1.2em;
+            font-variant-numeric: tabular-nums;
+            direction: ltr;
+        }
+
+        .record-date {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: block;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+        }
+
+        .spinner {
+            width: 64px;
+            height: 64px;
+            border: 6px solid #f1f5f9;
+            border-top: 6px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 20px 15px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .record-card {
+                padding: 16px;
+            }
+
+            .btn-toggle {
+                padding: 10px 20px;
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading" class="loading-overlay">
+        <div class="spinner"></div>
+        <div style="margin-top: 20px; font-weight: bold;">מחשב שיאים...</div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>שיאי מזג אוויר בזמן אמת</h1>
+            <div class="controls">
+                <button id="btn7" class="btn-toggle active" onclick="togglePeriod(7)">7 ימים</button>
+                <button id="btn31" class="btn-toggle" onclick="togglePeriod(31)">31 ימים</button>
+            </div>
+            <div id="last-update" class="last-update"></div>
+        </header>
+
+        <div class="records-grid">
+            <!-- Max Temp -->
+            <div class="record-card">
+                <h2 style="color: var(--temp-max);">טמפרטורה מקסימלית 🌡️</h2>
+                <ul id="list-temp-max" class="record-list"></ul>
+            </div>
+
+            <!-- Min Temp -->
+            <div class="record-card">
+                <h2 style="color: var(--temp-min);">טמפרטורה מינימלית ❄️</h2>
+                <ul id="list-temp-min" class="record-list"></ul>
+            </div>
+
+            <!-- Max Hourly Rain -->
+            <div class="record-card">
+                <h2 style="color: var(--rain);">שיא גשם שעתי ⛈️</h2>
+                <ul id="list-rain-1h" class="record-list"></ul>
+            </div>
+
+            <!-- Max 24h Rain -->
+            <div class="record-card">
+                <h2 style="color: var(--rain);">שיא גשם ל-24 שעות 🌧️</h2>
+                <ul id="list-rain-24h" class="record-list"></ul>
+            </div>
+
+            <!-- Total Rain -->
+            <div class="record-card">
+                <h2 style="color: var(--rain);">סה"כ גשם לתקופה 💧</h2>
+                <ul id="list-rain-total" class="record-list"></ul>
+            </div>
+        </div>
+
+
+    </div>
+
+    <script>
+        let rawData = {
+            rain: [],
+            temp_max: [],
+            temp_min: []
+        };
+        let currentPeriod = 7;
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const [date, time] = dateStr.split(' ');
+            const [y, m, d] = date.split('-');
+            return `${d}/${m}/${y} ${time || ''}`.trim();
+        }
+
+        async function fetchData() {
+            const now = new Date();
+            const years = [now.getFullYear()];
+            // If we are in the first 31 days of the year, we need previous year too
+            if (now.getDate() < 31 && now.getMonth() === 0) {
+                years.push(now.getFullYear() - 1);
+            }
+
+            const types = ['rain', 'temp_max', 'temp_min'];
+            const promises = [];
+
+            for (const type of types) {
+                for (const year of years) {
+                    const url = `https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/${type}_${year}.csv`;
+                    promises.push(
+                        fetch(url)
+                            .then(r => r.text())
+                            .then(text => {
+                                const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+                                rawData[type] = [...rawData[type], ...parsed.data];
+                            })
+                            .catch(e => console.warn(`Failed to fetch ${type}_${year}`, e))
+                    );
+                }
+            }
+
+            await Promise.all(promises);
+
+            // Clean and sort data
+            for (const type of types) {
+                rawData[type].forEach(d => d.dateObj = new Date(d.datetime));
+                rawData[type].sort((a, b) => a.dateObj - b.dateObj);
+            }
+
+            updateDashboard();
+            document.getElementById('loading').classList.add('hidden');
+        }
+
+        function togglePeriod(p) {
+            currentPeriod = p;
+            document.getElementById('btn7').classList.toggle('active', p === 7);
+            document.getElementById('btn31').classList.toggle('active', p === 31);
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            const now = new Date();
+            const startDate = new Date(now.getTime() - (currentPeriod * 24 * 60 * 60 * 1000));
+
+            // Filter and Process
+            const records = computeRecords(startDate);
+            renderLists(records);
+
+            // Find last update based on BET DAGAN temperature
+            let lastUpdateStr = "";
+            const betDaganData = rawData.temp_max.filter(d => !isNaN(parseFloat(d['BET DAGAN'])));
+            if (betDaganData.length > 0) {
+                const latest = betDaganData[betDaganData.length - 1];
+                lastUpdateStr = formatDate(latest.datetime);
+            } else {
+                lastUpdateStr = now.toLocaleString('he-IL');
+            }
+
+            document.getElementById('last-update').innerText = `מעודכן ל: ${lastUpdateStr}`;
+        }
+
+        function computeRecords(startDate) {
+            const results = {};
+            const stations = Object.keys(rawData.rain[0] || {}).filter(k => k !== 'datetime' && k !== 'dateObj');
+
+            // --- TEMPERATURE ---
+            ['temp_max', 'temp_min'].forEach(type => {
+                const data = rawData[type].filter(d => d.dateObj >= startDate);
+                const stationVals = {};
+
+                stations.forEach(s => {
+                    let vals = data.map(d => ({ v: parseFloat(d[s]), t: d.datetime })).filter(x => !isNaN(x.v));
+                    if (vals.length > 0) {
+                        if (type === 'temp_max') {
+                            const max = vals.reduce((a, b) => a.v > b.v ? a : b);
+                            stationVals[s] = max;
+                        } else {
+                            const min = vals.reduce((a, b) => a.v < b.v ? a : b);
+                            stationVals[s] = min;
+                        }
+                    }
+                });
+
+                const sorted = Object.entries(stationVals)
+                    .sort((a, b) => type === 'temp_max' ? b[1].v - a[1].v : a[1].v - b[1].v)
+                    .slice(0, 10);
+
+                results[type] = sorted.map(x => ({ station: x[0], value: x[1].v, date: x[1].t }));
+            });
+
+            // --- RAIN ---
+            const rainData = rawData.rain.filter(d => d.dateObj >= startDate);
+
+            // 1h Max & Total
+            const rain1h = {};
+            const rainTotal = {};
+            stations.forEach(s => {
+                let vals = rainData.map(d => ({ v: parseFloat(d[s]), t: d.datetime })).filter(x => !isNaN(x.v) && x.v > 0);
+                if (vals.length > 0) {
+                    rain1h[s] = vals.reduce((a, b) => a.v > b.v ? a : b);
+                    rainTotal[s] = vals.reduce((sum, x) => sum + x.v, 0);
+                }
+            });
+
+            results.rain_1h = Object.entries(rain1h).sort((a, b) => b[1].v - a[1].v).slice(0, 10).map(x => ({ station: x[0], value: x[1].v, date: x[1].t }));
+            results.rain_total = Object.entries(rainTotal).sort((a, b) => b[1] - a[1]).slice(0, 10).map(x => ({ station: x[0], value: x[1] }));
+
+            // 24h Max (Rolling)
+            const rain24h = {};
+            stations.forEach(s => {
+                let max24 = 0;
+                let maxDate = '';
+                for (let i = 23; i < rainData.length; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < 24; j++) {
+                        let v = parseFloat(rainData[i - j][s]);
+                        if (!isNaN(v)) sum += v;
+                    }
+                    if (sum > max24) {
+                        max24 = sum;
+                        maxDate = rainData[i].datetime;
+                    }
+                }
+                if (max24 > 0) rain24h[s] = { v: max24, t: maxDate };
+            });
+
+            results.rain_24h = Object.entries(rain24h).sort((a, b) => b[1].v - a[1].v).slice(0, 10).map(x => ({ station: x[0], value: x[1].v, date: x[1].t }));
+
+            return results;
+        }
+
+        function renderLists(records) {
+            const mapping = [
+                { id: 'list-temp-max', data: records.temp_max, unit: '°C' },
+                { id: 'list-temp-min', data: records.temp_min, unit: '°C' },
+                { id: 'list-rain-1h', data: records.rain_1h, unit: 'מ"מ' },
+                { id: 'list-rain-24h', data: records.rain_24h, unit: 'מ"מ' },
+                { id: 'list-rain-total', data: records.rain_total, unit: 'מ"מ' }
+            ];
+
+            mapping.forEach(m => {
+                const el = document.getElementById(m.id);
+                el.innerHTML = m.data.map(item => `
+                    <li class="record-item">
+                        <div>
+                            <span class="station-name">${item.station}</span>
+                            ${item.date ? `<span class="record-date">${formatDate(item.date)}</span>` : ''}
+                        </div>
+                        <span class="record-value">${item.value.toFixed(1)}${m.unit}</span>
+                    </li>
+                `).join('');
+            });
+        }
+
+        fetchData();
+    </script>
+</body>
+
+</html>
