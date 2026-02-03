@@ -8,6 +8,7 @@
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="icon" href="logo.jpg">
+    <link rel="stylesheet" href="style.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -44,281 +45,296 @@
     </style>
 </head>
 
-<body>
-    <div id="plot"></div>
-
-    <div class="footer">
-        <span>נתונים מ</span>
-        <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
-            style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-            <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
-                style="height: 16px; margin-right: 5px;">
+<header class="dashboard-header"
+    style="position: static; box-shadow: none; border-bottom: 1px solid #eee; padding: 10px 0; width: 100%;">
+    <div class="header-content" style="flex-direction: row; justify-content: center; gap: 20px;">
+        <a href="index.html" class="home-btn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <span>דף הבית</span>
         </a>
+        <h1 style="font-size: 1.4em; margin: 0; display: flex; align-items: center; gap: 10px;">
+            <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
+            טמפרטורת מקסימום - גרפים אזוריים
+        </h1>
     </div>
+</header>
 
-    <script>
-        // Configuration
-        const regions = ['מישור חוף צפוני', 'כרמל וחיפה', 'גליל וגולן', 'גוש דן והשרון', 'יהודה ושומרון', 'עמקי הצפון', 'מישור חוף דרומי', 'נגב', 'ים המלח והערבה'];
-        // March to Feb
-        const monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2];
-        const monthNames = {
-            9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
-            1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr',
-            5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug'
-        };
+<div id="plot"></div>
 
-        async function loadAndPlot() {
-            try {
-                const csvPath = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/regional_temp_max_per_month.csv';
+<div class="footer">
+    <span>נתונים מ</span>
+    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
+        style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+        <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
+            style="height: 16px; margin-right: 5px;">
+    </a>
+</div>
 
-                const data = await d3.csv(csvPath);
+<script>
+    // Configuration
+    const regions = ['מישור חוף צפוני', 'כרמל וחיפה', 'גליל וגולן', 'גוש דן והשרון', 'יהודה ושומרון', 'עמקי הצפון', 'מישור חוף דרומי', 'נגב', 'ים המלח והערבה'];
+    // March to Feb
+    const monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2];
+    const monthNames = {
+        9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
+        1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr',
+        5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug'
+    };
 
-                // Process data
-                data.forEach(d => {
-                    d.Temp = +d.Temp;
-                    d.Month = +d.Month;
-                    d.Year = +d.Year;
-                });
+    async function loadAndPlot() {
+        try {
+            const csvPath = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/regional_temp_max_per_month.csv';
 
-                // 2. Identify Cycles
-                const cycles = [...new Set(data.map(d => d.Cycle))].sort();
-                const currentCycle = cycles[cycles.length - 1];
-                // Last 10 cycles before current
-                const histCycles = cycles.slice(Math.max(0, cycles.length - 11), cycles.length - 1);
+            const data = await d3.csv(csvPath);
 
-                // 3. Current Date Info
-                const now = new Date();
-                const currMonth = now.getMonth() + 1;
-                const currDay = now.getDate();
-                const daysInMonth = new Date(now.getFullYear(), currMonth, 0).getDate();
-                const monthFraction = currDay / daysInMonth;
+            // Process data
+            data.forEach(d => {
+                d.Temp = +d.Temp;
+                d.Month = +d.Month;
+                d.Year = +d.Year;
+            });
 
-                // Setup Subplots
-                const cols = 3;
-                const rows = Math.ceil(regions.length / cols);
+            // 2. Identify Cycles
+            const cycles = [...new Set(data.map(d => d.Cycle))].sort();
+            const currentCycle = cycles[cycles.length - 1];
+            // Last 10 cycles before current
+            const histCycles = cycles.slice(Math.max(0, cycles.length - 11), cycles.length - 1);
 
-                const traces = [];
-                const layout = {
-                    annotations: [],
-                    title: {
-                        text: `טמפרטורת מקסימום לפי חודש ואיזור: מחזור ${currentCycle} לעומת 10 שנים קודמות`,
-                        x: 0.95,
-                        xanchor: 'right'
-                    },
-                    grid: { rows: rows, columns: cols, pattern: 'independent' },
-                    height: 300 * rows,
-                    showlegend: true,
-                    legend: {
-                        yanchor: "top",
-                        y: 1,
+            // 3. Current Date Info
+            const now = new Date();
+            const currMonth = now.getMonth() + 1;
+            const currDay = now.getDate();
+            const daysInMonth = new Date(now.getFullYear(), currMonth, 0).getDate();
+            const monthFraction = currDay / daysInMonth;
+
+            // Setup Subplots
+            const cols = 3;
+            const rows = Math.ceil(regions.length / cols);
+
+            const traces = [];
+            const layout = {
+                annotations: [],
+                title: {
+                    text: `טמפרטורת מקסימום לפי חודש ואיזור: מחזור ${currentCycle} לעומת 10 שנים קודמות`,
+                    x: 0.95,
+                    xanchor: 'right'
+                },
+                grid: { rows: rows, columns: cols, pattern: 'independent' },
+                height: 300 * rows,
+                showlegend: true,
+                legend: {
+                    yanchor: "top",
+                    y: 1,
+                    xanchor: "left",
+                    x: 1.02
+                },
+                updatemenus: [
+                    {
+                        type: "buttons",
+                        direction: "down",
+                        buttons: [
+                            {
+                                label: "Scale 15 to 50°C",
+                                method: "relayout",
+                                args: [{ "yaxis.range": [15, 50], "yaxis2.range": [15, 50], "yaxis3.range": [15, 50], "yaxis4.range": [15, 50], "yaxis5.range": [15, 50], "yaxis6.range": [15, 50], "yaxis7.range": [15, 50], "yaxis8.range": [15, 50], "yaxis9.range": [15, 50] }]
+                            },
+                            {
+                                label: "Auto Scale",
+                                method: "relayout",
+                                args: [{ "yaxis.autorange": true, "yaxis2.autorange": true, "yaxis3.autorange": true, "yaxis4.autorange": true, "yaxis5.autorange": true, "yaxis6.autorange": true, "yaxis7.autorange": true, "yaxis8.autorange": true, "yaxis9.autorange": true }]
+                            }
+                        ],
+                        pad: { "r": 10, "t": 10 },
+                        showactive: true,
+                        x: 1.02,
                         xanchor: "left",
-                        x: 1.02
-                    },
-                    updatemenus: [
-                        {
-                            type: "buttons",
-                            direction: "down",
-                            buttons: [
-                                {
-                                    label: "Scale 15 to 50°C",
-                                    method: "relayout",
-                                    args: [{ "yaxis.range": [15, 50], "yaxis2.range": [15, 50], "yaxis3.range": [15, 50], "yaxis4.range": [15, 50], "yaxis5.range": [15, 50], "yaxis6.range": [15, 50], "yaxis7.range": [15, 50], "yaxis8.range": [15, 50], "yaxis9.range": [15, 50] }]
-                                },
-                                {
-                                    label: "Auto Scale",
-                                    method: "relayout",
-                                    args: [{ "yaxis.autorange": true, "yaxis2.autorange": true, "yaxis3.autorange": true, "yaxis4.autorange": true, "yaxis5.autorange": true, "yaxis6.autorange": true, "yaxis7.autorange": true, "yaxis8.autorange": true, "yaxis9.autorange": true }]
-                                }
-                            ],
-                            pad: { "r": 10, "t": 10 },
-                            showactive: true,
-                            x: 1.02,
-                            xanchor: "left",
-                            y: 0.7,
-                            yanchor: "top"
-                        }
-                    ]
-                };
-
-                function getCycleData(region, cycle) {
-                    const cycleData = data.filter(d => d.Region === region && d.Cycle === cycle);
-                    const result = [];
-                    for (let m of monthOrder) {
-                        const rec = cycleData.find(d => d.Month === m);
-                        result.push(rec ? rec.Temp : null);
+                        y: 0.7,
+                        yanchor: "top"
                     }
-                    return result;
+                ]
+            };
+
+            function getCycleData(region, cycle) {
+                const cycleData = data.filter(d => d.Region === region && d.Cycle === cycle);
+                const result = [];
+                for (let m of monthOrder) {
+                    const rec = cycleData.find(d => d.Month === m);
+                    result.push(rec ? rec.Temp : null);
+                }
+                return result;
+            }
+
+            regions.forEach((region, i) => {
+                const xaxisKey = `x${i + 1}`;
+                const yaxisKey = `y${i + 1}`;
+
+                // 1. Calculate Historical Stats
+                const histArrays = histCycles.map(c => getCycleData(region, c));
+
+                const minLine = [];
+                const maxLine = [];
+                const medLine = [];
+
+                for (let mIdx = 0; mIdx < 12; mIdx++) {
+                    const valuesAtMonth = histArrays.map(arr => arr[mIdx]).filter(v => v !== null && v !== undefined);
+
+                    if (valuesAtMonth.length > 0) {
+                        minLine.push(d3.min(valuesAtMonth));
+                        maxLine.push(d3.max(valuesAtMonth));
+                        medLine.push(d3.median(valuesAtMonth));
+                    } else {
+                        minLine.push(null);
+                        maxLine.push(null);
+                        medLine.push(null);
+                    }
                 }
 
-                regions.forEach((region, i) => {
-                    const xaxisKey = `x${i + 1}`;
-                    const yaxisKey = `y${i + 1}`;
+                // 2. Current Cycle Data
+                const currRaw = data.filter(d => d.Region === region && d.Cycle === currentCycle);
+                currRaw.sort((a, b) => monthOrder.indexOf(a.Month) - monthOrder.indexOf(b.Month));
 
-                    // 1. Calculate Historical Stats
-                    const histArrays = histCycles.map(c => getCycleData(region, c));
+                const currX = [];
+                const currY = [];
+                const currText = [];
 
-                    const minLine = [];
-                    const maxLine = [];
-                    const medLine = [];
+                currRaw.forEach((d, index) => {
+                    currX.push(monthOrder.indexOf(d.Month));
+                    currY.push(d.Temp);
 
-                    for (let mIdx = 0; mIdx < 12; mIdx++) {
-                        const valuesAtMonth = histArrays.map(arr => arr[mIdx]).filter(v => v !== null && v !== undefined);
-
-                        if (valuesAtMonth.length > 0) {
-                            minLine.push(d3.min(valuesAtMonth));
-                            maxLine.push(d3.max(valuesAtMonth));
-                            medLine.push(d3.median(valuesAtMonth));
-                        } else {
-                            minLine.push(null);
-                            maxLine.push(null);
-                            medLine.push(null);
-                        }
+                    // Hover Text
+                    let label = monthNames[d.Month];
+                    if (index === currRaw.length - 1 && d.Month === currMonth) {
+                        label = `${monthNames[d.Month]} ${currDay}`;
                     }
-
-                    // 2. Current Cycle Data
-                    const currRaw = data.filter(d => d.Region === region && d.Cycle === currentCycle);
-                    currRaw.sort((a, b) => monthOrder.indexOf(a.Month) - monthOrder.indexOf(b.Month));
-
-                    const currX = [];
-                    const currY = [];
-                    const currText = [];
-
-                    currRaw.forEach((d, index) => {
-                        currX.push(monthOrder.indexOf(d.Month));
-                        currY.push(d.Temp);
-
-                        // Hover Text
-                        let label = monthNames[d.Month];
-                        if (index === currRaw.length - 1 && d.Month === currMonth) {
-                            label = `${monthNames[d.Month]} ${currDay}`;
-                        }
-                        currText.push(label);
-                    });
-
-                    if (currRaw.length > 0) {
-                        const lastRec = currRaw[currRaw.length - 1];
-                        if (lastRec.Month === currMonth) {
-                            currX[currX.length - 1] = currX[currX.length - 1] - 1 + monthFraction;
-                        }
-                    }
-
-                    // ADD TRACES
-                    // Max
-                    traces.push({
-                        x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-                        y: maxLine,
-                        mode: 'lines',
-                        line: { width: 0 },
-                        showlegend: false,
-                        hoverinfo: 'skip',
-                        xaxis: xaxisKey,
-                        yaxis: yaxisKey
-                    });
-
-                    // Min (Range)
-                    traces.push({
-                        x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-                        y: minLine,
-                        name: 'טווח 10 שנים',
-                        mode: 'lines',
-                        line: { width: 0 },
-                        fill: 'tonexty',
-                        fillcolor: 'rgba(200, 200, 200, 0.3)',
-                        showlegend: i === 0,
-                        xaxis: xaxisKey,
-                        yaxis: yaxisKey
-                    });
-
-                    // Median
-                    traces.push({
-                        x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-                        y: medLine,
-                        name: 'חציון 10 שנים',
-                        mode: 'lines',
-                        line: { color: 'gray', dash: 'dash' },
-                        showlegend: i === 0,
-                        xaxis: xaxisKey,
-                        yaxis: yaxisKey
-                    });
-
-                    // Current
-                    traces.push({
-                        x: currX,
-                        y: currY,
-                        text: currText,
-                        hovertemplate: '%{text}<br>%{y:.1f} °C<extra></extra>',
-                        name: currentCycle,
-                        mode: 'lines',
-                        line: { color: 'blue', width: 3 },
-                        showlegend: i === 0,
-                        xaxis: xaxisKey,
-                        yaxis: yaxisKey
-                    });
+                    currText.push(label);
                 });
 
-                // Update Axes
-                regions.forEach((region, i) => {
-                    const xaxisKey = `xaxis${i === 0 ? '' : i + 1}`;
-                    const yaxisKey = `yaxis${i === 0 ? '' : i + 1}`;
-
-                    layout[xaxisKey] = {
-                        tickvals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-                        ticktext: monthOrder.map(m => monthNames[m]),
-                    };
-
-                    if (!layout[yaxisKey]) layout[yaxisKey] = {};
-
-                    if (i % cols === 0) {
-                        layout[yaxisKey].title = 'טמפרטורה (C°)';
+                if (currRaw.length > 0) {
+                    const lastRec = currRaw[currRaw.length - 1];
+                    if (lastRec.Month === currMonth) {
+                        currX[currX.length - 1] = currX[currX.length - 1] - 1 + monthFraction;
                     }
+                }
 
-                    // Annotations for Titles
-                    const row = Math.floor(i / cols);
-                    const col = i % cols;
-
-                    const xGap = 0.08;
-                    const width = (1 - (cols - 1) * xGap) / cols;
-                    const xPos = col * (width + xGap) + width / 2;
-
-                    const yGap = 0.1;
-                    const height = (1 - (rows - 1) * yGap) / rows;
-                    const rowFromBottom = (rows - 1) - row;
-                    const yPos = rowFromBottom * (height + yGap) + height + 0.02;
-
-                    layout.annotations.push({
-                        text: region,
-                        x: xPos,
-                        y: yPos,
-                        xref: 'paper',
-                        yref: 'paper',
-                        showarrow: false,
-                        font: { size: 16 }
-                    });
+                // ADD TRACES
+                // Max
+                traces.push({
+                    x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                    y: maxLine,
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip',
+                    xaxis: xaxisKey,
+                    yaxis: yaxisKey
                 });
 
-                // Axes for scale args
-                const axisKeys = Array.from({ length: regions.length }, (_, k) => `yaxis${k === 0 ? '' : k + 1}`);
-                const scaleFunc = {};
-                const autoFunc = {};
-                axisKeys.forEach(k => {
-                    scaleFunc[k + '.range'] = [15, 50];
-                    autoFunc[k + '.autorange'] = true;
+                // Min (Range)
+                traces.push({
+                    x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                    y: minLine,
+                    name: 'טווח 10 שנים',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(200, 200, 200, 0.3)',
+                    showlegend: i === 0,
+                    xaxis: xaxisKey,
+                    yaxis: yaxisKey
                 });
 
-                layout.updatemenus[0].buttons[0].args = [scaleFunc];
-                layout.updatemenus[0].buttons[1].args = [autoFunc];
+                // Median
+                traces.push({
+                    x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                    y: medLine,
+                    name: 'חציון 10 שנים',
+                    mode: 'lines',
+                    line: { color: 'gray', dash: 'dash' },
+                    showlegend: i === 0,
+                    xaxis: xaxisKey,
+                    yaxis: yaxisKey
+                });
 
-                const config = { responsive: true };
-                Plotly.newPlot('plot', traces, layout, config);
+                // Current
+                traces.push({
+                    x: currX,
+                    y: currY,
+                    text: currText,
+                    hovertemplate: '%{text}<br>%{y:.1f} °C<extra></extra>',
+                    name: currentCycle,
+                    mode: 'lines',
+                    line: { color: 'blue', width: 3 },
+                    showlegend: i === 0,
+                    xaxis: xaxisKey,
+                    yaxis: yaxisKey
+                });
+            });
 
-            } catch (error) {
-                console.error("Error loading or plotting data:", error);
-                document.getElementById('plot').innerText = "Error loading data. See console.";
-            }
+            // Update Axes
+            regions.forEach((region, i) => {
+                const xaxisKey = `xaxis${i === 0 ? '' : i + 1}`;
+                const yaxisKey = `yaxis${i === 0 ? '' : i + 1}`;
+
+                layout[xaxisKey] = {
+                    tickvals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                    ticktext: monthOrder.map(m => monthNames[m]),
+                };
+
+                if (!layout[yaxisKey]) layout[yaxisKey] = {};
+
+                if (i % cols === 0) {
+                    layout[yaxisKey].title = 'טמפרטורה (C°)';
+                }
+
+                // Annotations for Titles
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+
+                const xGap = 0.08;
+                const width = (1 - (cols - 1) * xGap) / cols;
+                const xPos = col * (width + xGap) + width / 2;
+
+                const yGap = 0.1;
+                const height = (1 - (rows - 1) * yGap) / rows;
+                const rowFromBottom = (rows - 1) - row;
+                const yPos = rowFromBottom * (height + yGap) + height + 0.02;
+
+                layout.annotations.push({
+                    text: region,
+                    x: xPos,
+                    y: yPos,
+                    xref: 'paper',
+                    yref: 'paper',
+                    showarrow: false,
+                    font: { size: 16 }
+                });
+            });
+
+            // Axes for scale args
+            const axisKeys = Array.from({ length: regions.length }, (_, k) => `yaxis${k === 0 ? '' : k + 1}`);
+            const scaleFunc = {};
+            const autoFunc = {};
+            axisKeys.forEach(k => {
+                scaleFunc[k + '.range'] = [15, 50];
+                autoFunc[k + '.autorange'] = true;
+            });
+
+            layout.updatemenus[0].buttons[0].args = [scaleFunc];
+            layout.updatemenus[0].buttons[1].args = [autoFunc];
+
+            const config = { responsive: true };
+            Plotly.newPlot('plot', traces, layout, config);
+
+        } catch (error) {
+            console.error("Error loading or plotting data:", error);
+            document.getElementById('plot').innerText = "Error loading data. See console.";
         }
+    }
 
-        loadAndPlot();
-    </script>
+    loadAndPlot();
+</script>
 </body>
 
 </html>

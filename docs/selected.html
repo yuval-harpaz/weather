@@ -11,6 +11,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <link rel="icon" href="logo.jpg">
+    <link rel="stylesheet" href="style.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -85,7 +86,23 @@
 
 <body>
 
-    <div class="controls">
+    <header class="dashboard-header"
+        style="position: static; box-shadow: none; border-bottom: 1px solid #eee; padding: 15px 0; width: 100%;">
+        <div class="header-content" style="flex-direction: row; justify-content: center; gap: 20px;">
+            <a href="index.html" class="home-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span>דף הבית</span>
+            </a>
+            <h1 style="font-size: 1.4em; margin: 0; display: flex; align-items: center; gap: 10px;">
+                <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
+                נתוני תחנות - גרפים
+            </h1>
+        </div>
+    </header>
+
+    <div class="controls" style="margin-top: 20px;">
         <div class="control-group">
             <label for="measureSelect">מדד:</label>
             <select id="measureSelect" style="width: 100%;">

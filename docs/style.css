@@ -11,32 +11,45 @@
   left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
-  padding: 10px 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  padding: 12px 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   direction: rtl;
   text-align: center;
   max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
 }
 
 #floating-title h1 {
   font-size: 1.4em;
-  font-weight: 500;
-  margin: 0 0 8px 0;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-#floating-title .data-source {
+#floating-title .subtitle {
+  font-size: 0.9em;
+  color: #444;
+  margin: 2px 0;
+}
+
+.data-source {
   font-size: 0.75em;
   color: #666;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
-#floating-title .data-source a {
+.data-source a {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
@@ -44,14 +57,72 @@
   transition: opacity 0.2s;
 }
 
-#floating-title .data-source a:hover {
+.data-source a:hover {
   opacity: 0.7;
 }
 
-#floating-title .ims-logo {
+.ims-logo {
   height: 16px;
   width: auto;
   vertical-align: middle;
+}
+
+.title-icon {
+  height: 1.2em;
+  width: auto;
+  border-radius: 4px;
+}
+
+/* Home button */
+.home-btn {
+  background: #f0f4f8;
+  color: #2563eb;
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  border: 1px solid #d1d5db;
+  white-space: nowrap;
+}
+
+.home-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
+}
+
+/* GitHub Link */
+.github-link {
+  color: #333;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.github-link:hover {
+  color: #000;
+}
+
+.github-icon {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+/* Plotly Modebar Position */
+.js-plotly-plot .modebar-container {
+  left: 10px !important;
+  right: auto !important;
+}
+
+.js-plotly-plot .modebar {
+  left: 10px !important;
+  right: auto !important;
 }
 
 .legend {
@@ -60,7 +131,7 @@
   font-size: 0.9em;
   line-height: 1.8;
   border-radius: 6px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
   max-height: 80vh;
   overflow-y: auto;
 }
@@ -89,20 +160,24 @@
   #floating-title h1 {
     font-size: 1.2em;
   }
-  
+
   #floating-title .data-source {
     font-size: 0.7em;
   }
-  
+
   #floating-title .ims-logo {
     height: 14px;
+  }
+
+  .home-btn span {
+    display: none;
   }
 }
 
 /* Dashboard Styles */
 .dashboard-container {
   max-width: 1200px;
-  margin: 80px auto 40px;
+  margin: 110px auto 40px;
   padding: 0 20px;
   direction: rtl;
 }
@@ -114,8 +189,37 @@
   right: 0;
   background: white;
   z-index: 1000;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  padding: 10px 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 5px 0;
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  position: relative;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.header-title-row h1 {
+  margin: 0;
+  font-size: 1.6em;
+}
+
+.header-subtitle {
+  font-size: 0.95em;
+  color: #4b5563;
+  font-weight: 500;
+  margin: 0;
 }
 
 .dashboard-grid {
@@ -128,7 +232,7 @@
 .card {
   background: white;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -138,7 +242,7 @@
 
 .card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
 
 .card-header {
@@ -200,9 +304,10 @@
 
 @media (max-width: 500px) {
   .dashboard-container {
-    margin-top: 90px;
+    margin-top: 130px;
     padding: 0 10px;
   }
+
   .iframe-container {
     height: 300px;
   }

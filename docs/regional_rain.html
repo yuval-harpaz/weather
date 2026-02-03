@@ -8,6 +8,7 @@
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <link rel="icon" href="logo.jpg">
+  <link rel="stylesheet" href="style.css">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -44,334 +45,349 @@
   </style>
 </head>
 
-<body>
-  <div id="plot"></div>
-
-  <div class="footer">
-    <span>נתונים מ</span>
-    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
-      style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-      <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" style="height: 16px; margin-right: 5px;">
+<header class="dashboard-header"
+  style="position: static; box-shadow: none; border-bottom: 1px solid #eee; padding: 10px 0; width: 100%;">
+  <div class="header-content" style="flex-direction: row; justify-content: center; gap: 20px;">
+    <a href="index.html" class="home-btn">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+      <span>דף הבית</span>
     </a>
+    <h1 style="font-size: 1.4em; margin: 0; display: flex; align-items: center; gap: 10px;">
+      <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
+      כמות גשם מצטברת - גרפים אזוריים
+    </h1>
   </div>
+</header>
 
-  <script>
-    // Configuration
-    const regions = ['מישור חוף צפוני', 'כרמל וחיפה', 'גליל וגולן', 'גוש דן והשרון', 'יהודה ושומרון', 'עמקי הצפון', 'מישור חוף דרומי', 'נגב', 'ים המלח והערבה'];
-    const monthOrder = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8];
-    const monthNames = {
-      9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
-      1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr',
-      5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug'
-    };
+<div id="plot"></div>
 
-    async function loadAndPlot() {
-      try {
-        // Determine CSV path - if local or on server, usually relative to this file
-        // If this file is in /docs, data is in ../data
-        const csvPath = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/regional_rain_per_month.csv';
+<div class="footer">
+  <span>נתונים מ</span>
+  <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
+    style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+    <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" style="height: 16px; margin-right: 5px;">
+  </a>
+</div>
 
-        const data = await d3.csv(csvPath);
+<script>
+  // Configuration
+  const regions = ['מישור חוף צפוני', 'כרמל וחיפה', 'גליל וגולן', 'גוש דן והשרון', 'יהודה ושומרון', 'עמקי הצפון', 'מישור חוף דרומי', 'נגב', 'ים המלח והערבה'];
+  const monthOrder = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8];
+  const monthNames = {
+    9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr',
+    5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug'
+  };
 
-        // Process data
-        // 1. Convert columns to numbers where needed
-        data.forEach(d => {
-          d.Rain = +d.Rain;
-          d.Month = +d.Month;
-          d.Year = +d.Year;
-          // Winter is string or number, keep consistent logic. Python used sort unique.
+  async function loadAndPlot() {
+    try {
+      // Determine CSV path - if local or on server, usually relative to this file
+      // If this file is in /docs, data is in ../data
+      const csvPath = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/regional_rain_per_month.csv';
+
+      const data = await d3.csv(csvPath);
+
+      // Process data
+      // 1. Convert columns to numbers where needed
+      data.forEach(d => {
+        d.Rain = +d.Rain;
+        d.Month = +d.Month;
+        d.Year = +d.Year;
+        // Winter is string or number, keep consistent logic. Python used sort unique.
+      });
+
+      // 2. Identify Winters
+      const winters = [...new Set(data.map(d => d.Winter))].sort();
+      const currentWinter = winters[winters.length - 1];
+      // Last 10 winters before current
+      const histWinters = winters.slice(Math.max(0, winters.length - 11), winters.length - 1);
+
+      // 3. Current Date Info for plot adjustment
+      const now = new Date();
+      const currMonth = now.getMonth() + 1; // 0-indexed in JS, 1-12 in data
+      const currDay = now.getDate();
+      const daysInMonth = new Date(now.getFullYear(), currMonth, 0).getDate();
+      const monthFraction = currDay / daysInMonth;
+
+      // Prepare Setup for Subplots
+      // Plotly.js doesn't have "make_subplots" like Python, we use layout.grid or independent axes.
+      // Replicating a 3x3 grid.
+      const cols = 3;
+      const rows = Math.ceil(regions.length / cols);
+
+      const traces = [];
+      const layout = {
+        title: {
+          text: `כמות גשם מצטברת לפי חודש ואיזור: חורף ${currentWinter} לעומת 10 שנים קודמות`,
+          x: 0.95, // Right aligned roughly
+          xanchor: 'right'
+        },
+        grid: { rows: rows, columns: cols, pattern: 'independent' },
+        height: 300 * rows,
+        showlegend: true,
+        legend: {
+          yanchor: "top",
+          y: 1,
+          xanchor: "left",
+          x: 1.02
+        },
+        updatemenus: [
+          {
+            type: "buttons",
+            direction: "down",
+            buttons: [
+              {
+                label: "Scale 0-900mm",
+                method: "relayout",
+                args: [{ "yaxis.range": [0, 900], "yaxis2.range": [0, 900], "yaxis3.range": [0, 900], "yaxis4.range": [0, 900], "yaxis5.range": [0, 900], "yaxis6.range": [0, 900], "yaxis7.range": [0, 900], "yaxis8.range": [0, 900], "yaxis9.range": [0, 900] }]
+                // Ideally we generate this args object dynamically but hardcoding for known 9 regions is easier for now or we build it below
+              },
+              {
+                label: "Auto Scale",
+                method: "relayout",
+                args: [{ "yaxis.autorange": true, "yaxis2.autorange": true, "yaxis3.autorange": true, "yaxis4.autorange": true, "yaxis5.autorange": true, "yaxis6.autorange": true, "yaxis7.autorange": true, "yaxis8.autorange": true, "yaxis9.autorange": true }]
+              }
+            ],
+            pad: { "r": 10, "t": 10 },
+            showactive: true,
+            x: 1.02,
+            xanchor: "left",
+            y: 0.7,
+            yanchor: "top"
+          }
+        ]
+      };
+
+      // Helper to get cumulative rain for a specific winter/region
+      // Returns array of length 12 (or partial for current) aligned with monthOrder
+      function getWinterData(region, winter) {
+        const winterData = data.filter(d => d.Region === region && d.Winter === winter);
+        const result = [];
+        // Ensure we follow monthOrder
+        for (let m of monthOrder) {
+          const rec = winterData.find(d => d.Month === m);
+          result.push(rec ? rec.Rain : 0);
+        }
+        return result;
+      }
+
+      regions.forEach((region, i) => {
+        const row = Math.floor(i / cols) + 1;
+        const col = (i % cols) + 1;
+        const xaxisKey = `x${i + 1}`; // x, x2, x3...
+        const yaxisKey = `y${i + 1}`; // y, y2, y3...
+
+        // 1. Calculate Historical Stats
+        // Gather all full history arrays
+        const histArrays = histWinters.map(w => getWinterData(region, w));
+
+        // Calculate cumulative
+        const histCum = histArrays.map(arr => {
+          let sum = 0;
+          return arr.map(v => sum += v);
         });
 
-        // 2. Identify Winters
-        const winters = [...new Set(data.map(d => d.Winter))].sort();
-        const currentWinter = winters[winters.length - 1];
-        // Last 10 winters before current
-        const histWinters = winters.slice(Math.max(0, winters.length - 11), winters.length - 1);
+        // Stats per month index (0-11)
+        const minLine = [];
+        const maxLine = [];
+        const medLine = [];
 
-        // 3. Current Date Info for plot adjustment
-        const now = new Date();
-        const currMonth = now.getMonth() + 1; // 0-indexed in JS, 1-12 in data
-        const currDay = now.getDate();
-        const daysInMonth = new Date(now.getFullYear(), currMonth, 0).getDate();
-        const monthFraction = currDay / daysInMonth;
-
-        // Prepare Setup for Subplots
-        // Plotly.js doesn't have "make_subplots" like Python, we use layout.grid or independent axes.
-        // Replicating a 3x3 grid.
-        const cols = 3;
-        const rows = Math.ceil(regions.length / cols);
-
-        const traces = [];
-        const layout = {
-          title: {
-            text: `כמות גשם מצטברת לפי חודש ואיזור: חורף ${currentWinter} לעומת 10 שנים קודמות`,
-            x: 0.95, // Right aligned roughly
-            xanchor: 'right'
-          },
-          grid: { rows: rows, columns: cols, pattern: 'independent' },
-          height: 300 * rows,
-          showlegend: true,
-          legend: {
-            yanchor: "top",
-            y: 1,
-            xanchor: "left",
-            x: 1.02
-          },
-          updatemenus: [
-            {
-              type: "buttons",
-              direction: "down",
-              buttons: [
-                {
-                  label: "Scale 0-900mm",
-                  method: "relayout",
-                  args: [{ "yaxis.range": [0, 900], "yaxis2.range": [0, 900], "yaxis3.range": [0, 900], "yaxis4.range": [0, 900], "yaxis5.range": [0, 900], "yaxis6.range": [0, 900], "yaxis7.range": [0, 900], "yaxis8.range": [0, 900], "yaxis9.range": [0, 900] }]
-                  // Ideally we generate this args object dynamically but hardcoding for known 9 regions is easier for now or we build it below
-                },
-                {
-                  label: "Auto Scale",
-                  method: "relayout",
-                  args: [{ "yaxis.autorange": true, "yaxis2.autorange": true, "yaxis3.autorange": true, "yaxis4.autorange": true, "yaxis5.autorange": true, "yaxis6.autorange": true, "yaxis7.autorange": true, "yaxis8.autorange": true, "yaxis9.autorange": true }]
-                }
-              ],
-              pad: { "r": 10, "t": 10 },
-              showactive: true,
-              x: 1.02,
-              xanchor: "left",
-              y: 0.7,
-              yanchor: "top"
-            }
-          ]
-        };
-
-        // Helper to get cumulative rain for a specific winter/region
-        // Returns array of length 12 (or partial for current) aligned with monthOrder
-        function getWinterData(region, winter) {
-          const winterData = data.filter(d => d.Region === region && d.Winter === winter);
-          const result = [];
-          // Ensure we follow monthOrder
-          for (let m of monthOrder) {
-            const rec = winterData.find(d => d.Month === m);
-            result.push(rec ? rec.Rain : 0);
-          }
-          return result;
+        // We need median of cumulative sums at each step
+        // Transpose to get all values for month i
+        for (let mIdx = 0; mIdx < 12; mIdx++) {
+          const valuesAtMonth = histCum.map(arr => arr[mIdx]);
+          // min/max
+          minLine.push(d3.min(valuesAtMonth));
+          maxLine.push(d3.max(valuesAtMonth));
+          // median
+          medLine.push(d3.median(valuesAtMonth));
         }
 
-        regions.forEach((region, i) => {
-          const row = Math.floor(i / cols) + 1;
-          const col = (i % cols) + 1;
-          const xaxisKey = `x${i + 1}`; // x, x2, x3...
-          const yaxisKey = `y${i + 1}`; // y, y2, y3...
+        // 2. Current Winter Data
+        const currRaw = data.filter(d => d.Region === region && d.Winter === currentWinter);
+        // Sort by month order
+        currRaw.sort((a, b) => monthOrder.indexOf(a.Month) - monthOrder.indexOf(b.Month));
 
-          // 1. Calculate Historical Stats
-          // Gather all full history arrays
-          const histArrays = histWinters.map(w => getWinterData(region, w));
+        const currX = currRaw.map(d => monthOrder.indexOf(d.Month));
+        const currY = [];
+        const currText = [];
+        let cSum = 0;
+        currRaw.forEach((d, index) => {
+          cSum += d.Rain;
+          currY.push(cSum);
 
-          // Calculate cumulative
-          const histCum = histArrays.map(arr => {
-            let sum = 0;
-            return arr.map(v => sum += v);
-          });
+          // Determine hover text
+          // Default: Month Name (e.g., 'Jan')
+          let label = monthNames[d.Month];
 
-          // Stats per month index (0-11)
-          const minLine = [];
-          const maxLine = [];
-          const medLine = [];
-
-          // We need median of cumulative sums at each step
-          // Transpose to get all values for month i
-          for (let mIdx = 0; mIdx < 12; mIdx++) {
-            const valuesAtMonth = histCum.map(arr => arr[mIdx]);
-            // min/max
-            minLine.push(d3.min(valuesAtMonth));
-            maxLine.push(d3.max(valuesAtMonth));
-            // median
-            medLine.push(d3.median(valuesAtMonth));
+          // If this is the last point and matches the current real-world month, show specific date
+          if (index === currRaw.length - 1 && d.Month === currMonth) {
+            label = `${monthNames[d.Month]} ${currDay}`;
           }
-
-          // 2. Current Winter Data
-          const currRaw = data.filter(d => d.Region === region && d.Winter === currentWinter);
-          // Sort by month order
-          currRaw.sort((a, b) => monthOrder.indexOf(a.Month) - monthOrder.indexOf(b.Month));
-
-          const currX = currRaw.map(d => monthOrder.indexOf(d.Month));
-          const currY = [];
-          const currText = [];
-          let cSum = 0;
-          currRaw.forEach((d, index) => {
-            cSum += d.Rain;
-            currY.push(cSum);
-
-            // Determine hover text
-            // Default: Month Name (e.g., 'Jan')
-            let label = monthNames[d.Month];
-
-            // If this is the last point and matches the current real-world month, show specific date
-            if (index === currRaw.length - 1 && d.Month === currMonth) {
-              label = `${monthNames[d.Month]} ${currDay}`;
-            }
-            currText.push(label);
-          });
-
-          // Adjust last point if needed
-          if (currRaw.length > 0) {
-            const lastRec = currRaw[currRaw.length - 1];
-            if (lastRec.Month === currMonth) {
-              // Adjust x position
-              // The index in 'monthOrder' is an integer, we add fraction
-              currX[currX.length - 1] = currX[currX.length - 1] - 1 + monthFraction;
-            }
-          }
-
-          // ADD TRACES
-          // Max (invisible line for fill)
-          traces.push({
-            x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-            y: maxLine,
-            mode: 'lines',
-            line: { width: 0 },
-            showlegend: false,
-            hoverinfo: 'skip',
-            xaxis: xaxisKey,
-            yaxis: yaxisKey
-          });
-
-          // Min (filled to max) - "Range 10 years"
-          traces.push({
-            x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-            y: minLine,
-            name: 'טווח 10 שנים',
-            mode: 'lines',
-            line: { width: 0 },
-            fill: 'tonexty',
-            fillcolor: 'rgba(200, 200, 200, 0.3)',
-            showlegend: i === 0,
-            xaxis: xaxisKey,
-            yaxis: yaxisKey
-          });
-
-          // Median
-          traces.push({
-            x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-            y: medLine,
-            name: 'חציון 10 שנים',
-            mode: 'lines',
-            line: { color: 'gray', dash: 'dash' },
-            showlegend: i === 0,
-            xaxis: xaxisKey,
-            yaxis: yaxisKey
-          });
-
-          // Current
-          traces.push({
-            x: currX,
-            y: currY,
-            text: currText,
-            hovertemplate: '%{text}<br>%{y:.1f} mm<extra></extra>',
-            name: currentWinter,
-            mode: 'lines',
-            line: { color: 'blue', width: 3 },
-            showlegend: i === 0,
-            xaxis: xaxisKey,
-            yaxis: yaxisKey
-          });
-
-          // Add region title as annotation or layout property?
-          // Subplots in JS use 'annotations' for titles usually, or we can use the layout.
-          if (!layout.annotations) layout.annotations = [];
-          // Simple title approximation
-          // We need to calculate x/y position for each subplot title
-          // This is tricky in independent grid without 'easy' subplot titles
-          // But we can name the axis or just add text.
-          // Let's use layout.annotations for titles
+          currText.push(label);
         });
 
-        // Update Axes Layout
-        regions.forEach((region, i) => {
-          const xaxisKey = `xaxis${i === 0 ? '' : i + 1}`;
-          const yaxisKey = `yaxis${i === 0 ? '' : i + 1}`;
-
-          // Axis titles and ticks
-          layout[xaxisKey] = {
-            tickvals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-            ticktext: monthOrder.map(m => monthNames[m]),
-            // domain is handled by grid
-          };
-          layout[yaxisKey] = {
-            // domain handled by grid
-          };
-
-          // Add Y-axis title for first column
-          if (i % cols === 0) {
-            layout[yaxisKey].title = 'גשם (ממ)';
+        // Adjust last point if needed
+        if (currRaw.length > 0) {
+          const lastRec = currRaw[currRaw.length - 1];
+          if (lastRec.Month === currMonth) {
+            // Adjust x position
+            // The index in 'monthOrder' is an integer, we add fraction
+            currX[currX.length - 1] = currX[currX.length - 1] - 1 + monthFraction;
           }
+        }
 
-          // Add Subplot Title
-          // We need to find the center of the domain.
-          // Actually, 'layout.grid' handles domains, but annotations need x/y coordinates (0-1).
-          // This is hard to get wrong.
-          // simpler approach: use 'xaxis' title as subplot title at top? No.
-
-          // Let's rely on Plotly's automagic or manual calculation
-          // Manual calculation of domains for 3x3 grid
-          // row 1: y ~0.7-1.0
-          // row 2: y ~0.35-0.65
-          // row 3: y ~0.0-0.3
-          // col 1: x ~0.0-0.3
-          // col 2: x ~0.35-0.65
-          // col 3: x ~0.7-1.0
-
-          // Let's insert title annotations based on Row/Col logic
-          const row = Math.floor(i / cols); // 0, 1, 2
-          const col = i % cols; // 0, 1, 2
-
-          // Approximate positions
-          const xGap = 0.08;
-          const width = (1 - (cols - 1) * xGap) / cols;
-          const xPos = col * (width + xGap) + width / 2;
-
-          const yGap = 0.1;
-          const height = (1 - (rows - 1) * yGap) / rows;
-          // Y is from bottom up
-          const rowFromBottom = (rows - 1) - row;
-          const yPos = rowFromBottom * (height + yGap) + height + 0.02;
-
-          layout.annotations.push({
-            text: region,
-            x: xPos,
-            y: yPos,
-            xref: 'paper',
-            yref: 'paper',
-            showarrow: false,
-            font: { size: 16 }
-          });
-
+        // ADD TRACES
+        // Max (invisible line for fill)
+        traces.push({
+          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+          y: maxLine,
+          mode: 'lines',
+          line: { width: 0 },
+          showlegend: false,
+          hoverinfo: 'skip',
+          xaxis: xaxisKey,
+          yaxis: yaxisKey
         });
 
-        // Construct dynamic UpdateMenu Args for rescaling
-        // We already hardcoded 9 axes, but checking if we need to make it robust
-        const axisKeys = Array.from({ length: regions.length }, (_, k) => `yaxis${k === 0 ? '' : k + 1}`);
-        const scale0_900 = {};
-        const autoscale = {};
-        axisKeys.forEach(k => {
-          scale0_900[k + '.range'] = [0, 900];
-          autoscale[k + '.autorange'] = true;
+        // Min (filled to max) - "Range 10 years"
+        traces.push({
+          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+          y: minLine,
+          name: 'טווח 10 שנים',
+          mode: 'lines',
+          line: { width: 0 },
+          fill: 'tonexty',
+          fillcolor: 'rgba(200, 200, 200, 0.3)',
+          showlegend: i === 0,
+          xaxis: xaxisKey,
+          yaxis: yaxisKey
         });
 
-        layout.updatemenus[0].buttons[0].args = [scale0_900];
-        layout.updatemenus[0].buttons[1].args = [autoscale];
+        // Median
+        traces.push({
+          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+          y: medLine,
+          name: 'חציון 10 שנים',
+          mode: 'lines',
+          line: { color: 'gray', dash: 'dash' },
+          showlegend: i === 0,
+          xaxis: xaxisKey,
+          yaxis: yaxisKey
+        });
 
-        const config = { responsive: true };
-        Plotly.newPlot('plot', traces, layout, config);
+        // Current
+        traces.push({
+          x: currX,
+          y: currY,
+          text: currText,
+          hovertemplate: '%{text}<br>%{y:.1f} mm<extra></extra>',
+          name: currentWinter,
+          mode: 'lines',
+          line: { color: 'blue', width: 3 },
+          showlegend: i === 0,
+          xaxis: xaxisKey,
+          yaxis: yaxisKey
+        });
 
-      } catch (error) {
-        console.error("Error loading or plotting data:", error);
-        document.getElementById('plot').innerText = "Error loading data. See console.";
-      }
+        // Add region title as annotation or layout property?
+        // Subplots in JS use 'annotations' for titles usually, or we can use the layout.
+        if (!layout.annotations) layout.annotations = [];
+        // Simple title approximation
+        // We need to calculate x/y position for each subplot title
+        // This is tricky in independent grid without 'easy' subplot titles
+        // But we can name the axis or just add text.
+        // Let's use layout.annotations for titles
+      });
+
+      // Update Axes Layout
+      regions.forEach((region, i) => {
+        const xaxisKey = `xaxis${i === 0 ? '' : i + 1}`;
+        const yaxisKey = `yaxis${i === 0 ? '' : i + 1}`;
+
+        // Axis titles and ticks
+        layout[xaxisKey] = {
+          tickvals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+          ticktext: monthOrder.map(m => monthNames[m]),
+          // domain is handled by grid
+        };
+        layout[yaxisKey] = {
+          // domain handled by grid
+        };
+
+        // Add Y-axis title for first column
+        if (i % cols === 0) {
+          layout[yaxisKey].title = 'גשם (ממ)';
+        }
+
+        // Add Subplot Title
+        // We need to find the center of the domain.
+        // Actually, 'layout.grid' handles domains, but annotations need x/y coordinates (0-1).
+        // This is hard to get wrong.
+        // simpler approach: use 'xaxis' title as subplot title at top? No.
+
+        // Let's rely on Plotly's automagic or manual calculation
+        // Manual calculation of domains for 3x3 grid
+        // row 1: y ~0.7-1.0
+        // row 2: y ~0.35-0.65
+        // row 3: y ~0.0-0.3
+        // col 1: x ~0.0-0.3
+        // col 2: x ~0.35-0.65
+        // col 3: x ~0.7-1.0
+
+        // Let's insert title annotations based on Row/Col logic
+        const row = Math.floor(i / cols); // 0, 1, 2
+        const col = i % cols; // 0, 1, 2
+
+        // Approximate positions
+        const xGap = 0.08;
+        const width = (1 - (cols - 1) * xGap) / cols;
+        const xPos = col * (width + xGap) + width / 2;
+
+        const yGap = 0.1;
+        const height = (1 - (rows - 1) * yGap) / rows;
+        // Y is from bottom up
+        const rowFromBottom = (rows - 1) - row;
+        const yPos = rowFromBottom * (height + yGap) + height + 0.02;
+
+        layout.annotations.push({
+          text: region,
+          x: xPos,
+          y: yPos,
+          xref: 'paper',
+          yref: 'paper',
+          showarrow: false,
+          font: { size: 16 }
+        });
+
+      });
+
+      // Construct dynamic UpdateMenu Args for rescaling
+      // We already hardcoded 9 axes, but checking if we need to make it robust
+      const axisKeys = Array.from({ length: regions.length }, (_, k) => `yaxis${k === 0 ? '' : k + 1}`);
+      const scale0_900 = {};
+      const autoscale = {};
+      axisKeys.forEach(k => {
+        scale0_900[k + '.range'] = [0, 900];
+        autoscale[k + '.autorange'] = true;
+      });
+
+      layout.updatemenus[0].buttons[0].args = [scale0_900];
+      layout.updatemenus[0].buttons[1].args = [autoscale];
+
+      const config = { responsive: true };
+      Plotly.newPlot('plot', traces, layout, config);
+
+    } catch (error) {
+      console.error("Error loading or plotting data:", error);
+      document.getElementById('plot').innerText = "Error loading data. See console.";
     }
+  }
 
-    loadAndPlot();
-  </script>
+  loadAndPlot();
+</script>
 </body>
 
 </html>

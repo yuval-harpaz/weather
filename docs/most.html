@@ -41,9 +41,9 @@
 
         header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 20px;
             background: var(--card-bg);
-            padding: 40px;
+            padding: 15px 20px;
             border-radius: 24px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             backdrop-filter: blur(10px);
@@ -52,17 +52,20 @@
 
         h1 {
             margin: 0;
-            font-size: 2.5em;
+            font-size: 1.8em;
             font-weight: 800;
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: -0.025em;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .controls {
-            margin-top: 30px;
+            margin-top: 15px;
             display: flex;
             justify-content: center;
             gap: 15px;
@@ -243,7 +246,18 @@
 
     <div class="container">
         <header>
-            <h1>שיאי מזג אוויר שנמדדו לאחרונה</h1>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                <a href="index.html" class="home-btn">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>דף הבית</span>
+                </a>
+                <h1>
+                    <img src="logo.jpg" alt="Icon" class="title-icon">
+                    שיאי מזג אוויר שנמדדו לאחרונה
+                </h1>
+            </div>
             <div class="controls">
                 <button id="btn7" class="btn-toggle active" onclick="togglePeriod(7)">7 ימים</button>
                 <button id="btn31" class="btn-toggle" onclick="togglePeriod(31)">31 ימים</button>

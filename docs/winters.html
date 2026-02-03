@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
+
 <head>
   <meta charset="UTF-8">
   <title>Winter Rainfall Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="logo.jpg">
   <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
   <!-- Common map styles -->
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css" />
   <!-- Chart.js for bar plots -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <style>
@@ -16,6 +17,7 @@
       width: 500px;
       height: 350px;
     }
+
     .chart-container {
       position: relative;
       width: 100%;
@@ -23,270 +25,280 @@
     }
   </style>
 </head>
+
 <body>
-<div id="floating-title">
-  <h1>גשמים חורפיים - מפת חורפים (ספטמבר-ספטמבר)</h1>
-  <div class="data-source">
-    <span>נתונים מ</span>
-    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
-      <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo">
+  <div id="floating-title" style="flex-direction: row; justify-content: center; gap: 20px;">
+    <a href="index.html" class="home-btn">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+      <span>דף הבית</span>
     </a>
+    <h1 style="margin: 0;">
+      <img src="logo.jpg" alt="Icon" class="title-icon">
+      גשמים חורפיים - מפת חורפים (ספטמבר-ספטמבר)
+    </h1>
+    <div class="data-source" style="margin-top: 0;">
+      <span>נתונים מ</span>
+      <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+        <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo">
+      </a>
+    </div>
   </div>
-</div>
-<div id="map"></div>
+  <div id="map"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-<script>
-// Initialize map centered on Israel
-const map = L.map('map').setView([31.5, 35.0], 8);
+  <script>
+    // Initialize map centered on Israel
+    const map = L.map('map').setView([31.5, 35.0], 8);
 
-// Tile layer
-L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
-  attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
-}).addTo(map);
+    // Tile layer
+    L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
+      attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
+    }).addTo(map);
 
-// Generate colors for each winter year
-function generateWinterColors(numWinters) {
-  const colors = [];
-  for (let i = 0; i < numWinters; i++) {
-    const hue = (i * 360 / numWinters) % 360;
-    colors.push(`hsl(${hue}, 70%, 50%)`);
-  }
-  return colors;
-}
-
-// Parse location string from CSV
-function parseLocation(locStr) {
-  try {
-    const latMatch = locStr.match(/latitude['"]*:\s*([\d.]+)/);
-    const lngMatch = locStr.match(/longitude['"]*:\s*([\d.]+)/);
-    if (latMatch && lngMatch) {
-      return {
-        lat: parseFloat(latMatch[1]),
-        lng: parseFloat(lngMatch[1])
-      };
-    }
-  } catch (e) {
-    console.error('Error parsing location:', locStr, e);
-  }
-  return null;
-}
-
-// Calculate winter rainfall (Sep 1 to Sep 1 next year)
-function calculateWinterRainfall(data, stationName) {
-  const winters = {};
-  const startYear = 1989;
-  const endYear = 2026;
-  
-  data.forEach(row => {
-    if (!row.datetime) return;
-    
-    const date = new Date(row.datetime);
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1; // 1-12
-    
-    // Determine winter year (Sep 1 YYYY to Aug 31 YYYY+1 is winter YYYY-YYYY+1)
-    let winterYear;
-    if (month >= 9) {
-      winterYear = `${year}-${year + 1}`;
-    } else {
-      winterYear = `${year - 1}-${year}`;
-    }
-    
-    const rainfall = parseFloat(row[stationName]);
-    if (!isNaN(rainfall) && rainfall > 0) {
-      if (!winters[winterYear]) {
-        winters[winterYear] = 0;
+    // Generate colors for each winter year
+    function generateWinterColors(numWinters) {
+      const colors = [];
+      for (let i = 0; i < numWinters; i++) {
+        const hue = (i * 360 / numWinters) % 360;
+        colors.push(`hsl(${hue}, 70%, 50%)`);
       }
-      winters[winterYear] += rainfall;
+      return colors;
     }
-  });
-  
-  return winters;
-}
 
-// Create bar chart for a station
-function createBarChart(canvasId, stationName, winterData) {
-  const winters = Object.keys(winterData).sort();
-  const values = winters.map(w => winterData[w]);
-  const colors = generateWinterColors(winters.length);
-  
-  const ctx = document.getElementById(canvasId).getContext('2d');
-  
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: winters,
-      datasets: [{
-        label: 'גשם (מ"מ)',
-        data: values,
-        backgroundColor: colors,
-        borderColor: colors,
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false
-        },
-        title: {
-          display: true,
-          text: stationName,
-          font: {
-            size: 16
-          }
+    // Parse location string from CSV
+    function parseLocation(locStr) {
+      try {
+        const latMatch = locStr.match(/latitude['"]*:\s*([\d.]+)/);
+        const lngMatch = locStr.match(/longitude['"]*:\s*([\d.]+)/);
+        if (latMatch && lngMatch) {
+          return {
+            lat: parseFloat(latMatch[1]),
+            lng: parseFloat(lngMatch[1])
+          };
         }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'גשם (מ"מ)'
+      } catch (e) {
+        console.error('Error parsing location:', locStr, e);
+      }
+      return null;
+    }
+
+    // Calculate winter rainfall (Sep 1 to Sep 1 next year)
+    function calculateWinterRainfall(data, stationName) {
+      const winters = {};
+      const startYear = 1989;
+      const endYear = 2026;
+
+      data.forEach(row => {
+        if (!row.datetime) return;
+
+        const date = new Date(row.datetime);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // 1-12
+
+        // Determine winter year (Sep 1 YYYY to Aug 31 YYYY+1 is winter YYYY-YYYY+1)
+        let winterYear;
+        if (month >= 9) {
+          winterYear = `${year}-${year + 1}`;
+        } else {
+          winterYear = `${year - 1}-${year}`;
+        }
+
+        const rainfall = parseFloat(row[stationName]);
+        if (!isNaN(rainfall) && rainfall > 0) {
+          if (!winters[winterYear]) {
+            winters[winterYear] = 0;
           }
+          winters[winterYear] += rainfall;
+        }
+      });
+
+      return winters;
+    }
+
+    // Create bar chart for a station
+    function createBarChart(canvasId, stationName, winterData) {
+      const winters = Object.keys(winterData).sort();
+      const values = winters.map(w => winterData[w]);
+      const colors = generateWinterColors(winters.length);
+
+      const ctx = document.getElementById(canvasId).getContext('2d');
+
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: winters,
+          datasets: [{
+            label: 'גשם (מ"מ)',
+            data: values,
+            backgroundColor: colors,
+            borderColor: colors,
+            borderWidth: 1
+          }]
         },
-        x: {
-          title: {
-            display: true,
-            text: 'חורף'
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            title: {
+              display: true,
+              text: stationName,
+              font: {
+                size: 16
+              }
+            }
           },
-          ticks: {
-            maxRotation: 90,
-            minRotation: 45,
-            font: {
-              size: 8
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'גשם (מ"מ)'
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: 'חורף'
+              },
+              ticks: {
+                maxRotation: 90,
+                minRotation: 45,
+                font: {
+                  size: 8
+                }
+              }
             }
           }
         }
+      });
+    }
+
+    // Load all rain data files
+    async function loadAllRainData() {
+      const startYear = 1989;
+      const endYear = 2026;
+      const allData = [];
+
+      console.log('Loading rain data...');
+
+      for (let year = startYear; year <= endYear; year++) {
+        try {
+          const url = `https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/rain_${year}.csv`;
+          const response = await fetch(url);
+          const csvText = await response.text();
+          const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+          allData.push(...parsed.data);
+          console.log(`Loaded ${year}`);
+        } catch (error) {
+          console.error(`Error loading ${year}:`, error);
+        }
       }
-    }
-  });
-}
 
-// Load all rain data files
-async function loadAllRainData() {
-  const startYear = 1989;
-  const endYear = 2026;
-  const allData = [];
-  
-  console.log('Loading rain data...');
-  
-  for (let year = startYear; year <= endYear; year++) {
-    try {
-      const url = `https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/rain_${year}.csv`;
-      const response = await fetch(url);
-      const csvText = await response.text();
-      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-      allData.push(...parsed.data);
-      console.log(`Loaded ${year}`);
-    } catch (error) {
-      console.error(`Error loading ${year}:`, error);
+      console.log(`Total records loaded: ${allData.length}`);
+      return allData;
     }
-  }
-  
-  console.log(`Total records loaded: ${allData.length}`);
-  return allData;
-}
 
-// Main execution
-Promise.all([
-  fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/ims_stations.csv').then(r => r.text()),
-  loadAllRainData()
-]).then(([stationsCsv, rainData]) => {
-  const stationsData = Papa.parse(stationsCsv, { header: true, skipEmptyLines: true }).data;
-  
-  // Get all unique station names from rain data
-  const stationNames = new Set();
-  rainData.forEach(row => {
-    Object.keys(row).forEach(key => {
-      if (key && key !== 'datetime') {
-        stationNames.add(key);
-      }
-    });
-  });
+    // Main execution
+    Promise.all([
+      fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/ims_stations.csv').then(r => r.text()),
+      loadAllRainData()
+    ]).then(([stationsCsv, rainData]) => {
+      const stationsData = Papa.parse(stationsCsv, { header: true, skipEmptyLines: true }).data;
+
+      // Get all unique station names from rain data
+      const stationNames = new Set();
+      rainData.forEach(row => {
+        Object.keys(row).forEach(key => {
+          if (key && key !== 'datetime') {
+            stationNames.add(key);
+          }
+        });
+      });
 
 
-  console.log(`Found ${stationNames.size} stations in rain data`);
-  
-  // Create a map of stations with their locations
-  const stationLocations = {};
-  stationsData.forEach(row => {
-    const location = parseLocation(row.location);
-    if (location && row.name) {
-      stationLocations[row.name] = {
-        lat: location.lat,
-        lng: location.lng,
-        active: row.active === 'True'
-      };
-    }
-  });
-  stationNames.forEach(name => {
-    if (!stationLocations[name]) {
-      console.warn('Missing station in ims_stations.csv:', name);
-    }
-  });
-  // Counter for charts
-  let chartCounter = 0;
-  
-  // For each station with rain data and location, calculate winters and add marker
-  stationNames.forEach(stationName => {
-    if (!stationLocations[stationName]) {
-      return; // Skip stations without location data
-    }
-    
-    const winterData = calculateWinterRainfall(rainData, stationName);
-    const winterYears = Object.keys(winterData);
-    
-    if (winterYears.length === 0) {
-      return; // Skip stations with no data
-    }
-    
-    const location = stationLocations[stationName];
-    const chartId = `chart-${chartCounter++}`;
-    
-    // Create popup with chart
-    const popupContent = document.createElement('div');
-    popupContent.className = 'chart-popup';
-    popupContent.innerHTML = `
+      console.log(`Found ${stationNames.size} stations in rain data`);
+
+      // Create a map of stations with their locations
+      const stationLocations = {};
+      stationsData.forEach(row => {
+        const location = parseLocation(row.location);
+        if (location && row.name) {
+          stationLocations[row.name] = {
+            lat: location.lat,
+            lng: location.lng,
+            active: row.active === 'True'
+          };
+        }
+      });
+      stationNames.forEach(name => {
+        if (!stationLocations[name]) {
+          console.warn('Missing station in ims_stations.csv:', name);
+        }
+      });
+      // Counter for charts
+      let chartCounter = 0;
+
+      // For each station with rain data and location, calculate winters and add marker
+      stationNames.forEach(stationName => {
+        if (!stationLocations[stationName]) {
+          return; // Skip stations without location data
+        }
+
+        const winterData = calculateWinterRainfall(rainData, stationName);
+        const winterYears = Object.keys(winterData);
+
+        if (winterYears.length === 0) {
+          return; // Skip stations with no data
+        }
+
+        const location = stationLocations[stationName];
+        const chartId = `chart-${chartCounter++}`;
+
+        // Create popup with chart
+        const popupContent = document.createElement('div');
+        popupContent.className = 'chart-popup';
+        popupContent.innerHTML = `
       <div class="chart-container">
         <canvas id="${chartId}"></canvas>
       </div>
     `;
-    
-    const marker = L.circleMarker([location.lat, location.lng], {
-      radius: 6,
-      fillColor: '#3388ff',
-      color: '#fff',
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.8
-    }).addTo(map);
-    
-    marker.bindPopup(popupContent, {
-      maxWidth: 550,
-      minWidth: 500
-    });
-    
-    // Create chart when popup opens
-    marker.on('popupopen', function() {
-      setTimeout(() => {
-        createBarChart(chartId, stationName, winterData);
-      }, 100);
-    });
-  });
-  
-  console.log(`Added ${chartCounter} stations to map`);
-  
-  // Add legend
-  const legend = L.control({ position: 'topright' });
-  legend.onAdd = function(map) {
-    const div = L.DomUtil.create('div', 'legend');
-    div.innerHTML = `
+
+        const marker = L.circleMarker([location.lat, location.lng], {
+          radius: 6,
+          fillColor: '#3388ff',
+          color: '#fff',
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(map);
+
+        marker.bindPopup(popupContent, {
+          maxWidth: 550,
+          minWidth: 500
+        });
+
+        // Create chart when popup opens
+        marker.on('popupopen', function () {
+          setTimeout(() => {
+            createBarChart(chartId, stationName, winterData);
+          }, 100);
+        });
+      });
+
+      console.log(`Added ${chartCounter} stations to map`);
+
+      // Add legend
+      const legend = L.control({ position: 'topright' });
+      legend.onAdd = function (map) {
+        const div = L.DomUtil.create('div', 'legend');
+        div.innerHTML = `
       <div dir="rtl" style="text-align: right;">
         <strong>חורפים</strong><br>
         <p style="font-size: 0.9em; margin: 5px 0;">
@@ -298,15 +310,16 @@ Promise.all([
         </div>
       </div>
     `;
-    return div;
-  };
-  legend.addTo(map);
-})
-.catch(error => {
-  console.error('Error loading data:', error);
-});
+        return div;
+      };
+      legend.addTo(map);
+    })
+      .catch(error => {
+        console.error('Error loading data:', error);
+      });
 
-</script>
+  </script>
 
 </body>
+
 </html>
