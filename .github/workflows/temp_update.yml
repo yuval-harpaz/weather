@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs at 01:00 UTC = 3:00 AM Israel time (winter, UTC+2)
     # This is 2 hours after the rain update (23:00 UTC)
-    - cron: '0 1 * * *'
+    - cron: '0 1,11 * * *'
   workflow_dispatch:  # Allows manual triggering from the Actions tab
 
 jobs:
