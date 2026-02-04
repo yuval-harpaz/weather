@@ -98,7 +98,7 @@ def update_stations(force=False):
         for ival in range(len(values_prev)):
             if prev.columns[ival] == 'monitors' or prev.columns[ival] == 'StationTarget':
                 continue
-            if str(values_prev[ival]) == 'nan' and values_new[ival] == '':
+            if str(values_prev[ival]) == 'nan' and values_new[ival].replace('None','') == '':
                 continue
             if type(values_new[ival]) == dict:
                 values_new[ival] = str(values_new[ival])
