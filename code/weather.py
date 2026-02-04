@@ -49,7 +49,7 @@ def timing():
     print(f'median times for all channels: {np.nanmedian(times[:,1]):.2f} sec')
     print(f'median times for all channels one day: {np.nanmedian(times[:,2]):.2f} sec')
 
-def update_stations():
+def update_stations(force=False):
     """
     Updates the stations CSV file with new stations from the IMS API.
     
@@ -81,7 +81,33 @@ def update_stations():
         if name_prev != name_new:
             print(f'station name changed for id {stationid} from {name_prev} to {name_new}')
             raise Exception('station name changed, please check!')
-    if len(df_new) > 0:
+        # make sure everything is as before
+    new_columns = [col for col in df_sta.columns if col not in prev.columns]
+    if len(new_columns) > 0:
+        print('new columns found:')
+        print(new_columns)
+        raise Exception('new columns found, please check!')
+
+    same_loc = [prev.columns[ii] == df_sta.columns[ii] for ii in range(len(prev.columns))]
+    if not all(same_loc):
+        raise Exception('columns order changed, cannot proceed to station tests!')
+    
+    for station in prev['name']:
+        values_prev = prev[prev['name'] == station].values[0]
+        values_new = df_sta[df_sta['name'] == station].values[0]
+        for ival in range(len(values_prev)):
+            if prev.columns[ival] == 'monitors' or prev.columns[ival] == 'StationTarget':
+                continue
+            if str(values_prev[ival]) == 'nan' and values_new[ival] == '':
+                continue
+            if type(values_new[ival]) == dict:
+                values_new[ival] = str(values_new[ival])
+            elif str(values_new[ival]) == '':
+                values_new[ival] = 'nan'
+            if values_prev[ival] != values_new[ival]:
+                print(f'station {station} {prev.columns[ival]} changed from {values_prev[ival]} to {values_new[ival]}')
+                raise Exception('station values changed, please check!')
+    if len(df_new) > 0 or force:
         df_sta.to_csv('data/ims_stations.csv', index=False)
 
 df_sta = pd.read_csv('data/ims_stations.csv')
