@@ -112,7 +112,7 @@ def update_stations(force=False):
 
 df_sta = pd.read_csv('data/ims_stations.csv')
 
-def update_regions():
+def update_regions(force=False):
     """
     Updates the regions CSV file with new regions from the IMS API.
     
@@ -128,7 +128,24 @@ def update_regions():
     df_reg = pd.DataFrame(data)
     prev = pd.read_csv('data/ims_regions.csv')
     df_reg_new = df_reg[~df_reg['regionId'].isin(prev['regionId'].values)]
-    if len(df_reg_new) > 0:
+    # check that regions are the same
+    for iregion in range(len(prev)):
+        prev_stations = prev['stations'].values[iregion]
+        prev_dicts = eval(prev_stations)
+        prev_names = [p['name'] for p in prev_dicts]
+        current_dicts = df_reg['stations'].values[iregion]
+        current_names = [p['name'] for p in current_dicts]
+        if set(current_names) != set(prev_names):
+            print(f"region {prev['name'][iregion]} has issues")
+            missing = [p for p in prev_names if p not in current_names] + [c for c in current_names if c not in prev_names]
+            print(missing)
+            raise Exception("region's list of stations changes, please check!")
+        regionid = prev['regionId'].values[iregion]
+        name_prev = prev['name'].values[iregion]
+        name_new = df_reg['name'].values[df_reg['regionId'] == regionid][0]
+        if str(name_prev).replace('nan', 'None') != name_new:
+            raise Exception("region name changed, please check!")
+    if len(df_reg_new) > 0 or force:
         df_reg.to_csv('data/ims_regions.csv', index=False)
 
 def update_activity(new=False, ignore_old=True):
