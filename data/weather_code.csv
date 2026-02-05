@@ -1,25 +1,24 @@
-Code,מזג האוויר,Weather
-1010,סופות חול,Sandstorms
-1020,סופת רעמים וברקים,Thunderstorms
-1060,שלג,Snow
-1070,שלג קל,Snow Light
-1080,גשם מעורב בשלג,Sleet
-1140,גשם,Rainy
-1160,ערפל,Fog
-1220,מעונן חלקית,Partly cloudy
-1230,מעונן,Cloudy
-1250,בהיר,Clear
-1260,רוחות ערות,Windy
-1270,הביל,Muggy
-1300,קרה,Frost
-1310,חם,Hot
-1320,קר,Cold
-1510,סוער,Stormy
-1520,שלג כבד,Snow Heavy
-1530,מעונן חלקית, אפשרות לגשם,Partly cloudy rain possible
-1540,מעונן, אפשרות לגשם,Cloudy rain possible
-1560,מעונן, גשם קל,Cloudy rain light
-1570,אביך,Dust
-1580,חם מאד,Hot Extremely
-1590,קר מאד,Cold Extremely
-
+"Code","מזג האוויר","Weather"
+1010,"סופות חול","Sandstorms"
+1020,"סופת רעמים וברקים","Thunderstorms"
+1060,"שלג","Snow"
+1070,"שלג קל","Light Snow"
+1080,"גשם מעורב בשלג","Sleet"
+1140,"גשם","Rainy"
+1160,"ערפל","Fog"
+1220,"מעונן חלקית","Partly cloudy"
+1230,"מעונן","Cloudy"
+1250,"בהיר","Clear"
+1260,"רוחות ערות","Windy"
+1270,"הביל","Muggy"
+1300,"קרה","Frost"
+1310,"חם","Hot"
+1320,"קר","Cold"
+1510,"סוער","Stormy"
+1520,"שלג כבד","Heavy Snow"
+1530,"מעונן חלקית;  אפשרות לגשם","Partly cloudy possible rain "
+1540,"מעונן;  אפשרות לגשם","Cloudy possible rain"
+1560,"מעונן;  גשם קל","Cloudy light rain"
+1570,"אביך","Dust"
+1580,"חם מאד","Hot Extremely"
+1590,"קר מאד","Extremely Cold"
