@@ -8,15 +8,18 @@ import numpy as np
 from glob import glob
 from time import sleep
 import json
-update_stations(force=True)
-update_regions(force=True)
-df = pd.read_csv('data/ims_regions.csv')
-for iregion in range(len(df)):
-    region = str(df['name'][iregion])
-    stations = eval(df['stations'][iregion])
-    stations = [s['name'] for s in stations]
-    print(f'Region: {iregion} {region}')
-    print('stations: '+', '.join(sorted(stations)))
+
+from collect_predictions import main
+main()
+# update_stations(force=True)
+# update_regions(force=True)
+# df = pd.read_csv('data/ims_regions.csv') 
+# for iregion in range(len(df)):
+#     region = str(df['name'][iregion])
+#     stations = eval(df['stations'][iregion])
+#     stations = [s['name'] for s in stations]
+#     print(f'Region: {iregion} {region}')
+#     print('stations: '+', '.join(sorted(stations)))
 
 # df0 = pd.read_csv('data/rain_2020.csv')
 # df1 = pd.read_csv('data/rain_2021.csv')
