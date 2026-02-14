@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>תחזית מזג אוויר - 4 ימים</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="logo.jpg">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
+    <!-- Common map styles -->
+    <link rel="stylesheet" href="style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Assistant', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .leaflet-popup-content-wrapper {
+            border-radius: 12px !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18) !important;
+            padding: 0 !important;
+            overflow: hidden;
+        }
+
+        .leaflet-popup-content {
+            margin: 0 !important;
+            min-width: 260px;
+            max-width: 340px;
+            font-family: 'Assistant', sans-serif;
+        }
+
+        .popup-header {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            padding: 12px 16px;
+            font-size: 1.15em;
+            font-weight: 700;
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+
+        .popup-header .coords {
+            font-size: 0.7em;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .forecast-grid {
+            display: flex;
+            flex-direction: row-reverse;
+            padding: 6px;
+            gap: 2px;
+            background: #f8fafc;
+        }
+
+        .forecast-day {
+            flex: 1;
+            text-align: center;
+            padding: 8px 4px;
+            border-radius: 8px;
+            transition: background 0.2s;
+            min-width: 0;
+        }
+
+        .forecast-day:hover {
+            background: #e0e7ff;
+        }
+
+        .day-name {
+            font-size: 1em;
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 4px;
+        }
+
+        .day-date {
+            font-size: 0.7em;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+
+        .weather-emoji {
+            font-size: 1.5em;
+            margin: 4px 0;
+        }
+
+        .weather-desc {
+            font-size: 0.72em;
+            color: #475569;
+            margin-bottom: 6px;
+            line-height: 1.2;
+            min-height: 2em;
+        }
+
+        .temp-row {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .temp-max {
+            font-size: 1.15em;
+            font-weight: 700;
+            color: #dc2626;
+        }
+
+        .temp-min {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #2563eb;
+        }
+
+        .temp-label {
+            font-size: 0.6em;
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.92);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            font-family: 'Assistant', sans-serif;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            font-size: 1.1em;
+            color: #475569;
+            font-weight: 600;
+        }
+
+        .error-msg {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 24px 32px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            text-align: center;
+            z-index: 2000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            direction: rtl;
+        }
+
+        @media (max-width: 500px) {
+            .leaflet-popup-content {
+                min-width: 220px;
+                max-width: 290px;
+            }
+
+            .popup-header {
+                font-size: 1em;
+                padding: 10px 12px;
+            }
+
+            .forecast-grid {
+                padding: 4px;
+            }
+
+            .forecast-day {
+                padding: 6px 2px;
+            }
+
+            .weather-emoji {
+                font-size: 1.3em;
+            }
+
+            .day-name {
+                font-size: 0.9em;
+            }
+
+            .temp-max {
+                font-size: 1em;
+            }
+
+            .temp-min {
+                font-size: 0.85em;
+            }
+
+            .weather-desc {
+                font-size: 0.65em;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">טוען תחזית...</div>
+    </div>
+
+    <div id="floating-title" style="flex-direction: row; justify-content: center; gap: 20px;">
+        <a href="index.html" class="home-btn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <span>דף הבית</span>
+        </a>
+        <h1 style="margin: 0;">
+            <img src="logo.jpg" alt="Icon" class="title-icon">
+            תחזית מזג אוויר - 4 ימים
+        </h1>
+        <div class="data-source" style="margin-top: 0;">
+            <span>נתונים מ</span>
+            <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+                <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo">
+            </a>
+        </div>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <script>
+        // Initialize map centered on Israel
+        const map = L.map('map').setView([31.5, 35.0], 8);
+
+        // Tile layer
+        L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
+            attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
+        }).addTo(map);
+
+        // Hebrew day-of-week symbols: Sunday=א ... Saturday=ש
+        const hebrewDays = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+
+        // Weather code → emoji mapping
+        const weatherEmoji = {
+            1010: '🌪️',  // Sandstorms
+            1020: '⛈️',   // Thunderstorms
+            1060: '🌨️',  // Snow
+            1070: '🌨️',  // Light Snow
+            1080: '🌨️',  // Sleet
+            1140: '🌧️',  // Rainy
+            1160: '🌫️',  // Fog
+            1220: '⛅',   // Partly cloudy
+            1230: '☁️',   // Cloudy
+            1250: '☀️',   // Clear
+            1260: '💨',   // Windy
+            1270: '🌡️',  // Muggy
+            1300: '❄️',   // Frost
+            1310: '🔥',   // Hot
+            1320: '🥶',   // Cold
+            1510: '🌊',   // Stormy
+            1520: '❄️',   // Heavy Snow
+            1530: '🌤️',  // Partly cloudy possible rain
+            1540: '🌥️',  // Cloudy possible rain
+            1560: '🌦️',  // Cloudy light rain
+            1570: '😶‍🌫️', // Dust
+            1580: '🔥',   // Hot Extremely
+            1590: '🥶',   // Extremely Cold
+        };
+
+        // Temperature → color gradient (blue=cold → red=hot)
+        function tempColor(temp) {
+            const t = Math.max(0, Math.min(45, temp));
+            const ratio = t / 45;
+            const r = Math.round(30 + 225 * ratio);
+            const g = Math.round(100 + 80 * (1 - Math.abs(ratio - 0.5) * 2));
+            const b = Math.round(220 - 190 * ratio);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // Format date as DD/MM
+        function fmtDate(dateStr) {
+            const parts = dateStr.split('-');
+            return parts[2] + '/' + parts[1];
+        }
+
+        // Fetch weather codes CSV and XML forecast data
+        Promise.all([
+            fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/weather_code.csv').then(r => r.text()),
+            fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_cities.xml')).then(r => r.arrayBuffer())
+        ]).then(([codesCsv, xmlBuffer]) => {
+            // Parse weather codes
+            const codesData = Papa.parse(codesCsv, { header: true, skipEmptyLines: true }).data;
+            const weatherCodes = {};
+            codesData.forEach(row => {
+                weatherCodes[row.Code] = { he: row['מזג האוויר'], en: row.Weather };
+            });
+
+            // Decode ISO-8859-8 (Hebrew)
+            const decoder = new TextDecoder('iso-8859-8');
+            const xmlText = decoder.decode(new Uint8Array(xmlBuffer));
+
+            // Parse XML
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+            const locations = xmlDoc.querySelectorAll('Location');
+
+            const cities = [];
+
+            locations.forEach(loc => {
+                const meta = loc.querySelector('LocationMetaData');
+                const nameEng = meta.querySelector('LocationNameEng').textContent;
+                const nameHeb = meta.querySelector('LocationNameHeb').textContent;
+                const lat = parseFloat(meta.querySelector('DisplayLat').textContent);
+                const lon = parseFloat(meta.querySelector('DisplayLon').textContent);
+
+                const timeUnits = loc.querySelectorAll('TimeUnitData');
+                const days = [];
+
+                timeUnits.forEach(tu => {
+                    const date = tu.querySelector('Date').textContent;
+                    const elements = tu.querySelectorAll('Element');
+                    const dayData = { date };
+
+                    elements.forEach(el => {
+                        const name = el.querySelector('ElementName').textContent;
+                        const value = el.querySelector('ElementValue').textContent;
+                        if (name === 'Maximum temperature') dayData.max = parseInt(value);
+                        if (name === 'Minimum temperature') dayData.min = parseInt(value);
+                        if (name === 'Weather code') dayData.weatherCode = value;
+                    });
+
+                    // Only include days that have at least a weather code or max temp
+                    if (dayData.weatherCode || dayData.max !== undefined) {
+                        days.push(dayData);
+                    }
+                });
+
+                // Take up to 4 days that have max temperature
+                const forecastDays = days.filter(d => d.max !== undefined).slice(0, 4);
+
+                if (forecastDays.length > 0) {
+                    cities.push({ nameEng, nameHeb, lat, lon, days: forecastDays });
+                }
+            });
+
+            // Add markers
+            cities.forEach(city => {
+                // Average max temp for marker color
+                const avgMax = city.days.reduce((s, d) => s + (d.max || 0), 0) / city.days.length;
+                const color = tempColor(avgMax);
+
+                const marker = L.circleMarker([city.lat, city.lon], {
+                    radius: 9,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.85
+                }).addTo(map);
+
+                // Build popup HTML
+                let forecastHTML = '<div class="forecast-grid">';
+                city.days.forEach(day => {
+                    const d = new Date(day.date + 'T00:00:00');
+                    const daySymbol = hebrewDays[d.getDay()];
+                    const emoji = weatherEmoji[day.weatherCode] || '🌡️';
+                    const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
+
+                    forecastHTML += `
+            <div class="forecast-day">
+              <div class="day-name">יום ${daySymbol}'</div>
+              <div class="day-date">${fmtDate(day.date)}</div>
+              <div class="weather-emoji">${emoji}</div>
+              <div class="weather-desc">${desc}</div>
+              <div class="temp-row">
+                <span class="temp-max">${day.max !== undefined ? day.max + '°' : '-'}</span>
+                <span class="temp-min">${day.min !== undefined ? day.min + '°' : '-'}</span>
+              </div>
+            </div>`;
+                });
+                forecastHTML += '</div>';
+
+                const popupContent = `
+          <div class="popup-header">
+            ${city.nameHeb}
+            <div class="coords">${city.lat.toFixed(2)}°N, ${city.lon.toFixed(2)}°E</div>
+          </div>
+          ${forecastHTML}`;
+
+                marker.bindPopup(popupContent, {
+                    maxWidth: 360,
+                    className: ''
+                });
+
+                // Show city name as tooltip
+                marker.bindTooltip(city.nameHeb, {
+                    permanent: false,
+                    direction: 'top',
+                    offset: [0, -10],
+                    className: 'city-tooltip'
+                });
+            });
+
+            // Hide loading
+            document.getElementById('loading').style.display = 'none';
+
+        }).catch(err => {
+            console.error('Error loading forecast data:', err);
+            document.getElementById('loading').innerHTML =
+                `<div class="error-msg">שגיאה בטעינת נתוני התחזית<br><small>${err.message}</small></div>`;
+        });
+    </script>
+
+</body>
+
+</html>
