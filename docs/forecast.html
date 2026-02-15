@@ -18,41 +18,34 @@
             padding: 0;
         }
 
-        .leaflet-popup-content-wrapper {
-            border-radius: 12px !important;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18) !important;
+        .leaflet-tooltip.compact-tooltip {
+            background-color: white !important;
+            border: none !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
             padding: 0 !important;
-            overflow: hidden;
-        }
-
-        .leaflet-popup-content {
-            margin: 0 !important;
-            min-width: 260px;
-            max-width: 340px;
             font-family: 'Assistant', sans-serif;
+            pointer-events: none !important;
         }
 
-        .popup-header {
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            color: white;
-            padding: 12px 16px;
-            font-size: 1.15em;
-            font-weight: 700;
-            text-align: center;
-            letter-spacing: 0.5px;
+        .leaflet-tooltip-right.compact-tooltip::before {
+            border-right-color: white !important;
+            left: -10px !important;
         }
 
-        .popup-header .coords {
-            font-size: 0.7em;
-            font-weight: 400;
-            opacity: 0.8;
-            margin-top: 2px;
+        .leaflet-tooltip-left.compact-tooltip::before {
+            border-left-color: white !important;
+            right: -10px !important;
+        }
+
+        .leaflet-tooltip.compact-tooltip .forecast-grid {
+            border-radius: 8px;
+            overflow: hidden;
         }
 
         .forecast-grid {
             display: flex;
-            flex-direction: row-reverse;
-            padding: 6px;
+            padding: 2px 4px;
             gap: 2px;
             background: #f8fafc;
         }
@@ -60,7 +53,7 @@
         .forecast-day {
             flex: 1;
             text-align: center;
-            padding: 8px 4px;
+            padding: 2px 2px;
             border-radius: 8px;
             transition: background 0.2s;
             min-width: 0;
@@ -70,22 +63,28 @@
             background: #e0e7ff;
         }
 
+        .day-header {
+            display: flex;
+            justify-content: center;
+            align-items: baseline;
+            gap: 4px;
+            margin-bottom: 0px;
+        }
+
         .day-name {
-            font-size: 1em;
+            font-size: 0.9em;
             font-weight: 700;
             color: #1e40af;
-            margin-bottom: 4px;
         }
 
         .day-date {
             font-size: 0.7em;
             color: #64748b;
-            margin-bottom: 6px;
         }
 
         .weather-emoji {
             font-size: 1.5em;
-            margin: 4px 0;
+            margin: 0px 0;
         }
 
         .weather-desc {
@@ -98,27 +97,45 @@
 
         .temp-row {
             display: flex;
-            flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 2px;
+            font-size: 0.9em;
         }
 
         .temp-max {
-            font-size: 1.15em;
             font-weight: 700;
             color: #dc2626;
         }
 
         .temp-min {
-            font-size: 0.95em;
             font-weight: 600;
             color: #2563eb;
         }
 
-        .temp-label {
-            font-size: 0.6em;
+        .temp-separator {
             color: #94a3b8;
             font-weight: 400;
+        }
+
+        /* Legend styles */
+        .info.legend {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            line-height: 1.5;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: right;
+            margin-left: 8px;
+            opacity: 0.85;
+            border-radius: 4px;
         }
 
         .loading-overlay {
@@ -256,6 +273,9 @@
 
         // Hebrew day-of-week symbols: Sunday=א ... Saturday=ש
         const hebrewDays = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+        const openCities = ['ירושלים', 'תל אביב', 'באר שבע', 'חיפה', 'אילת', 'צפת', 'מצפה רמון'];
+        let markers = [];
+        let firstClick = true;
 
         // Weather code → emoji mapping
         const weatherEmoji = {
@@ -303,7 +323,7 @@
         // Fetch weather codes CSV and XML forecast data
         Promise.all([
             fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/weather_code.csv').then(r => r.text()),
-            fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_cities.xml')).then(r => r.arrayBuffer())
+            fetch('https://corsproxy.io/?' + encodeURIComponent('https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_cities.xml')).then(r => r.arrayBuffer())
         ]).then(([codesCsv, xmlBuffer]) => {
             // Parse weather codes
             const codesData = Papa.parse(codesCsv, { header: true, skipEmptyLines: true }).data;
@@ -362,61 +382,106 @@
 
             // Add markers
             cities.forEach(city => {
-                // Average max temp for marker color
-                const avgMax = city.days.reduce((s, d) => s + (d.max || 0), 0) / city.days.length;
-                const color = tempColor(avgMax);
+                // Next day's max temp for marker color
+                const nextDayMax = city.days[0] ? city.days[0].max : 25;
+                const color = tempColor(nextDayMax);
 
                 const marker = L.circleMarker([city.lat, city.lon], {
-                    radius: 9,
+                    radius: 8,
                     fillColor: color,
                     color: '#fff',
-                    weight: 2,
+                    weight: 1.5,
                     opacity: 1,
-                    fillOpacity: 0.85
+                    fillOpacity: 0.9
                 }).addTo(map);
 
-                // Build popup HTML
+                markers.push({ marker, nameHeb: city.nameHeb, days: city.days });
+
+                // Build forecast HTML
                 let forecastHTML = '<div class="forecast-grid">';
                 city.days.forEach(day => {
                     const d = new Date(day.date + 'T00:00:00');
                     const daySymbol = hebrewDays[d.getDay()];
                     const emoji = weatherEmoji[day.weatherCode] || '🌡️';
-                    const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
 
                     forecastHTML += `
             <div class="forecast-day">
-              <div class="day-name">יום ${daySymbol}'</div>
-              <div class="day-date">${fmtDate(day.date)}</div>
+              <div class="day-header">
+                <span class="day-name">${daySymbol}</span>
+                <span class="day-date">${fmtDate(day.date)}</span>
+              </div>
               <div class="weather-emoji">${emoji}</div>
-              <div class="weather-desc">${desc}</div>
               <div class="temp-row">
-                <span class="temp-max">${day.max !== undefined ? day.max + '°' : '-'}</span>
-                <span class="temp-min">${day.min !== undefined ? day.min + '°' : '-'}</span>
+                <span class="temp-min">${day.min !== undefined ? day.min : '-'}</span>
+                <span class="temp-separator">-</span>
+                <span class="temp-max">${day.max !== undefined ? day.max : '-'}</span>
               </div>
             </div>`;
                 });
                 forecastHTML += '</div>';
 
-                const popupContent = `
-          <div class="popup-header">
-            ${city.nameHeb}
-            <div class="coords">${city.lat.toFixed(2)}°N, ${city.lon.toFixed(2)}°E</div>
-          </div>
-          ${forecastHTML}`;
+                const isPermanent = openCities.some(name => city.nameHeb.includes(name));
 
-                marker.bindPopup(popupContent, {
-                    maxWidth: 360,
-                    className: ''
+                marker.bindTooltip(forecastHTML, {
+                    permanent: isPermanent,
+                    direction: 'right',
+                    className: 'compact-tooltip',
+                    offset: [165, 0],
+                    opacity: 1,
+                    interactive: false,
+                    sticky: false
                 });
 
-                // Show city name as tooltip
-                marker.bindTooltip(city.nameHeb, {
-                    permanent: false,
-                    direction: 'top',
-                    offset: [0, -10],
-                    className: 'city-tooltip'
+                marker.on('click', function (e) {
+                    // Make all markers non-permanent for hover behavior
+                    markers.forEach(m => {
+                        const tt = m.marker.getTooltip();
+                        if (tt) {
+                            const content = tt.getContent();
+                            m.marker.unbindTooltip();
+                            m.marker.bindTooltip(content, {
+                                permanent: false,
+                                direction: 'right',
+                                className: 'compact-tooltip',
+                                offset: [165, 0],
+                                opacity: 1,
+                                interactive: false,
+                                sticky: false
+                            });
+                        }
+                    });
+
+                    // Make the clicked marker permanent so it stays open
+                    const clickedContent = marker.getTooltip() ? marker.getTooltip().getContent() : forecastHTML;
+                    marker.unbindTooltip();
+                    marker.bindTooltip(clickedContent, {
+                        permanent: true,
+                        direction: 'right',
+                        className: 'compact-tooltip',
+                        offset: [165, 0],
+                        opacity: 1,
+                        interactive: false,
+                        sticky: false
+                    });
+                    marker.openTooltip();
+                    firstClick = false;
                 });
             });
+
+            // Add legend
+            const legend = L.control({ position: 'bottomleft' });
+            legend.onAdd = function (map) {
+                const div = L.DomUtil.create('div', 'info legend');
+                const grades = [10, 20, 30, 40];
+                div.innerHTML = '<div>טמפ\' מקסימום</div>';
+                for (let i = 0; i < grades.length; i++) {
+                    div.innerHTML +=
+                        '<i style="background:' + tempColor(grades[i]) + '"></i> ' +
+                        grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+                }
+                return div;
+            };
+            legend.addTo(map);
 
             // Hide loading
             document.getElementById('loading').style.display = 'none';
