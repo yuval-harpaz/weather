@@ -323,7 +323,7 @@
         // Fetch weather codes CSV and XML forecast data
         Promise.all([
             fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/weather_code.csv').then(r => r.text()),
-            fetch('https://corsproxy.io/?' + encodeURIComponent('https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_cities.xml')).then(r => r.arrayBuffer())
+            fetch('https://quiet-glitter-2b69.yuvharpaz.workers.dev').then(r => r.arrayBuffer())
         ]).then(([codesCsv, xmlBuffer]) => {
             // Parse weather codes
             const codesData = Papa.parse(codesCsv, { header: true, skipEmptyLines: true }).data;
