@@ -18,12 +18,14 @@
             padding: 0;
         }
 
-        .leaflet-tooltip.compact-tooltip {
-            background-color: white !important;
+        .compact-tooltip {
+            background: rgba(255, 255, 255, 0.98) !important;
             border: none !important;
-            border-radius: 8px !important;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
-            padding: 0 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+            padding: 8px !important;
+            z-index: 3000 !important;
+            /* High enough to be above leaflet controls */
             font-family: 'Assistant', sans-serif;
             pointer-events: none !important;
         }
@@ -128,6 +130,8 @@
             gap: 10px;
             border: 1px solid #e2e8f0;
             direction: ltr;
+            z-index: 500;
+            /* Lower than tooltips */
         }
 
         .colorbar-gradient {
@@ -246,6 +250,26 @@
             .weather-desc {
                 font-size: 0.65em;
             }
+
+            #floating-title h1 {
+                font-size: 1.1em !important;
+            }
+
+            #floating-title {
+                padding: 6px 10px !important;
+            }
+        }
+
+        @media (max-width: 600px) {
+            #floating-title {
+                width: 95%;
+                max-width: none;
+                padding: 8px 10px !important;
+            }
+
+            #floating-title h1 {
+                font-size: 1.15em !important;
+            }
         }
 
         .weather-message-box {
@@ -260,7 +284,7 @@
             padding: 15px;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
+            z-index: 3000;
             max-width: 300px;
             direction: rtl;
             font-size: 0.9em;
