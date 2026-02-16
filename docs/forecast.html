@@ -132,6 +132,30 @@
             direction: ltr;
             z-index: 500;
             /* Lower than tooltips */
+            position: relative;
+        }
+
+        .colorbar-close {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            color: #64748b;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .colorbar-close:hover {
+            background: #f1f5f9;
+            color: #ef4444;
         }
 
         .colorbar-gradient {
@@ -365,13 +389,13 @@
 
     <div id="floating-title" style="flex-direction: column; align-items: center; gap: 5px; padding: 10px 15px;">
         <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; gap: 15px;">
-            <div style="width: 20px;"></div> <!-- Spacer -->
+            <button onclick="document.getElementById('floating-title').style.display='none'"
+                style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: #64748b; padding: 0; line-height: 1;">×</button>
             <h1 style="margin: 0; font-size: 1.3em; display: flex; align-items: center; gap: 8px;">
                 <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
                 תחזית מזג אוויר - 4 ימים
             </h1>
-            <button onclick="document.getElementById('floating-title').style.display='none'"
-                style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: #64748b; padding: 0; line-height: 1;">×</button>
+            <div style="width: 20px;"></div> <!-- Spacer -->
         </div>
         <div
             style="display: flex; flex-direction: row; justify-content: center; gap: 20px; align-items: center; width: 100%;">
@@ -682,7 +706,9 @@
             const colorbar = L.control({ position: 'bottomleft' });
             colorbar.onAdd = function (map) {
                 const div = L.DomUtil.create('div', 'colorbar-control');
+                div.id = 'colorbar-container';
                 div.innerHTML = `
+                    <div class="colorbar-close" onclick="document.getElementById('colorbar-container').style.display='none'">×</div>
                     <div class="colorbar-labels">
                         <span>40°C</span>
                         <span>32.5°C</span>
