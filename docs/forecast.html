@@ -118,24 +118,41 @@
             font-weight: 400;
         }
 
-        /* Legend styles */
-        .info.legend {
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            line-height: 1.5;
-            font-weight: 600;
-            color: #475569;
+        /* Colorbar styles */
+        .colorbar-control {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            display: flex;
+            gap: 10px;
+            border: 1px solid #e2e8f0;
+            direction: ltr;
         }
 
-        .legend i {
-            width: 18px;
-            height: 18px;
-            float: right;
-            margin-left: 8px;
-            opacity: 0.85;
+        .colorbar-gradient {
+            width: 14px;
+            height: 200px;
+            background: linear-gradient(to top,
+                    rgb(0, 0, 255),
+                    rgb(0, 255, 255),
+                    rgb(0, 255, 0),
+                    rgb(255, 255, 0),
+                    rgb(255, 0, 0));
             border-radius: 4px;
+        }
+
+        .colorbar-labels {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 200px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #334155;
+            padding: 2px 0;
+            text-align: right;
+            min-width: 32px;
         }
 
         .loading-overlay {
@@ -387,13 +404,29 @@
             1590: '🥶',   // Extremely Cold
         };
 
-        // Temperature → color gradient (blue=cold → red=hot)
+        // Temperature → Jet color gradient (Blue → Cyan → Green → Yellow → Bright Red)
         function tempColor(temp) {
-            const t = Math.max(0, Math.min(45, temp));
-            const ratio = t / 45;
-            const r = Math.round(30 + 225 * ratio);
-            const g = Math.round(100 + 80 * (1 - Math.abs(ratio - 0.5) * 2));
-            const b = Math.round(220 - 190 * ratio);
+            const t = Math.max(10, Math.min(40, temp));
+            const ratio = (t - 10) / 30;
+            let r, g, b;
+
+            if (ratio < 0.25) { // Blue (0,0,255) to Cyan (0,255,255)
+                r = 0;
+                g = Math.round(ratio * 4 * 255);
+                b = 255;
+            } else if (ratio < 0.5) { // Cyan (0,255,255) to Green (0,255,0)
+                r = 0;
+                g = 255;
+                b = Math.round((0.5 - ratio) * 4 * 255);
+            } else if (ratio < 0.75) { // Green (0,255,0) to Yellow (255,255,0)
+                r = Math.round((ratio - 0.5) * 4 * 255);
+                g = 255;
+                b = 0;
+            } else { // Yellow (255,255,0) to Bright Red (255,0,0)
+                r = 255;
+                g = Math.round((1.0 - ratio) * 4 * 255);
+                b = 0;
+            }
             return `rgb(${r},${g},${b})`;
         }
 
@@ -612,20 +645,23 @@
                 });
             });
 
-            // Add legend
-            const legend = L.control({ position: 'bottomleft' });
-            legend.onAdd = function (map) {
-                const div = L.DomUtil.create('div', 'info legend');
-                const grades = [10, 20, 30, 40];
-                div.innerHTML = '<div>טמפ\' מקסימום</div>';
-                for (let i = 0; i < grades.length; i++) {
-                    div.innerHTML +=
-                        '<i style="background:' + tempColor(grades[i]) + '"></i> ' +
-                        grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
-                }
+            // Add vertical colorbar
+            const colorbar = L.control({ position: 'bottomleft' });
+            colorbar.onAdd = function (map) {
+                const div = L.DomUtil.create('div', 'colorbar-control');
+                div.innerHTML = `
+                    <div class="colorbar-labels">
+                        <span>40°C</span>
+                        <span>32.5°C</span>
+                        <span>25°C</span>
+                        <span>17.5°C</span>
+                        <span>10°C</span>
+                    </div>
+                    <div class="colorbar-gradient"></div>
+                `;
                 return div;
             };
-            legend.addTo(map);
+            colorbar.addTo(map);
 
             // Hide loading
             document.getElementById('loading').style.display = 'none';
