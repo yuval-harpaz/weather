@@ -422,7 +422,7 @@
     <script>
         // Initialize map centered on Israel
         const map = L.map('map').setView([31.5, 35.0], 8);
-
+        const offset_x = 180;
         // Tile layer
         L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
             attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
@@ -660,7 +660,7 @@
                     permanent: isPermanent,
                     direction: 'right',
                     className: 'compact-tooltip',
-                    offset: [165, 0],
+                    offset: [offset_x, 0],
                     opacity: 1,
                     interactive: false,
                     sticky: false
@@ -677,7 +677,7 @@
                                 permanent: false,
                                 direction: 'right',
                                 className: 'compact-tooltip',
-                                offset: [165, 0],
+                                offset: [offset_x, 0],
                                 opacity: 1,
                                 interactive: false,
                                 sticky: false
@@ -692,7 +692,7 @@
                         permanent: true,
                         direction: 'right',
                         className: 'compact-tooltip',
-                        offset: [165, 0],
+                        offset: [offset_x, 0],
                         opacity: 1,
                         interactive: false,
                         sticky: false
