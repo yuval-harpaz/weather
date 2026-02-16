@@ -230,6 +230,79 @@
                 font-size: 0.65em;
             }
         }
+
+        .weather-message-box {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            /* Right side for RTL context usually makes sense to be unobtrusive or accessible? Actually let's put it on the left so it doesn't cover the legend which is bottomleft? Legend is bottomleft. So message box should be bottom right. */
+            /* Wait, legend is L.control position 'bottomleft'. */
+            /* So I should put message box on bottom RIGHT. */
+            left: auto;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            max-width: 300px;
+            direction: rtl;
+            font-size: 0.9em;
+            display: none;
+            /* Hidden by default until loaded */
+        }
+
+        @media (max-width: 500px) {
+            .weather-message-box {
+                left: 10px;
+                right: 10px;
+                max-width: none;
+                bottom: 10px;
+            }
+        }
+
+        .weather-message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-weight: 700;
+            color: #1e40af;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.2em;
+            cursor: pointer;
+            color: #64748b;
+            padding: 0 5px;
+        }
+
+        .close-btn:hover {
+            color: #ef4444;
+        }
+
+        .forecast-list-item {
+            margin-bottom: 12px;
+        }
+
+        .forecast-list-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .forecast-date {
+            font-weight: 600;
+            color: #334155;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .forecast-text {
+            color: #475569;
+            line-height: 1.4;
+        }
     </style>
 </head>
 
@@ -237,6 +310,16 @@
     <div id="loading" class="loading-overlay">
         <div class="loading-spinner"></div>
         <div class="loading-text">טוען תחזית...</div>
+    </div>
+
+    <!-- Message Box Container -->
+    <div id="weather-message-box" class="weather-message-box">
+        <div class="weather-message-header">
+            <span>תחזית ארצית</span>
+            <button class="close-btn"
+                onclick="document.getElementById('weather-message-box').style.display='none'">×</button>
+        </div>
+        <div id="weather-message-content"></div>
     </div>
 
     <div id="floating-title" style="flex-direction: row; justify-content: center; gap: 20px;">
@@ -320,17 +403,78 @@
             return parts[2] + '/' + parts[1];
         }
 
-        // Fetch weather codes CSV and XML forecast data
+        // Fetch weather codes CSV, XML forecast data, and Text Forecast
         Promise.all([
             fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/weather_code.csv').then(r => r.text()),
-            fetch('https://quiet-glitter-2b69.yuvharpaz.workers.dev').then(r => r.arrayBuffer())
-        ]).then(([codesCsv, xmlBuffer]) => {
+            fetch('https://quiet-glitter-2b69.yuvharpaz.workers.dev').then(r => r.arrayBuffer()),
+            fetch('https://forcastisr4days.yuvharpaz.workers.dev').then(r => r.text())
+        ]).then(([codesCsv, xmlBuffer, textForecastXmlStr]) => {
             // Parse weather codes
             const codesData = Papa.parse(codesCsv, { header: true, skipEmptyLines: true }).data;
             const weatherCodes = {};
             codesData.forEach(row => {
                 weatherCodes[row.Code] = { he: row['מזג האוויר'], en: row.Weather };
             });
+
+            // --- Process Text Forecast (Message Box) ---
+            try {
+                const parser = new DOMParser();
+                const textDoc = parser.parseFromString(textForecastXmlStr, 'text/xml');
+
+                // Find Israel location
+                const locations = textDoc.querySelectorAll('Location');
+                let israelLoc = null;
+                for (let i = 0; i < locations.length; i++) {
+                    const name = locations[i].querySelector('LocationNameEng').textContent;
+                    if (name === 'Israel') {
+                        israelLoc = locations[i];
+                        break;
+                    }
+                }
+
+                if (israelLoc) {
+                    const timeUnits = israelLoc.querySelectorAll('TimeUnitData');
+                    let msgContent = '';
+                    let count = 0;
+
+                    timeUnits.forEach(tu => {
+                        if (count >= 4) return;
+
+                        const dateStr = tu.querySelector('Date').textContent;
+                        const elements = tu.querySelectorAll('Element');
+                        let weatherHeb = '';
+
+                        elements.forEach(el => {
+                            if (el.querySelector('ElementName').textContent === 'Weather in Hebrew') {
+                                weatherHeb = el.querySelector('ElementValue').textContent.trim();
+                            }
+                        });
+
+                        if (weatherHeb) {
+                            const d = new Date(dateStr);
+                            if (!isNaN(d.getTime())) {
+                                const dayName = hebrewDays[d.getDay()];
+                                const formattedDate = fmtDate(dateStr);
+
+                                msgContent += `
+                                    <div class="forecast-list-item">
+                                        <span class="forecast-date">${dayName}' ${formattedDate}</span>
+                                        <div class="forecast-text">${weatherHeb}</div>
+                                    </div>
+                                `;
+                                count++;
+                            }
+                        }
+                    });
+
+                    if (msgContent) {
+                        document.getElementById('weather-message-content').innerHTML = msgContent;
+                        document.getElementById('weather-message-box').style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.warn('Error parsing text forecast:', e);
+            }
 
             // Decode ISO-8859-8 (Hebrew)
             const decoder = new TextDecoder('iso-8859-8');
