@@ -433,6 +433,20 @@
 
         // Hebrew day-of-week symbols: Sunday=א ... Saturday=ש
         const hebrewDays = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+        const fullHebrewDays = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'];
+        const fullHebrewMonths = [
+            'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+            'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
+        ];
+
+        function getAriaDate(dateStr) {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return '';
+            const dayName = fullHebrewDays[d.getDay()];
+            const dayOfMonth = d.getDate();
+            const monthName = fullHebrewMonths[d.getMonth()];
+            return `${dayName}, ${dayOfMonth} ב${monthName}`;
+        }
         const openCities = ['ירושלים', 'תל אביב', 'באר שבע', 'חיפה', 'אילת', 'צפת', 'מצפה רמון'];
         let markers = [];
         let firstClick = true;
@@ -554,7 +568,7 @@
 
                                 msgContent += `
                                     <div class="forecast-list-item">
-                                        <span class="forecast-date">${dayName}' ${formattedDate}</span>
+                                        <span class="forecast-date" aria-label="${getAriaDate(dateStr)}">${dayName}' ${formattedDate}</span>
                                         <div class="forecast-text">${weatherHeb}</div>
                                     </div>
                                 `;
@@ -643,12 +657,13 @@
                     const d = new Date(day.date + 'T00:00:00');
                     const daySymbol = hebrewDays[d.getDay()];
                     const emoji = weatherEmoji[day.weatherCode] || '🌡️';
+                    const ariaLabel = getAriaDate(day.date);
 
                     forecastHTML += `
-            <div class="forecast-day">
+            <div class="forecast-day" aria-label="${ariaLabel}">
               <div class="day-header">
-                <span class="day-name">${daySymbol}</span>
-                <span class="day-date">${fmtDate(day.date)}</span>
+                <span class="day-name" aria-hidden="true">${daySymbol}</span>
+                <span class="day-date" aria-hidden="true">${fmtDate(day.date)}</span>
               </div>
               <div class="weather-emoji">${emoji}</div>
               <div class="temp-row">
