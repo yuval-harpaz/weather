@@ -322,6 +322,8 @@
                 right: 10px;
                 max-width: none;
                 bottom: 10px;
+                max-height: 80vh;
+                overflow-y: auto;
             }
         }
 
@@ -498,8 +500,11 @@
         Promise.all([
             fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/weather_code.csv').then(r => r.text()),
             fetch('https://quiet-glitter-2b69.yuvharpaz.workers.dev').then(r => r.arrayBuffer()),
-            fetch('https://forcastisr4days.yuvharpaz.workers.dev').then(r => r.text())
-        ]).then(([codesCsv, xmlBuffer, textForecastXmlStr]) => {
+            fetch('https://forcastisr4days.yuvharpaz.workers.dev').then(r => r.arrayBuffer())
+        ]).then(([codesCsv, xmlBuffer, textForecastBuffer]) => {
+            // Decode Text Forecast (Message Box)
+            const textDecoder = new TextDecoder('iso-8859-8');
+            const textForecastXmlStr = textDecoder.decode(new Uint8Array(textForecastBuffer));
             // Parse weather codes
             const codesData = Papa.parse(codesCsv, { header: true, skipEmptyLines: true }).data;
             const weatherCodes = {};
