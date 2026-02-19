@@ -473,7 +473,7 @@
             1530: '🌤️',  // Partly cloudy possible rain
             1540: '🌥️',  // Cloudy possible rain
             1560: '🌦️',  // Cloudy light rain
-            1570: '😶‍🌫️', // Dust
+            1570: '☁',  // Dust
             1580: '🔥',   // Hot Extremely
             1590: '🥶',   // Extremely Cold
         };
@@ -665,7 +665,7 @@
                 <span class="day-name" aria-hidden="true">${daySymbol}</span>
                 <span class="day-date" aria-hidden="true">${fmtDate(day.date)}</span>
               </div>
-              <div class="weather-emoji">${emoji}</div>
+              <div class="weather-emoji" ${day.weatherCode === '1570' ? 'style="color: #b8860b;"' : ''}>${emoji}</div>
               <div class="temp-row">
                 <span class="temp-min">${day.min !== undefined ? day.min : '-'}</span>
                 <span class="temp-separator">-</span>
