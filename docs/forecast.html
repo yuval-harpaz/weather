@@ -28,6 +28,15 @@
             /* High enough to be above leaflet controls */
             font-family: 'Assistant', sans-serif;
             pointer-events: none !important;
+            white-space: normal !important;
+        }
+
+        .slim-tooltip {
+            width: 160px !important;
+        }
+
+        .detailed-tooltip {
+            width: 320px !important;
         }
 
         .leaflet-tooltip-right.compact-tooltip::before {
@@ -38,6 +47,10 @@
         .leaflet-tooltip-left.compact-tooltip::before {
             border-left-color: white !important;
             right: -10px !important;
+        }
+
+        .detailed-tooltip::before {
+            display: none !important;
         }
 
         .leaflet-tooltip.compact-tooltip .forecast-grid {
@@ -95,6 +108,51 @@
             margin-bottom: 6px;
             line-height: 1.2;
             min-height: 2em;
+        }
+
+        .weather-desc-text {
+            font-size: 0.75em;
+            color: #475569;
+            margin: 2px 0 4px 0;
+            line-height: 1.1;
+            min-height: 2.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .detailed-tooltip .day-date,
+        .detailed-tooltip .weather-desc-text {
+            font-size: 0.9em !important;
+            font-weight: 600;
+        }
+
+        .tooltip-city-name {
+            font-weight: 700;
+            color: #1e40af;
+            font-size: 1.1em;
+            padding: 6px 8px;
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f1f5f9;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .extra-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            font-size: 0.9em;
+            color: #475569;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        .extra-item {
+            display: flex;
+            align-items: center;
+            gap: 2px;
         }
 
         .temp-row {
@@ -425,7 +483,7 @@
     <script>
         // Initialize map centered on Israel
         const map = L.map('map').setView([31.5, 35.0], 8);
-        const offset_x = 180;
+        const offset_x = 200;
         // Tile layer
         L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
             attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
@@ -618,6 +676,14 @@
                         if (name === 'Maximum temperature') dayData.max = parseInt(value);
                         if (name === 'Minimum temperature') dayData.min = parseInt(value);
                         if (name === 'Weather code') dayData.weatherCode = value;
+                        if (name === 'Wind direction and speed') {
+                            const parts = value.split('/');
+                            if (parts.length > 1) {
+                                const speeds = parts[parts.length - 1].split('-');
+                                dayData.windMax = speeds[speeds.length - 1];
+                            }
+                        }
+                        if (name === 'Maximum relative humidity') dayData.humidity = value;
                     });
 
                     // Only include days that have at least a weather code or max temp
@@ -651,36 +717,50 @@
 
                 markers.push({ marker, nameHeb: city.nameHeb, days: city.days });
 
-                // Build forecast HTML
-                let forecastHTML = '<div class="forecast-grid">';
-                city.days.forEach(day => {
-                    const d = new Date(day.date + 'T00:00:00');
-                    const daySymbol = hebrewDays[d.getDay()];
-                    const emoji = weatherEmoji[day.weatherCode] || '🌡️';
-                    const ariaLabel = getAriaDate(day.date);
+                function getForecastHTML(city, detailed) {
+                    let html = '';
+                    if (detailed) {
+                        html += `<div class="tooltip-city-name">${city.nameHeb}</div>`;
+                    }
+                    html += '<div class="forecast-grid">';
+                    city.days.forEach((day, index) => {
+                        const d = new Date(day.date + 'T00:00:00');
+                        const daySymbol = hebrewDays[d.getDay()];
+                        const emoji = weatherEmoji[day.weatherCode] || '🌡️';
+                        const ariaLabel = getAriaDate(day.date);
+                        const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
 
-                    forecastHTML += `
+                        html += `
             <div class="forecast-day" aria-label="${ariaLabel}">
               <div class="day-header">
                 <span class="day-name" aria-hidden="true">${daySymbol}</span>
                 <span class="day-date" aria-hidden="true">${fmtDate(day.date)}</span>
               </div>
               <div class="weather-emoji" ${day.weatherCode === '1570' ? 'style="color: #b8860b;"' : ''}>${emoji}</div>
+              ${detailed ? `<div class="weather-desc-text">${desc}</div>` : ''}
               <div class="temp-row">
                 <span class="temp-min">${day.min !== undefined ? day.min : '-'}</span>
                 <span class="temp-separator">-</span>
                 <span class="temp-max">${day.max !== undefined ? day.max : '-'}</span>
               </div>
+              ${detailed && index === 0 ? `
+              <div class="extra-info">
+                ${day.windMax ? `<div class="extra-item" title="רוח מקסימלית">💨${day.windMax} קמ"ש</div>` : ''}
+                ${day.humidity ? `<div class="extra-item" title="לחות מקסימלית">💧${day.humidity}% לחות</div>` : ''}
+              </div>` : ''}
             </div>`;
-                });
-                forecastHTML += '</div>';
+                    });
+                    html += '</div>';
+                    return html;
+                }
 
                 const isPermanent = openCities.some(name => city.nameHeb.includes(name));
+                const initialHTML = getForecastHTML(city, false);
 
-                marker.bindTooltip(forecastHTML, {
+                marker.bindTooltip(initialHTML, {
                     permanent: isPermanent,
                     direction: 'right',
-                    className: 'compact-tooltip',
+                    className: 'compact-tooltip slim-tooltip',
                     offset: [offset_x, 0],
                     opacity: 1,
                     interactive: false,
@@ -688,16 +768,16 @@
                 });
 
                 marker.on('click', function (e) {
-                    // Make all markers non-permanent for hover behavior
+                    // Reset all markers to slim and non-permanent
                     markers.forEach(m => {
-                        const tt = m.marker.getTooltip();
-                        if (tt) {
-                            const content = tt.getContent();
+                        const cityData = cities.find(c => c.nameHeb === m.nameHeb);
+                        if (cityData) {
+                            const slimHTML = getForecastHTML(cityData, false);
                             m.marker.unbindTooltip();
-                            m.marker.bindTooltip(content, {
+                            m.marker.bindTooltip(slimHTML, {
                                 permanent: false,
                                 direction: 'right',
-                                className: 'compact-tooltip',
+                                className: 'compact-tooltip slim-tooltip',
                                 offset: [offset_x, 0],
                                 opacity: 1,
                                 interactive: false,
@@ -706,14 +786,14 @@
                         }
                     });
 
-                    // Make the clicked marker permanent so it stays open
-                    const clickedContent = marker.getTooltip() ? marker.getTooltip().getContent() : forecastHTML;
+                    // Set this marker to detailed and permanent (centered)
+                    const detailedHTML = getForecastHTML(city, true);
                     marker.unbindTooltip();
-                    marker.bindTooltip(clickedContent, {
+                    marker.bindTooltip(detailedHTML, {
                         permanent: true,
                         direction: 'right',
-                        className: 'compact-tooltip',
-                        offset: [offset_x, 0],
+                        className: 'compact-tooltip detailed-tooltip',
+                        offset: [offset_x - 50, 0],
                         opacity: 1,
                         interactive: false,
                         sticky: false
