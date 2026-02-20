@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>תחזית לשבוע - 7 ימים</title>
+    <title>תחזית מזג אוויר - 7 ימים</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="logo.jpg">
     <!-- Leaflet CSS -->
@@ -253,7 +253,7 @@
                 style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: #64748b; padding: 0; line-height: 1;">×</button>
             <h1 style="margin: 0; font-size: 1.3em; display: flex; align-items: center; gap: 8px;">
                 <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
-                תחזית לשבוע - 7 ימים
+                תחזית מזג אוויר - 7 ימים
             </h1>
             <div style="width: 20px;"></div>
         </div>
@@ -269,7 +269,7 @@
             </a>
             <div class="data-source" style="font-size: 0.8em; color: #64748b;">
                 <span>נתונים מ</span>
-                <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+                <a href="https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_cities_1week_6hr_forecast.xml" target="_blank" rel="noopener">
                     <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
                         style="height: 14px; vertical-align: middle;">
                 </a>
@@ -295,11 +295,7 @@
         let firstClick = true;
 
         function getRainIcon(rain) {
-            const r = parseFloat(rain);
-            if (r <= 0.1) return '☀️';
-            if (r <= 5) return '🌦️';
-            if (r <= 10) return '🌧️';
-            return '⛈️';
+            return '💧';
         }
 
         function fmtDate(dateStr) {
@@ -413,7 +409,7 @@
                             const x = getX(i, 2); // 14:00 is hIndex 2
                             const dayPoints = flatData.filter(p => p.dayIndex === i);
                             const dailyRain = Math.max(0, ...dayPoints.map(p => p.rain));
-                            const hasRain = dailyRain > 0.1;
+                            const hasRain = dailyRain > 0;
                             const rainIcon = hasRain ? getRainIcon(dailyRain) : '';
 
                             // Day name centered on 14:00 x
