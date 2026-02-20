@@ -6,3 +6,5 @@ code/*pycache*
 tmp*
 *output.log
 *Untitled*
+data/forecast_errors.html
+data/daily_comparison.csv

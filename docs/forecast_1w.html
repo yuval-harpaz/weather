@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>תחזית לשבוע - 7 ימים</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="logo.jpg">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
+    <!-- Common map styles -->
+    <link rel="stylesheet" href="style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Assistant', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .compact-tooltip {
+            background: rgba(255, 255, 255, 0.98) !important;
+            border: none !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+            padding: 6px !important;
+            z-index: 3000 !important;
+            font-family: 'Assistant', sans-serif;
+            pointer-events: none !important;
+        }
+
+        .forecast-grid {
+            display: flex;
+            padding: 2px;
+            gap: 4px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .forecast-day {
+            flex: 1;
+            text-align: center;
+            padding: 4px;
+            border-radius: 6px;
+            min-width: 60px;
+        }
+
+        .day-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+            margin-bottom: 4px;
+        }
+
+        .day-name {
+            font-size: 0.85em;
+            font-weight: 700;
+            color: #1e40af;
+        }
+
+        .day-date {
+            font-size: 0.65em;
+            color: #64748b;
+        }
+
+        .intervals-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2px;
+        }
+
+        .interval-slot {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            padding: 2px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .interval-time {
+            font-size: 0.6em;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .weather-icon {
+            font-size: 1em;
+            margin: 1px 0;
+        }
+
+        .temp-max {
+            font-size: 0.8em;
+            font-weight: 700;
+            color: #000000;
+        }
+
+        /* Detailed Popup Styles */
+        .detailed-popup .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            padding: 0;
+        }
+
+        .detailed-popup .leaflet-popup-content {
+            margin: 0;
+            width: 350px !important;
+        }
+
+        .popup-header {
+            background: #1e40af;
+            color: white;
+            padding: 10px 15px;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+
+        .popup-scroll {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .popup-day {
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+
+        .popup-day:last-child {
+            border-bottom: none;
+        }
+
+        .popup-day-title {
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .popup-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        .popup-table th {
+            text-align: right;
+            background: #f1f5f9;
+            padding: 4px 6px;
+            color: #475569;
+        }
+
+        .popup-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .popup-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        @media (max-width: 500px) {
+            .detailed-popup .leaflet-popup-content {
+                width: 280px !important;
+            }
+
+            .forecast-grid {
+                gap: 2px;
+            }
+
+            .forecast-day {
+                min-width: 50px;
+            }
+        }
+
+        /* Colorbar styles */
+        .colorbar-control {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            display: flex;
+            gap: 10px;
+            border: 1px solid #e2e8f0;
+            direction: ltr;
+            z-index: 500;
+        }
+
+        .colorbar-gradient {
+            width: 14px;
+            height: 200px;
+            background: linear-gradient(to top,
+                    rgb(0, 0, 255),
+                    rgb(0, 255, 255),
+                    rgb(0, 255, 0),
+                    rgb(255, 255, 0),
+                    rgb(255, 0, 0));
+            border-radius: 4px;
+        }
+
+        .colorbar-labels {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 200px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #334155;
+            padding: 2px 0;
+            text-align: right;
+            min-width: 32px;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.92);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-msg {
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 24px 32px;
+            border-radius: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">טוען תחזית שבועית...</div>
+    </div>
+
+    <div id="floating-title"
+        style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 15px; position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 1000; width: auto; min-width: 250px;">
+        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; gap: 15px;">
+            <button onclick="document.getElementById('floating-title').style.display='none'"
+                style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: #64748b; padding: 0; line-height: 1;">×</button>
+            <h1 style="margin: 0; font-size: 1.3em; display: flex; align-items: center; gap: 8px;">
+                <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
+                תחזית לשבוע - 7 ימים
+            </h1>
+            <div style="width: 20px;"></div>
+        </div>
+        <div
+            style="display: flex; flex-direction: row; justify-content: center; gap: 20px; align-items: center; width: 100%;">
+            <a href="index.html" class="home-btn"
+                style="text-decoration: none; color: #1e40af; display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 0.9em;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span>דף הבית</span>
+            </a>
+            <div class="data-source" style="font-size: 0.8em; color: #64748b;">
+                <span>נתונים מ</span>
+                <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+                    <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
+                        style="height: 14px; vertical-align: middle;">
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div id="map" style="height: 100vh; width: 100%;"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+
+    <script>
+        const map = L.map('map').setView([31.5, 35.0], 8);
+        L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
+            attribution: '© המרכז למיפוי ישראל'
+        }).addTo(map);
+
+        const hebrewDays = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+        const fullHebrewDays = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'];
+
+        const openCities = ['Hadera', 'Jerusalem', 'Zafed', 'Beer Sheva', 'Eilat', 'Mizpe Ramon'];
+        let markers = [];
+        let firstClick = true;
+
+        function getRainIcon(rain) {
+            const r = parseFloat(rain);
+            if (r <= 0.1) return '☀️';
+            if (r <= 5) return '🌦️';
+            if (r <= 10) return '🌧️';
+            return '⛈️';
+        }
+
+        function fmtDate(dateStr) {
+            const d = new Date(dateStr);
+            return d.getDate() + '/' + (d.getMonth() + 1);
+        }
+
+        function tempColor(temp) {
+            const t = Math.max(10, Math.min(40, temp));
+            const ratio = (t - 10) / 30;
+            let r, g, b;
+            if (ratio < 0.25) { r = 0; g = Math.round(ratio * 4 * 255); b = 255; }
+            else if (ratio < 0.5) { r = 0; g = 255; b = Math.round((0.5 - ratio) * 4 * 255); }
+            else if (ratio < 0.75) { r = Math.round((ratio - 0.5) * 4 * 255); g = 255; b = 0; }
+            else { r = 255; g = Math.round((1.0 - ratio) * 4 * 255); b = 0; }
+            return `rgb(${r},${g},${b})`;
+        }
+
+        fetch('https://forecastisr1w6h.yuvharpaz.workers.dev')
+            .then(r => r.text())
+            .then(xmlText => {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                const locations = xmlDoc.querySelectorAll('Location');
+
+                locations.forEach(loc => {
+                    const meta = loc.querySelector('LocationMetaData');
+                    const nameEng = meta.querySelector('LocationNameEng').textContent;
+                    const lat = parseFloat(meta.querySelector('DisplayLat').textContent);
+                    const lon = parseFloat(meta.querySelector('DisplayLon').textContent);
+
+                    const forecasts = loc.querySelectorAll('Forecast');
+                    const daysMap = {};
+
+                    forecasts.forEach(f => {
+                        const timeStr = f.querySelector('ForecastTime').textContent; // YYYY-MM-DD HH:mm:ss
+                        const datePart = timeStr.split(' ')[0];
+                        const hourPart = timeStr.split(' ')[1].split(':')[0];
+
+                        if (!daysMap[datePart]) daysMap[datePart] = [];
+
+                        const data = {
+                            time: hourPart,
+                            temp: f.querySelector('Temperature').textContent,
+                            humidity: f.querySelector('RelativeHumidity').textContent,
+                            windSpeed: f.querySelector('WindSpeed').textContent,
+                            windDir: f.querySelector('WindDirection').textContent,
+                            rain: f.querySelector('Rain').textContent,
+                            maxTemp: f.querySelector('MaxTemp').textContent,
+                            feelsLike: f.querySelector('FeelsLike').textContent,
+                            heatStress: f.querySelector('HeatStress').textContent,
+                            uv: f.querySelector('UVIndex').textContent
+                        };
+                        daysMap[datePart].push(data);
+                    });
+
+                    const sortedDates = Object.keys(daysMap).sort();
+
+                    // Slim Tooltip Content
+                    let slimHTML = '<div class="forecast-grid">';
+                    sortedDates.slice(0, 7).forEach(date => {
+                        const d = new Date(date);
+                        const dayData = daysMap[date];
+                        const relevantHours = ['02', '08', '14', '20'];
+
+                        slimHTML += `<div class="forecast-day">
+                            <div class="day-header">
+                                <span class="day-name">${hebrewDays[d.getDay()]}</span>
+                                <span class="day-date">${fmtDate(date)}</span>
+                            </div>
+                            <div class="intervals-grid">`;
+
+                        relevantHours.forEach(h => {
+                            const hourData = dayData.find(hd => hd.time === h);
+                            if (hourData) {
+                                slimHTML += `<div class="interval-slot">
+                                    <span class="interval-time">${h}</span>
+                                    <span class="weather-icon">${getRainIcon(hourData.rain)}</span>
+                                    <span class="temp-max">${Math.round(hourData.maxTemp)}°</span>
+                                </div>`;
+                            } else {
+                                slimHTML += `<div class="interval-slot" style="visibility:hidden"></div>`;
+                            }
+                        });
+
+                        slimHTML += `</div></div>`;
+                    });
+                    slimHTML += '</div>';
+
+                    // Detailed Popup Content
+                    let detailedHTML = `<div class="detailed-popup">
+                        <div class="popup-header">${nameEng} - תחזית מפורטת</div>
+                        <div class="popup-scroll">`;
+
+                    sortedDates.slice(0, 7).forEach(date => {
+                        const d = new Date(date);
+                        detailedHTML += `<div class="popup-day">
+                            <span class="popup-day-title">${fullHebrewDays[d.getDay()]} ${fmtDate(date)}</span>
+                            <table class="popup-table">
+                                <thead>
+                                    <tr>
+                                        <th>שעה</th>
+                                        <th>טמפ'</th>
+                                        <th>לחות</th>
+                                        <th>רוח</th>
+                                        <th>גשם</th>
+                                        <th>UV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+                        daysMap[date].forEach(h => {
+                            detailedHTML += `<tr>
+                                <td>${h.time}:00</td>
+                                <td>${h.temp}°</td>
+                                <td>${h.humidity}%</td>
+                                <td>${h.windSpeed} קמ"ש</td>
+                                <td>${h.rain} מ"מ</td>
+                                <td>${h.uv}</td>
+                            </tr>`;
+                        });
+
+                        detailedHTML += `</tbody></table></div>`;
+                    });
+                    detailedHTML += `</div></div>`;
+
+                    // Marker
+                    const firstDayMax = daysMap[sortedDates[0]] ? parseFloat(daysMap[sortedDates[0]][0].maxTemp) : 20;
+                    const marker = L.circleMarker([lat, lon], {
+                        radius: 8,
+                        fillColor: tempColor(firstDayMax),
+                        color: '#fff',
+                        weight: 1.5,
+                        fillOpacity: 0.9
+                    }).addTo(map);
+
+                    marker.bindTooltip(slimHTML, {
+                        permanent: openCities.some(name => nameEng.includes(name)),
+                        direction: 'top',
+                        className: 'compact-tooltip',
+                        offset: [515, -10],
+                        opacity: 1
+                    });
+
+                    markers.push(marker);
+
+                    marker.on('click', function (e) {
+                        if (firstClick) {
+                            markers.forEach(m => {
+                                const tt = m.getTooltip();
+                                if (tt && tt.options.permanent) {
+                                    const content = tt.getContent();
+                                    m.unbindTooltip();
+                                    m.bindTooltip(content, {
+                                        permanent: false,
+                                        direction: 'top',
+                                        className: 'compact-tooltip',
+                                        offset: [515, -10],
+                                        opacity: 1
+                                    });
+                                }
+                            });
+                            firstClick = false;
+                        }
+                    });
+
+                    marker.bindPopup(detailedHTML, {
+                        maxWidth: 400,
+                        className: 'detailed-popup'
+                    });
+                });
+
+                map.on('click', function (e) {
+                    if (firstClick) {
+                        markers.forEach(m => {
+                            const tt = m.getTooltip();
+                            if (tt && tt.options.permanent) {
+                                const content = tt.getContent();
+                                m.unbindTooltip();
+                                m.bindTooltip(content, {
+                                    permanent: false,
+                                    direction: 'top',
+                                    className: 'compact-tooltip',
+                                    offset: [515, -10],
+                                    opacity: 1
+                                });
+                            }
+                        });
+                        firstClick = false;
+                    }
+                });
+
+                // Colorbar
+                const colorbar = L.control({ position: 'bottomleft' });
+                colorbar.onAdd = function () {
+                    const div = L.DomUtil.create('div', 'colorbar-control');
+                    div.innerHTML = `
+                        <div class="colorbar-labels">
+                            <span>40°C</span><span>30°C</span><span>20°C</span><span>10°C</span>
+                        </div>
+                        <div class="colorbar-gradient"></div>
+                    `;
+                    return div;
+                };
+                colorbar.addTo(map);
+
+                document.getElementById('loading').style.display = 'none';
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('loading').innerHTML = `<div class="error-msg">שגיאה בטעינת נתונים</div>`;
+            });
+    </script>
+</body>
+
+</html>
