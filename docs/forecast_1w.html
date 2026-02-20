@@ -29,20 +29,19 @@
             pointer-events: none !important;
         }
 
-        .forecast-grid {
-            display: flex;
-            padding: 2px;
-            gap: 4px;
+        .forecast-container {
+            /* Now handled mostly by inline styles from the JS */
             background: #f8fafc;
             border-radius: 8px;
+            overflow: visible;
         }
 
         .forecast-day {
-            flex: 1;
             text-align: center;
             padding: 4px;
             border-radius: 6px;
-            min-width: 60px;
+            /* Remove flex: 1 and min-width to prevent squashing */
+            min-width: 30px;
         }
 
         .day-header {
@@ -64,37 +63,23 @@
             color: #64748b;
         }
 
-        .intervals-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 2px;
-        }
-
-        .interval-slot {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background: white;
-            padding: 2px;
-            border-radius: 4px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .interval-time {
-            font-size: 0.6em;
-            color: #64748b;
-            font-weight: 600;
-        }
-
         .weather-icon {
-            font-size: 1em;
-            margin: 1px 0;
+            font-size: 1.1em;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 2px;
         }
 
-        .temp-max {
-            font-size: 0.8em;
-            font-weight: 700;
-            color: #000000;
+        .chart-container {
+            width: 100%;
+            padding: 5px 0 0 0;
+            overflow: hidden;
+        }
+
+        .chart-svg {
+            display: block;
+            width: 100%;
+            height: 60px;
         }
 
         /* Detailed Popup Styles */
@@ -305,7 +290,7 @@
         const hebrewDays = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
         const fullHebrewDays = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'];
 
-        const openCities = ['Hadera', 'Jerusalem', 'Zafed', 'Beer Sheva', 'Eilat', 'Mizpe Ramon'];
+        const openCities = ['Hadera', 'Jerusalem', 'Zefat', 'Beer Sheva', 'Eilat', 'Mizpe Ramon'];
         let markers = [];
         let firstClick = true;
 
@@ -374,34 +359,99 @@
                     const sortedDates = Object.keys(daysMap).sort();
 
                     // Slim Tooltip Content
-                    let slimHTML = '<div class="forecast-grid">';
-                    sortedDates.slice(0, 7).forEach(date => {
-                        const d = new Date(date);
+                    let slimHTML = '<div class="forecast-grid" style="display: flex; flex-direction: column; padding: 4px; gap: 4px; background: #f8fafc; border-radius: 8px;">';
+                    // Show all dates available in the xml, up to 10 days
+                    const validDates = sortedDates.slice(0, 10);
+
+                    const flatData = [];
+                    validDates.forEach((date, dayIndex) => {
                         const dayData = daysMap[date];
-                        const relevantHours = ['02', '08', '14', '20'];
+                        ['02', '08', '14', '20'].forEach((h, hIndex) => {
+                            const hd = dayData.find(d => d.time === h);
+                            if (hd) {
+                                flatData.push({
+                                    dayIndex,
+                                    hIndex,
+                                    temp: parseFloat(hd.temp),
+                                    rain: parseFloat(hd.rain),
+                                    isMin: h === '02',
+                                    isMax: h === '14',
+                                    maxTemp: parseFloat(hd.maxTemp || hd.temp)
+                                });
+                            }
+                        });
+                    });
 
-                        slimHTML += `<div class="forecast-day">
-                            <div class="day-header">
-                                <span class="day-name">${hebrewDays[d.getDay()]}</span>
-                                <span class="day-date">${fmtDate(date)}</span>
-                            </div>
-                            <div class="intervals-grid">`;
+                    if (flatData.length > 0) {
+                        let globalMin = Math.min(...flatData.map(d => d.isMax ? d.maxTemp : d.temp));
+                        let globalMax = Math.max(...flatData.map(d => d.isMax ? d.maxTemp : d.temp));
+                        globalMin -= 2;
+                        globalMax += 4; // Extra space at top for text
+                        const yRange = globalMax - globalMin || 1;
 
-                        relevantHours.forEach(h => {
-                            const hourData = dayData.find(hd => hd.time === h);
-                            if (hourData) {
-                                slimHTML += `<div class="interval-slot">
-                                    <span class="interval-time">${h}</span>
-                                    <span class="weather-icon">${getRainIcon(hourData.rain)}</span>
-                                    <span class="temp-max">${Math.round(hourData.maxTemp)}°</span>
-                                </div>`;
-                            } else {
-                                slimHTML += `<div class="interval-slot" style="visibility:hidden"></div>`;
+                        // Single unified SVG — labels drawn directly above each 14:00 point, no separate flex headers
+                        const totalDays = validDates.length;
+                        const daySlotW = 30;
+                        const hSlotW = daySlotW / 4;
+                        const svgTotalW = totalDays * daySlotW;
+                        const headerH = 28; // px reserved at top for day/date labels
+                        const chartH = 50;
+                        const svgH = headerH + chartH;
+
+                        // RTL: day 0 on the right
+                        const getX = (dayIndex, hIndex) => svgTotalW - (dayIndex * daySlotW + (daySlotW / 8) + hIndex * hSlotW) - 1;
+                        // chart y is offset by headerH
+                        const getY = (t) => headerH + (chartH - ((t - globalMin) / yRange) * chartH);
+
+                        slimHTML += `<div class="chart-container" style="overflow: visible; width: 100%; padding: 0;">
+                            <svg viewBox="0 0 ${svgTotalW} ${svgH}" preserveAspectRatio="xMinYMin meet" style="overflow: visible; display: block; width: 100%; height: auto; min-width: ${svgTotalW}px;">`;
+
+                        // Draw day/date labels above each 14:00 point (hIndex=2)
+                        validDates.forEach((date, i) => {
+                            const [yr, mo, dstr] = date.split('-');
+                            const d = new Date(yr, mo - 1, dstr);
+                            const x = getX(i, 2); // 14:00 is hIndex 2
+                            const dayPoints = flatData.filter(p => p.dayIndex === i);
+                            const dailyRain = Math.max(0, ...dayPoints.map(p => p.rain));
+                            const hasRain = dailyRain > 0.1;
+                            const rainIcon = hasRain ? getRainIcon(dailyRain) : '';
+
+                            // Day name centered on 14:00 x
+                            slimHTML += `<text x="${x}" y="9" font-size="8" fill="#1e40af" text-anchor="middle" font-weight="700" font-family="Assistant,sans-serif">${hebrewDays[d.getDay()]}</text>`;
+                            // Date below day name
+                            slimHTML += `<text x="${x}" y="18" font-size="7.5" fill="#64748b" text-anchor="middle" font-family="Assistant,sans-serif">${fmtDate(date)}</text>`;
+                            // Rain icon to the left of the day name (in RTL visual space, left = lower x)
+                            if (hasRain) {
+                                slimHTML += `<text x="${x - 9}" y="9" font-size="7" text-anchor="middle">${rainIcon}</text>`;
                             }
                         });
 
-                        slimHTML += `</div></div>`;
-                    });
+                        // Draw continuous temperature line
+                        const coords = flatData.map(p => {
+                            const x = getX(p.dayIndex, p.hIndex);
+                            const t = p.isMax ? p.maxTemp : p.temp;
+                            return `${x},${getY(t)}`;
+                        }).join(' ');
+                        slimHTML += `<polyline points="${coords}" fill="none" stroke="#2563eb" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" />`;
+
+                        // Draw dots and temperature labels
+                        flatData.forEach(p => {
+                            const x = getX(p.dayIndex, p.hIndex);
+                            const t = p.isMax ? p.maxTemp : p.temp;
+                            const y = getY(t);
+
+                            if (p.isMin) {
+                                slimHTML += `<circle cx="${x}" cy="${y}" r="2" fill="#3b82f6" />`;
+                                slimHTML += `<text x="${x}" y="${y + 10}" font-size="9" fill="#334155" text-anchor="middle" font-weight="700" font-family="Assistant,sans-serif">${Math.round(t)}°</text>`;
+                            }
+                            if (p.isMax) {
+                                slimHTML += `<circle cx="${x}" cy="${y}" r="2" fill="#ef4444" />`;
+                                slimHTML += `<text x="${x}" y="${y - 3}" font-size="9" fill="#dc2626" text-anchor="middle" font-weight="700" font-family="Assistant,sans-serif">${Math.round(t)}°</text>`;
+                            }
+                        });
+
+                        slimHTML += `</svg></div>`;
+                    }
                     slimHTML += '</div>';
 
                     // Detailed Popup Content
@@ -409,8 +459,9 @@
                         <div class="popup-header">${nameEng} - תחזית מפורטת</div>
                         <div class="popup-scroll">`;
 
-                    sortedDates.slice(0, 7).forEach(date => {
-                        const d = new Date(date);
+                    validDates.forEach(date => {
+                        const [y, m, dstr] = date.split('-');
+                        const d = new Date(y, m - 1, dstr);
                         detailedHTML += `<div class="popup-day">
                             <span class="popup-day-title">${fullHebrewDays[d.getDay()]} ${fmtDate(date)}</span>
                             <table class="popup-table">
@@ -432,7 +483,7 @@
                                 <td>${h.temp}°</td>
                                 <td>${h.humidity}%</td>
                                 <td>${h.windSpeed} קמ"ש</td>
-                                <td>${h.rain} מ"מ</td>
+                                <td>${h.rain} מ"מ/10דק'</td>
                                 <td>${h.uv}</td>
                             </tr>`;
                         });
@@ -446,16 +497,15 @@
                     const marker = L.circleMarker([lat, lon], {
                         radius: 8,
                         fillColor: tempColor(firstDayMax),
-                        color: '#fff',
-                        weight: 1.5,
+                        stroke: false,
                         fillOpacity: 0.9
                     }).addTo(map);
 
                     marker.bindTooltip(slimHTML, {
-                        permanent: openCities.some(name => nameEng.includes(name)),
-                        direction: 'top',
+                        permanent: openCities.some(name => nameEng === name || (name === 'Jerusalem' && nameEng.includes('Jerusalem'))),
+                        direction: 'right',
                         className: 'compact-tooltip',
-                        offset: [515, -10],
+                        offset: [335, 0],
                         opacity: 1
                     });
 
