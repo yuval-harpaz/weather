@@ -428,6 +428,21 @@
             color: #475569;
             line-height: 1.4;
         }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+            font-size: 1em;
+            line-height: 1;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .refresh-btn:hover {
+            color: #1e40af;
+        }
     </style>
 </head>
 
@@ -454,6 +469,8 @@
             <h1 style="margin: 0; font-size: 1.3em; display: flex; align-items: center; gap: 8px;">
                 <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
                 תחזית מזג אוויר - 4 ימים
+                <button class="refresh-btn" title="refresh" aria-label="refresh"
+                    onclick="location.reload()">⟳</button>
             </h1>
             <div style="width: 20px;"></div> <!-- Spacer -->
         </div>
