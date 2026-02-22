@@ -531,13 +531,17 @@
             'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
         ];
 
-        function getAriaDate(dateStr) {
+        function getAriaDate(dateStr, minTemp, maxTemp) {
             const d = new Date(dateStr);
             if (isNaN(d.getTime())) return '';
             const dayName = fullHebrewDays[d.getDay()];
             const dayOfMonth = d.getDate();
             const monthName = fullHebrewMonths[d.getMonth()];
-            return `${dayName}, ${dayOfMonth} ב${monthName}`;
+            let label = `${dayName}, ${dayOfMonth} ב${monthName}`;
+            if (minTemp !== undefined && maxTemp !== undefined) {
+                label += `, ${minTemp} עד ${maxTemp} מעלות`;
+            }
+            return label;
         }
         const openCities = ['ירושלים', 'תל אביב', 'באר שבע', 'חיפה', 'אילת', 'צפת', 'מצפה רמון'];
         let markers = [];
@@ -761,19 +765,19 @@
                         const d = new Date(day.date + 'T00:00:00');
                         const daySymbol = hebrewDays[d.getDay()];
                         const emoji = weatherEmoji[day.weatherCode] || '🌡️';
-                        const ariaLabel = getAriaDate(day.date);
+                        const ariaLabel = getAriaDate(day.date, day.min, day.max);
                         console.log('SR date label:', ariaLabel);
                         const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
 
                         html += `
-            <div class="forecast-day" role="text" aria-label="${ariaLabel}" lang="he" dir="rtl">
+            <div class="forecast-day" role="img" aria-label="${ariaLabel}" lang="he" dir="rtl">
               <div class="day-header" aria-hidden="true">
-                <span class="day-name" aria-hidden="true">${daySymbol}</span>
+                <span class="day-name" aria-hidden="true" aria-label="${fullHebrewDays[d.getDay()]}">${daySymbol}</span>
                 <span class="day-date" aria-hidden="true">${fmtDate(day.date)}</span>
               </div>
-              <div class="weather-emoji" ${day.weatherCode === '1570' ? 'style="color: #b8860b;"' : ''}>${emoji}</div>
-              ${detailed ? `<div class="weather-desc-text">${desc}</div>` : ''}
-              <div class="temp-row">
+              <div class="weather-emoji" aria-hidden="true" ${day.weatherCode === '1570' ? 'style="color: #b8860b;"' : ''}>${emoji}</div>
+              ${detailed ? `<div class="weather-desc-text" aria-hidden="true">${desc}</div>` : ''}
+              <div class="temp-row" aria-hidden="true">
                 <span class="temp-min">${day.min !== undefined ? day.min : '-'}</span>
                 <span class="temp-separator">-</span>
                 <span class="temp-max">${day.max !== undefined ? day.max : '-'}</span>
