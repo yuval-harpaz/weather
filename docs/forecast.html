@@ -872,6 +872,20 @@
                             }
                         });
                         map.setView([lastCity.lat, lastCity.lon], 10, { animate: false });
+                        // On mobile, shift marker into the visible gap between title and תחזית ארצית
+                        if (window.innerWidth <= 500) {
+                            const titleEl = document.getElementById('floating-title');
+                            const msgEl = document.getElementById('weather-message-box');
+                            const titleBottom = titleEl ? titleEl.getBoundingClientRect().bottom : 80;
+                            const msgTop = msgEl && msgEl.style.display !== 'none'
+                                ? msgEl.getBoundingClientRect().top
+                                : window.innerHeight - 10;
+                            const gapCenter = (titleBottom + msgTop) / 2;
+                            const screenCenter = window.innerHeight / 2;
+                            const panY = Math.round(screenCenter - gapCenter);
+                            console.log('Restore: panBy', panY, '(titleBottom:', titleBottom, 'msgTop:', msgTop, ')');
+                            if (Math.abs(panY) > 5) map.panBy([0, -panY], { animate: false });
+                        }
                         saved.marker.unbindTooltip();
                         saved.marker.bindTooltip(getForecastHTML(cityData, false), {
                             permanent: true,
