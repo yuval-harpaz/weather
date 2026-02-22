@@ -482,7 +482,7 @@
                 <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
                 תחזית מזג אוויר - 4 ימים
                 <button class="refresh-btn" title="refresh" aria-label="refresh"
-                    onclick="location.reload()">⟳</button>
+                    onclick="localStorage.removeItem('lastCity'); location.reload()">⟳</button>
             </h1>
             <div style="width: 20px;"></div> <!-- Spacer -->
         </div>
@@ -739,37 +739,21 @@
             });
 
             // Add markers
-            cities.forEach(city => {
-                // Next day's max temp for marker color
-                const nextDayMax = city.days[0] ? city.days[0].max : 25;
-                const color = tempColor(nextDayMax);
+            function getForecastHTML(city, detailed) {
+                let html = '';
+                if (detailed) {
+                    html += `<div class="tooltip-city-name">${city.nameHeb}</div>`;
+                }
+                html += '<div class="forecast-grid">';
+                city.days.forEach((day, index) => {
+                    const d = new Date(day.date + 'T00:00:00');
+                    const daySymbol = hebrewDays[d.getDay()];
+                    const emoji = weatherEmoji[day.weatherCode] || '🌡️';
+                    const ariaLabel = getAriaDate(day.date, day.min, day.max);
+                    // console.log('SR date label:', ariaLabel);
+                    const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
 
-                const marker = L.circleMarker([city.lat, city.lon], {
-                    radius: 8,
-                    fillColor: color,
-                    color: '#fff',
-                    weight: 1.5,
-                    opacity: 1,
-                    fillOpacity: 0.9
-                }).addTo(map);
-
-                markers.push({ marker, nameHeb: city.nameHeb, days: city.days });
-
-                function getForecastHTML(city, detailed) {
-                    let html = '';
-                    if (detailed) {
-                        html += `<div class="tooltip-city-name">${city.nameHeb}</div>`;
-                    }
-                    html += '<div class="forecast-grid">';
-                    city.days.forEach((day, index) => {
-                        const d = new Date(day.date + 'T00:00:00');
-                        const daySymbol = hebrewDays[d.getDay()];
-                        const emoji = weatherEmoji[day.weatherCode] || '🌡️';
-                        const ariaLabel = getAriaDate(day.date, day.min, day.max);
-                        // console.log('SR date label:', ariaLabel);
-                        const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
-
-                        html += `
+                    html += `
             <div class="forecast-day" role="img" aria-label="${ariaLabel}" lang="he" dir="rtl">
               <div class="day-header" aria-hidden="true">
                 <span class="day-name" aria-hidden="true" aria-label="${fullHebrewDays[d.getDay()]}">${daySymbol}</span>
@@ -788,10 +772,26 @@
                 ${day.humidity ? `<div class="extra-item" title="לחות מקסימלית">💧${day.humidity}% לחות</div>` : ''}
               </div>` : ''}
             </div>`;
-                    });
-                    html += '</div>';
-                    return html;
-                }
+                });
+                html += '</div>';
+                return html;
+            }
+
+            cities.forEach(city => {
+                // Next day's max temp for marker color
+                const nextDayMax = city.days[0] ? city.days[0].max : 25;
+                const color = tempColor(nextDayMax);
+
+                const marker = L.circleMarker([city.lat, city.lon], {
+                    radius: 8,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 1.5,
+                    opacity: 1,
+                    fillOpacity: 0.9
+                }).addTo(map);
+
+                markers.push({ marker, nameHeb: city.nameHeb, days: city.days });
 
                 const isPermanent = openCities.some(name => city.nameHeb.includes(name));
                 const initialHTML = getForecastHTML(city, false);
@@ -807,13 +807,16 @@
                 });
 
                 marker.on('click', function (e) {
+                    console.log('Click: saving to localStorage:', city.nameHeb, city.lat, city.lon);
+                    localStorage.setItem('lastCity', JSON.stringify({ nameHeb: city.nameHeb, lat: city.lat, lon: city.lon }));
+                    console.log('localStorage after save:', localStorage.getItem('lastCity'));
+
                     // Reset all markers to slim and non-permanent
                     markers.forEach(m => {
                         const cityData = cities.find(c => c.nameHeb === m.nameHeb);
                         if (cityData) {
-                            const slimHTML = getForecastHTML(cityData, false);
                             m.marker.unbindTooltip();
-                            m.marker.bindTooltip(slimHTML, {
+                            m.marker.bindTooltip(getForecastHTML(cityData, false), {
                                 permanent: false,
                                 direction: 'right',
                                 className: 'compact-tooltip slim-tooltip',
@@ -826,9 +829,8 @@
                     });
 
                     // Set this marker to detailed and permanent (centered)
-                    const detailedHTML = getForecastHTML(city, true);
                     marker.unbindTooltip();
-                    marker.bindTooltip(detailedHTML, {
+                    marker.bindTooltip(getForecastHTML(city, true), {
                         permanent: true,
                         direction: 'right',
                         className: 'compact-tooltip detailed-tooltip',
@@ -841,6 +843,54 @@
                     firstClick = false;
                 });
             });
+
+            // Restore last selected city from previous session
+            console.log('Restore: localStorage lastCity =', localStorage.getItem('lastCity'));
+            try {
+                const lastCity = JSON.parse(localStorage.getItem('lastCity'));
+                if (lastCity) {
+                    console.log('Restore: found saved city:', lastCity.nameHeb);
+                    const saved = markers.find(m => m.nameHeb === lastCity.nameHeb);
+                    console.log('Restore: marker found?', !!saved);
+                    if (saved) {
+                        const cityData = cities.find(c => c.nameHeb === lastCity.nameHeb);
+                        console.log('Restore: cityData found?', !!cityData);
+                        // Reset all markers to non-permanent first
+                        markers.forEach(m => {
+                            const cd = cities.find(c => c.nameHeb === m.nameHeb);
+                            if (cd) {
+                                m.marker.unbindTooltip();
+                                m.marker.bindTooltip(getForecastHTML(cd, false), {
+                                    permanent: false,
+                                    direction: 'right',
+                                    className: 'compact-tooltip slim-tooltip',
+                                    offset: [offset_x, 0],
+                                    opacity: 1,
+                                    interactive: false,
+                                    sticky: false
+                                });
+                            }
+                        });
+                        map.setView([lastCity.lat, lastCity.lon], 10, { animate: false });
+                        saved.marker.unbindTooltip();
+                        saved.marker.bindTooltip(getForecastHTML(cityData, false), {
+                            permanent: true,
+                            direction: 'right',
+                            className: 'compact-tooltip slim-tooltip',
+                            offset: [offset_x, 0],
+                            opacity: 1,
+                            interactive: false,
+                            sticky: false
+                        });
+                        saved.marker.openTooltip();
+                        console.log('Restore: tooltip opened for', lastCity.nameHeb);
+                    }
+                } else {
+                    console.log('Restore: no saved city found');
+                }
+            } catch (e) {
+                console.warn('Restore failed:', e);
+            }
 
             // Add vertical colorbar
             const colorbar = L.control({ position: 'bottomleft' });
