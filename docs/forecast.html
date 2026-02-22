@@ -762,6 +762,7 @@
                         const daySymbol = hebrewDays[d.getDay()];
                         const emoji = weatherEmoji[day.weatherCode] || '🌡️';
                         const ariaLabel = getAriaDate(day.date);
+                        console.log('SR date label:', ariaLabel);
                         const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
 
                         html += `
