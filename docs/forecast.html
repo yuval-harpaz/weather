@@ -884,7 +884,7 @@
                             const screenCenter = window.innerHeight / 2;
                             const panY = Math.round(screenCenter - gapCenter);
                             console.log('Restore: panBy', panY, '(titleBottom:', titleBottom, 'msgTop:', msgTop, ')');
-                            if (Math.abs(panY) > 5) map.panBy([0, -panY], { animate: false });
+                            if (Math.abs(panY) > 5) map.panBy([0, panY], { animate: false });
                         }
                         saved.marker.unbindTooltip();
                         saved.marker.bindTooltip(getForecastHTML(cityData, false), {
