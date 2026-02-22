@@ -429,6 +429,18 @@
             line-height: 1.4;
         }
 
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
         .refresh-btn {
             background: none;
             border: none;
@@ -753,8 +765,9 @@
                         const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
 
                         html += `
-            <div class="forecast-day" aria-label="${ariaLabel}">
-              <div class="day-header">
+            <div class="forecast-day" role="text">
+              <span class="sr-only">${ariaLabel}</span>
+              <div class="day-header" aria-hidden="true">
                 <span class="day-name" aria-hidden="true">${daySymbol}</span>
                 <span class="day-date" aria-hidden="true">${fmtDate(day.date)}</span>
               </div>
