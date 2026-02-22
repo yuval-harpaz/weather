@@ -766,8 +766,7 @@
                         const desc = weatherCodes[day.weatherCode] ? weatherCodes[day.weatherCode].he : '';
 
                         html += `
-            <div class="forecast-day" role="text">
-              <span class="sr-only">${ariaLabel}</span>
+            <div class="forecast-day" role="text" aria-label="${ariaLabel}" lang="he" dir="rtl">
               <div class="day-header" aria-hidden="true">
                 <span class="day-name" aria-hidden="true">${daySymbol}</span>
                 <span class="day-date" aria-hidden="true">${fmtDate(day.date)}</span>
