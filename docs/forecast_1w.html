@@ -362,19 +362,17 @@
                     const flatData = [];
                     validDates.forEach((date, dayIndex) => {
                         const dayData = daysMap[date];
-                        ['02', '08', '14', '20'].forEach((h, hIndex) => {
-                            const hd = dayData.find(d => d.time === h);
-                            if (hd) {
-                                flatData.push({
-                                    dayIndex,
-                                    hIndex,
-                                    temp: parseFloat(hd.temp),
-                                    rain: parseFloat(hd.rain),
-                                    isMin: h === '02',
-                                    isMax: h === '14',
-                                    maxTemp: parseFloat(hd.maxTemp || hd.temp)
-                                });
-                            }
+                        // Include all available hours for complete data coverage
+                        dayData.forEach((h, idx) => {
+                            flatData.push({
+                                dayIndex,
+                                hIndex: idx,
+                                temp: parseFloat(h.temp),
+                                rain: parseFloat(h.rain),
+                                isMin: h.time === '02' || h.time === '03',
+                                isMax: h.time === '14' || h.time === '15',
+                                maxTemp: parseFloat(h.maxTemp || h.temp)
+                            });
                         });
                     });
 
@@ -385,7 +383,7 @@
                         globalMax += 4; // Extra space at top for text
                         const yRange = globalMax - globalMin || 1;
 
-                        // Single unified SVG — labels drawn directly above each 14:00 point, no separate flex headers
+                        // Single unified SVG — labels drawn directly above each 15:00 point, no separate flex headers
                         const totalDays = validDates.length;
                         const daySlotW = 30;
                         const hSlotW = daySlotW / 4;
@@ -402,17 +400,17 @@
                         slimHTML += `<div class="chart-container" style="overflow: visible; width: 100%; padding: 0;">
                             <svg viewBox="0 0 ${svgTotalW} ${svgH}" preserveAspectRatio="xMinYMin meet" style="overflow: visible; display: block; width: 100%; height: auto; min-width: ${svgTotalW}px;">`;
 
-                        // Draw day/date labels above each 14:00 point (hIndex=2)
+                        // Draw day/date labels above each 15:00 point (hIndex=2)
                         validDates.forEach((date, i) => {
                             const [yr, mo, dstr] = date.split('-');
                             const d = new Date(yr, mo - 1, dstr);
-                            const x = getX(i, 2); // 14:00 is hIndex 2
+                            const x = getX(i, 2); // 15:00 is hIndex 2
                             const dayPoints = flatData.filter(p => p.dayIndex === i);
                             const dailyRain = Math.max(0, ...dayPoints.map(p => p.rain));
                             const hasRain = dailyRain > 0;
                             const rainIcon = hasRain ? getRainIcon(dailyRain) : '';
 
-                            // Day name centered on 14:00 x
+                            // Day name centered on 15:00 x
                             slimHTML += `<text x="${x}" y="9" font-size="8" fill="#1e40af" text-anchor="middle" font-weight="700" font-family="Assistant,sans-serif">${hebrewDays[d.getDay()]}</text>`;
                             // Date below day name
                             slimHTML += `<text x="${x}" y="18" font-size="7.5" fill="#64748b" text-anchor="middle" font-family="Assistant,sans-serif">${fmtDate(date)}</text>`;
