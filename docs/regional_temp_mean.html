@@ -136,9 +136,9 @@
                         direction: "down",
                         buttons: [
                             {
-                                label: "Scale 5 to 40°C",
+                                label: "Scale 5 to 35°C",
                                 method: "relayout",
-                                args: [{ "yaxis.range": [5, 40], "yaxis2.range": [5, 40], "yaxis3.range": [5, 40], "yaxis4.range": [5, 40], "yaxis5.range": [5, 40], "yaxis6.range": [5, 40], "yaxis7.range": [5, 40], "yaxis8.range": [5, 40], "yaxis9.range": [5, 40] }]
+                                args: [{ "yaxis.range": [5, 35], "yaxis2.range": [5, 35], "yaxis3.range": [5, 35], "yaxis4.range": [5, 35], "yaxis5.range": [5, 35], "yaxis6.range": [5, 35], "yaxis7.range": [5, 35], "yaxis8.range": [5, 35], "yaxis9.range": [5, 35] }]
                             },
                             {
                                 label: "Auto Scale",
@@ -290,27 +290,18 @@
                     layout[yaxisKey].title = 'טמפרטורה (C°)';
                 }
 
-                // Annotations for Titles
-                const row = Math.floor(i / cols);
-                const col = i % cols;
-
-                const xGap = 0.08;
-                const width = (1 - (cols - 1) * xGap) / cols;
-                const xPos = col * (width + xGap) + width / 2;
-
-                const yGap = 0.1;
-                const height = (1 - (rows - 1) * yGap) / rows;
-                const rowFromBottom = (rows - 1) - row;
-                const yPos = rowFromBottom * (height + yGap) + height + 0.02;
-
+                // Annotations for Titles — centered on each subplot's own x-axis
+                const subIdx = i === 0 ? '' : String(i + 1);
                 layout.annotations.push({
                     text: region,
-                    x: xPos,
-                    y: yPos,
-                    xref: 'paper',
-                    yref: 'paper',
+                    x: 0.5,
+                    y: 1.04,
+                    xref: `x${subIdx} domain`,
+                    yref: `y${subIdx} domain`,
+                    xanchor: 'center',
+                    yanchor: 'bottom',
                     showarrow: false,
-                    font: { size: 16 }
+                    font: { size: 14 }
                 });
             });
 
@@ -319,7 +310,7 @@
             const scaleFunc = {};
             const autoFunc = {};
             axisKeys.forEach(k => {
-                scaleFunc[k + '.range'] = [5, 40];
+                scaleFunc[k + '.range'] = [5, 35];
                 autoFunc[k + '.autorange'] = true;
             });
 
