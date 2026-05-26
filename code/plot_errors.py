@@ -5,7 +5,7 @@ import os
 
 def main():
     data_path = '/home/yuval/weather/data/daily_comparison.csv'
-    output_path = '/home/yuval/weather/data/forecast_errors.html'
+    output_path = '/home/yuval/weather/docs/forecast_errors.html'
     
     if not os.path.exists(data_path):
         print(f"Error: {data_path} not found. Run compare_forecast.py first.")
