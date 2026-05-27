@@ -97,6 +97,61 @@ def process_files(file_pattern, measure_name, agg_func):
             
     return results
 
+def process_mean_files():
+    """
+    For each year that has BOTH temp_min and temp_max files, compute the
+    daily midrange (max+min)/2 per station, then mean across days in each
+    calendar month.  Cycle = calendar year string (e.g. '2024').
+    """
+    min_files = sorted(glob('data/temp_min_*.csv'))
+    years = [int(os.path.basename(f).replace('temp_min_', '').replace('.csv', ''))
+             for f in min_files]
+    results = []
+    print("Processing MeanTemp...")
+    for year in years:
+        min_file = f'data/temp_min_{year}.csv'
+        max_file = f'data/temp_max_{year}.csv'
+        if not os.path.exists(max_file):
+            continue
+        try:
+            df_min = pd.read_csv(min_file)
+            df_max = pd.read_csv(max_file)
+            df_min['datetime'] = pd.to_datetime(df_min['datetime'])
+            df_max['datetime'] = pd.to_datetime(df_max['datetime'])
+
+            common_stations = [c for c in df_min.columns
+                               if c != 'datetime' and c in df_max.columns]
+            if not common_stations:
+                continue
+
+            df_min = df_min.set_index('datetime')
+            df_max = df_max.set_index('datetime')
+
+            # Daily min of TDmin, daily max of TDmax, then midrange
+            daily_min = df_min[common_stations].resample('D').min()
+            daily_max = df_max[common_stations].resample('D').max()
+            daily_mid = (daily_min + daily_max) / 2.0
+
+            daily_mid['_month'] = daily_mid.index.month
+            daily_mid['_year']  = daily_mid.index.year
+
+            for (yr, month), group in daily_mid.groupby(['_year', '_month']):
+                vals = group[common_stations].mean().dropna()
+                cycle = str(yr)
+                for station, value in vals.items():
+                    results.append({
+                        'Station': station,
+                        'Measure': 'MeanTemp',
+                        'Cycle': cycle,
+                        'Month': month,
+                        'Value': round(float(value), 1)
+                    })
+            print(f"  Processed MeanTemp {year}")
+        except Exception as e:
+            print(f"Error processing MeanTemp {year}: {e}")
+    return results
+
+
 def main():
     all_data = []
     
@@ -108,6 +163,9 @@ def main():
     
     # 3. Max Temp (Max)
     all_data.extend(process_files('data/temp_max_*.csv', 'MaxTemp', 'max'))
+
+    # 4. Mean Temp (midrange mean)
+    all_data.extend(process_mean_files())
     
     # Save to CSV
     output_file = 'data/station_monthly.csv'
