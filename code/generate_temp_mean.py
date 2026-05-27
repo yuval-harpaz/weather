@@ -18,8 +18,7 @@ import numpy as np
 from glob import glob
 
 # Setup paths so we can run from any directory
-home = os.environ.get('HOME', os.path.expanduser('~'))
-base_dir = os.path.join(home, 'weather')
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Load station data for region mapping
 df_stations = pd.read_csv(os.path.join(base_dir, 'data', 'ims_stations.csv'))
