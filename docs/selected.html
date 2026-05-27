@@ -109,6 +109,7 @@
                 <option value="Rain" selected>גשם (Rain)</option>
                 <option value="MinTemp">טמפרטורת מינימום (Min Temp)</option>
                 <option value="MaxTemp">טמפרטורת מקסימום (Max Temp)</option>
+                <option value="MeanTemp">טמפרטורה ממוצעת (Mean Temp)</option>
             </select>
         </div>
         <div class="control-group">
@@ -229,8 +230,10 @@
             let monthOrder;
             if (currentMeasure === 'Rain' || currentMeasure === 'MinTemp') {
                 monthOrder = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8];
-            } else {
+            } else if (currentMeasure === 'MaxTemp') {
                 monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2];
+            } else { // MeanTemp — Jan to Dec
+                monthOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
             }
 
             // Identify Cycles
@@ -391,7 +394,7 @@
 
             const layout = {
                 title: {
-                    text: `נתוני ${currentMeasure === 'Rain' ? 'גשם מצטבר' : (currentMeasure === 'MinTemp' ? 'טמפרטורת מינימום' : 'טמפרטורת מקסימום')} - ${currentStation}`,
+                    text: `נתוני ${currentMeasure === 'Rain' ? 'גשם מצטבר' : (currentMeasure === 'MinTemp' ? 'טמפרטורת מינימום' : (currentMeasure === 'MaxTemp' ? 'טמפרטורת מקסימום' : 'טמפרטורה ממוצעת'))} - ${currentStation}`,
                     x: 0.95,
                     xanchor: 'right'
                 },
@@ -413,30 +416,87 @@
         async function updateHourlyPlot() {
             // Determine file prefix based on measure
             let filePrefix;
-            let valKey = currentStation;
 
             if (currentMeasure === 'Rain') filePrefix = 'rain';
             else if (currentMeasure === 'MinTemp') filePrefix = 'temp_min';
             else if (currentMeasure === 'MaxTemp') filePrefix = 'temp_max';
-            else { // Hourly data not available for other measures
-                Plotly.newPlot('hourlyPlot', [], {
-                    title: { text: 'נתונים שעתיים אינם זמינים עבור מדד זה' }
-                });
+            else if (currentMeasure === 'MeanTemp') filePrefix = 'mean'; // handled specially below
+            else {
+                Plotly.newPlot('hourlyPlot', [], { title: { text: 'נתונים שעתיים אינם זמינים עבור מדד זה' } });
                 return;
             }
 
             const now = new Date();
             const currentYear = now.getFullYear();
-
-            // Calculate 31 days ago
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - 31);
-
             const startYear = startDate.getFullYear();
-
-            // Needed years
             const neededYears = new Set([startYear, currentYear]);
 
+            const parseTime = d3.timeParse("%Y-%m-%d %H:%M");
+
+            if (currentMeasure === 'MeanTemp') {
+                // Load both min and max files and compute hourly midrange
+                const promises = [];
+                neededYears.forEach(y => {
+                    ['temp_min', 'temp_max'].forEach(pfx => {
+                        const key = `${pfx}_${y}`;
+                        if (!rawDataCache[key]) {
+                            const url = `${rawDataBase}/${key}.csv`;
+                            const p = d3.csv(url).then(data => { rawDataCache[key] = data; return data; })
+                                        .catch(() => { rawDataCache[key] = []; return []; });
+                            promises.push(p);
+                        } else {
+                            promises.push(Promise.resolve(rawDataCache[key]));
+                        }
+                    });
+                });
+
+                Promise.all(promises).then(() => {
+                    // Build datetime → {min, max} maps
+                    const dtMap = new Map();
+                    const sortedYears = Array.from(neededYears).sort();
+                    sortedYears.forEach(y => {
+                        const minRows = rawDataCache[`temp_min_${y}`] || [];
+                        const maxRows = rawDataCache[`temp_max_${y}`] || [];
+                        minRows.forEach(d => {
+                            const v = d[currentStation];
+                            if (v === undefined || v === '') return;
+                            const dt = parseTime(d.datetime);
+                            if (!dt || dt < startDate || dt > now) return;
+                            if (!dtMap.has(d.datetime)) dtMap.set(d.datetime, {dt, min: null, max: null});
+                            dtMap.get(d.datetime).min = +v;
+                        });
+                        maxRows.forEach(d => {
+                            const v = d[currentStation];
+                            if (v === undefined || v === '') return;
+                            const dt = parseTime(d.datetime);
+                            if (!dt || dt < startDate || dt > now) return;
+                            if (!dtMap.has(d.datetime)) dtMap.set(d.datetime, {dt, min: null, max: null});
+                            dtMap.get(d.datetime).max = +v;
+                        });
+                    });
+
+                    const pts = [...dtMap.values()]
+                        .filter(p => p.min !== null && p.max !== null)
+                        .sort((a, b) => a.dt - b.dt);
+
+                    const x = pts.map(p => p.dt);
+                    const y = pts.map(p => (p.min + p.max) / 2);
+
+                    Plotly.newPlot('hourlyPlot', [{
+                        x, y, type: 'scatter', mode: 'lines',
+                        line: { color: 'green' }, name: currentStation
+                    }], {
+                        title: { text: 'טמפרטורה ממוצעת (אמצע טווח) ל-31 ימים אחרונים (רזולוציה שעתית)', x: 0.95, xanchor: 'right' },
+                        yaxis: { title: '°C' }, xaxis: { title: 'זמן' },
+                        margin: { t: 40, r: 20, l: 40, b: 40 }, dir: 'rtl'
+                    }, { responsive: true });
+                });
+                return;
+            }
+
+            // Original logic for Rain / MinTemp / MaxTemp
             const promises = [];
             neededYears.forEach(y => {
                 const key = `${filePrefix}_${y}`;
