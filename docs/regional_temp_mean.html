@@ -72,14 +72,14 @@
 
 <div id="plot"></div>
 
-<div class="footer">
-    <span>נתונים מ</span>
-    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
-        style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-        <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
-            style="height: 16px; margin-right: 5px;">
+<div class="data-source" id="ims-attribution" style="position: fixed; top: 52%; flex-direction: column; align-items: flex-start; background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+    <span style="font-size: 0.8em;">נתונים מ</span>
+    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+        <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo">
     </a>
 </div>
+
+
 
 <script>
     // ── Static config ──────────────────────────────────────────────────────────
@@ -192,7 +192,14 @@
                 xanchor:'center', yanchor:'bottom', showarrow:false, font:{size:14} });
         });
 
-        Plotly.newPlot('plot', traces, layout, { responsive: true });
+
+        Plotly.newPlot('plot', traces, layout, { responsive: true }).then(() => {
+                const plotEl = document.getElementById('plot');
+                const mr = plotEl._fullLayout.margin.r;
+                const plotRect = plotEl.getBoundingClientRect();
+                const imsEl = document.getElementById('ims-attribution');
+                imsEl.style.right = (window.innerWidth - plotRect.right + mr - 5) + 'px';
+            });
         attachModeListener();
     }
 
@@ -329,7 +336,14 @@
             }
         });
 
-        Plotly.newPlot('plot', traces, layout, { responsive: true });
+
+        Plotly.newPlot('plot', traces, layout, { responsive: true }).then(() => {
+                const plotEl = document.getElementById('plot');
+                const mr = plotEl._fullLayout.margin.r;
+                const plotRect = plotEl.getBoundingClientRect();
+                const imsEl = document.getElementById('ims-attribution');
+                imsEl.style.right = (window.innerWidth - plotRect.right + mr - 5) + 'px';
+            });
         attachModeListener();
     }
 
