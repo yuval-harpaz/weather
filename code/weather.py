@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import time
 from glob import glob
+import requests
 from datetime import datetime, timedelta
 import re
 # https://data.gov.il/dataset/481
@@ -117,10 +118,10 @@ def update_regions(force=False):
     Updates the regions CSV file with new regions from the IMS API.
     
     Inputs:
-        None (reads from data/ims_regions.csv, fetches from IMS API)
+        force (bool): If True, saves the CSV even if no new regions are found.
     
     Outputs:
-        None (updates data/ims_regions.csv if new regions are found)
+        None (updates data/ims_regions.csv if new regions are found or user approves changes)
     """
     url = 'https://api.ims.gov.il/v1/Envista/regions'
     response = requests.request("GET", url, headers=headers)
@@ -129,6 +130,7 @@ def update_regions(force=False):
     prev = pd.read_csv('data/ims_regions.csv')
     df_reg_new = df_reg[~df_reg['regionId'].isin(prev['regionId'].values)]
     # check that regions are the same
+    station_changes = []  # collect all changes before deciding what to do
     for iregion in range(len(prev)):
         prev_stations = prev['stations'].values[iregion]
         prev_dicts = eval(prev_stations)
@@ -136,16 +138,51 @@ def update_regions(force=False):
         current_dicts = df_reg['stations'].values[iregion]
         current_names = [p['name'] for p in current_dicts]
         if set(current_names) != set(prev_names):
-            print(f"region {prev['name'][iregion]} has issues")
-            missing = [p for p in prev_names if p not in current_names] + [c for c in current_names if c not in prev_names]
-            print(missing)
-            raise Exception("region's list of stations changes, please check!")
+            region_name = prev['name'][iregion]
+            added = [c for c in current_names if c not in prev_names]
+            removed = [p for p in prev_names if p not in current_names]
+            station_changes.append({
+                'region': region_name,
+                'added': added,
+                'removed': removed,
+            })
         regionid = prev['regionId'].values[iregion]
         name_prev = prev['name'].values[iregion]
         name_new = df_reg['name'].values[df_reg['regionId'] == regionid][0]
         if str(name_prev).replace('nan', 'None') != name_new:
-            raise Exception("region name changed, please check!")
-    if len(df_reg_new) > 0 or force:
+            raise Exception(f"region name changed from '{name_prev}' to '{name_new}', please check!")
+
+    if station_changes:
+        print("\n=== Region station changes detected ===")
+        has_removals = False
+        for change in station_changes:
+            print(f"\nRegion: {change['region']}")
+            if change['added']:
+                print(f"  Added stations:   {change['added']}")
+            if change['removed']:
+                print(f"  Removed stations: {change['removed']}")
+                has_removals = True
+        print()
+        if has_removals:
+            print("WARNING: Some stations were REMOVED from regions.")
+            print("This may indicate discontinued stations or data reorganisation.")
+            print("Steps to take:")
+            print("  1. Check the IMS API or website to confirm the removal is intentional.")
+            print("  2. Consider whether historical CSV data for those stations should be kept.")
+            print("  3. Re-run with user approval below to update the regions CSV.")
+        else:
+            print("Only new stations were added (no removals). This is likely safe to accept.")
+            print("Steps to take:")
+            print("  1. Verify the new stations exist in ims_stations.csv (run update_stations()).")
+            print("  2. Consider re-running data collection to backfill the new stations.")
+
+        answer = input("Update data/ims_regions.csv with the new station lists? [y/N]: ").strip().lower()
+        if answer == 'y':
+            df_reg.to_csv('data/ims_regions.csv', index=False)
+            print("data/ims_regions.csv updated.")
+        else:
+            raise Exception("region's list of stations changed, user chose not to update. Aborting.")
+    elif len(df_reg_new) > 0 or force:
         df_reg.to_csv('data/ims_regions.csv', index=False)
 
 def update_activity(new=False, ignore_old=True):
