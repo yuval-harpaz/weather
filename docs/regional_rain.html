@@ -382,10 +382,13 @@
       const config = { responsive: true };
       Plotly.newPlot('plot', traces, layout, config).then(() => {
         const plotEl = document.getElementById('plot');
-        const mr = plotEl._fullLayout.margin.r;
+        const fl = plotEl._fullLayout;
+        const plotWidth = fl.width - fl.margin.l - fl.margin.r;
+        const buttonLeftSVG = fl.margin.l + 1.02 * plotWidth;
         const plotRect = plotEl.getBoundingClientRect();
         const imsEl = document.getElementById('ims-attribution');
-        imsEl.style.right = (window.innerWidth - plotRect.right + mr - 5) + 'px';
+        imsEl.style.left = (plotRect.left + buttonLeftSVG) + 'px';
+        imsEl.style.right = 'auto';
       });
 
     } catch (error) {

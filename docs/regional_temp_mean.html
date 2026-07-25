@@ -83,7 +83,7 @@
 
 <script>
     // ── Static config ──────────────────────────────────────────────────────────
-    const regions = ['מישור חוף צפוני', 'כרמל וחיפה', 'גליל וגולן', 'גוש דן והשרון', 'יהודה ושומרון', 'עמקי הצפון', 'מישור חוף דרומי', 'נגב', 'ים המלח והערבה'];
+    const regions = ['מishor chof tzfoni', 'karmel uchifa', 'galil u golon', 'gush dan u hasaron', 'yehuda u shomeron', 'emki haTzafon', 'mishor chof doromi', 'nagab', 'im haMachel u haErbe'];
     const monthOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     const monthNames = { 1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec' };
     // Polar angles: Jan=0° with rotation=90+clockwise puts Jan at top
@@ -195,10 +195,13 @@
 
         Plotly.newPlot('plot', traces, layout, { responsive: true }).then(() => {
                 const plotEl = document.getElementById('plot');
-                const mr = plotEl._fullLayout.margin.r;
+                const fl = plotEl._fullLayout;
+                const plotWidth = fl.width - fl.margin.l - fl.margin.r;
+                const buttonLeftSVG = fl.margin.l + 1.02 * plotWidth;
                 const plotRect = plotEl.getBoundingClientRect();
                 const imsEl = document.getElementById('ims-attribution');
-                imsEl.style.right = (window.innerWidth - plotRect.right + mr - 5) + 'px';
+                imsEl.style.left = (plotRect.left + buttonLeftSVG) + 'px';
+                imsEl.style.right = 'auto';
             });
         attachModeListener();
     }
@@ -339,10 +342,13 @@
 
         Plotly.newPlot('plot', traces, layout, { responsive: true }).then(() => {
                 const plotEl = document.getElementById('plot');
-                const mr = plotEl._fullLayout.margin.r;
+                const fl = plotEl._fullLayout;
+                const plotWidth = fl.width - fl.margin.l - fl.margin.r;
+                const buttonLeftSVG = fl.margin.l + 1.02 * plotWidth;
                 const plotRect = plotEl.getBoundingClientRect();
                 const imsEl = document.getElementById('ims-attribution');
-                imsEl.style.right = (window.innerWidth - plotRect.right + mr - 5) + 'px';
+                imsEl.style.left = (plotRect.left + buttonLeftSVG) + 'px';
+                imsEl.style.right = 'auto';
             });
         attachModeListener();
     }
@@ -375,4 +381,3 @@
 </body>
 
 </html>
-
