@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Israeli Surface Stations Hourly Observations</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="logo.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Assistant', sans-serif; margin: 0; padding: 0; }
+        .obs-tooltip {
+            background: rgba(255,255,255,0.97) !important;
+            border: none !important;
+            border-radius: 10px !important;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.18) !important;
+            padding: 5px 10px !important;
+            font-family: 'Assistant', sans-serif;
+            pointer-events: none !important;
+            white-space: nowrap !important;
+            font-size: 0.93em;
+            font-weight: 600;
+        }
+        .obs-tooltip::before { display: none !important; }
+        .wind-arrow-marker { display:flex; align-items:center; justify-content:center; }
+        .time-nav { display:flex; align-items:center; gap:8px; justify-content:center; }
+        .nav-btn {
+            background:#f0f4f8; border:1.5px solid #d1d5db; border-radius:7px;
+            padding:2px 10px; font-size:1em; font-weight:700; cursor:pointer;
+            color:#374151; font-family:'Assistant',sans-serif; transition:background 0.15s; line-height:1.5;
+        }
+        .nav-btn:hover:not(:disabled) { background:#dbeafe; border-color:#2563eb; }
+        .nav-btn:disabled { opacity:0.35; cursor:default; }
+        .nav-btn.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+        #time-label { font-size:0.95em; font-weight:700; color:#1e3a8a; min-width:150px; text-align:center; }
+        .measure-row { display:flex; align-items:center; gap:6px; justify-content:center; }
+        #measure-select {
+            font-family:'Assistant',sans-serif; font-size:0.88em; padding:3px 6px;
+            border-radius:7px; border:1.5px solid #d1d5db; background:#f9fafb;
+            color:#111827; cursor:pointer; max-width:220px;
+        }
+        #lang-btn {
+            background:#f0f4f8; border:1.5px solid #d1d5db; border-radius:7px;
+            padding:2px 9px; font-size:0.82em; font-weight:700; cursor:pointer;
+            color:#374151; font-family:'Assistant',sans-serif; transition:background 0.15s; white-space:nowrap;
+        }
+        #lang-btn:hover { background:#dbeafe; border-color:#2563eb; }
+        .colorbar-control {
+            background:rgba(255,255,255,0.95); padding:10px 8px; border-radius:10px;
+            box-shadow:0 4px 15px rgba(0,0,0,0.15); display:flex; gap:8px;
+            border:1px solid #e2e8f0; direction:ltr;
+        }
+        .colorbar-gradient { width:13px; border-radius:4px; }
+        .colorbar-labels {
+            display:flex; flex-direction:column; justify-content:space-between;
+            font-size:10px; font-weight:700; color:#334155; padding:2px 0; min-width:36px; text-align:right;
+        }
+        .loading-overlay {
+            position:fixed; top:0; left:0; right:0; bottom:0;
+            background:rgba(255,255,255,0.93);
+            display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2000;
+        }
+        .loading-spinner {
+            width:44px; height:44px; border:4px solid #e2e8f0; border-top:4px solid #2563eb;
+            border-radius:50%; animation:spin 1s linear infinite; margin-bottom:14px;
+        }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .loading-text { font-size:1.05em; color:#475569; font-weight:600; }
+        @media (max-width:600px) {
+            #floating-title { width:96%; max-width:none; }
+            #floating-title h1 { font-size:1em !important; }
+            #measure-select { max-width:170px; }
+        }
+    </style>
+</head>
+<body>
+<div id="loading" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading observations&#8230;</div>
+</div>
+<div id="floating-title" style="flex-direction:column;align-items:center;gap:6px;padding:10px 16px;">
+    <div style="display:flex;justify-content:space-between;width:100%;align-items:center;gap:8px;">
+        <button onclick="document.getElementById('floating-title').style.display='none'"
+            style="background:none;border:none;font-size:1.4em;cursor:pointer;color:#64748b;padding:0;line-height:1;">&#215;</button>
+        <h1 id="page-title" style="margin:0;font-size:1.1em;display:flex;align-items:center;gap:7px;">
+            <img src="logo.jpg" alt="Icon" class="title-icon" style="height:1.2em;">
+            <span id="title-text">Israeli Surface Stations Hourly Observations</span>
+        </h1>
+        <button id="lang-btn" onclick="toggleLang()">&#1506;&#1489;</button>
+    </div>
+    <div class="time-nav" style="direction:ltr;">
+        <button class="nav-btn" id="btn-prev" onclick="stepTime(-1)" title="Previous time step">&#9664;</button>
+        <span id="time-label">&#8212;</span>
+        <button class="nav-btn" id="btn-next" onclick="stepTime(+1)" title="Next time step">&#9654;</button>
+        <button class="nav-btn" id="btn-latest" onclick="goLatest()" title="Jump to latest available time for this measure">&#8677;</button>
+    </div>
+    <div class="measure-row">
+        <label id="measure-label" for="measure-select" style="font-size:0.85em;font-weight:600;color:#374151;">Measure:</label>
+        <select id="measure-select" onchange="onMeasureChange()"></select>
+    </div>
+    <div style="display:flex;flex-direction:row;justify-content:center;gap:18px;align-items:center;width:100%;">
+        <a href="index.html" class="home-btn" style="margin:0;">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span id="home-label">Home</span>
+        </a>
+        <div class="data-source" style="margin-top:0;">
+            <span id="source-label">Data from</span>
+            <a href="https://ims.gov.il/sites/default/files/ims_data/xml_files/observ.xml" target="_blank" rel="noopener">
+                <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo" style="height:14px;">
+            </a>
+        </div>
+    </div>
+</div>
+<div id="map"></div>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([31.5, 35.0], 8);
+L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
+    attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
+}).addTo(map);
+let lang = 'en';
+let params = [];
+let timeKeys = [];
+let timeIndex = 0;
+let currentMeasure = 'TD';
+let data = {};
+let activeMarkers = [];
+let colorbarCtrl = null;
+let availableShorts = new Set();
+let autoLatest = true;
+let xmlTitle = 'Israeli Surface Stations Hourly Observations';
+const heParamNames = {
+    TT:'טמפרטורת אוויר', TD:'טמפרטורת נקודת הטל', TWE:'טמפרטורה רטובה',
+    RH:'לחות יחסית', DD:'כיוון הרוח', FF:'מהירות הרוח',
+    PO:'לחץ אטמוספרי (תחנה)', PP:'לחץ ברמת הים', VV:'נראות אופקית',
+    TW:'טמפרטורת ים', TN:'טמפרטורה מינימלית', TX:'טמפרטורה מקסימלית',
+    GRD:'קרינה גלובלית יומית', GRH:'קרינה גלובלית שעתית',
+    TG:'טמפרטורת קרקע מינימלית', FFX:'מהירות רוח מקסימלית 3 שעות',
+    FM:'מהירות משב 3 שעות', SSS:'משך שמש', H85:'גיאופוטנציאל 850 hPa',
+    PP1:'שינוי לחץ 1 שעה', PP3:'שינוי לחץ 3 שעות',
+    R24:'גשם יומי', R01:'גשם שעתי', R06:'גשם 6 שעות', R12:'גשם 12 שעות',
+    WW:'מזג אוויר נוכחי', W1:'מזג אוויר עבר 1', W2:'מזג אוויר עבר 2'
+};
+const heUI = {
+    measure:'פרמטר:', home:'דף הבית', sourceLabel:'נתונים מ',
+    title:'תצפיות שעתיות של תחנות פני קרקע בישראל'
+};
+function jetColor(ratio) {
+    const r0 = Math.max(0, Math.min(1, ratio));
+    let r, g, b;
+    if      (r0 < 0.25) { r=0; g=Math.round(r0*4*255); b=255; }
+    else if (r0 < 0.50) { r=0; g=255; b=Math.round((0.5-r0)*4*255); }
+    else if (r0 < 0.75) { r=Math.round((r0-0.5)*4*255); g=255; b=0; }
+    else                 { r=255; g=Math.round((1-r0)*4*255); b=0; }
+    return 'rgb('+r+','+g+','+b+')';
+}
+const fixedRanges = {
+    TT:[-50,450], TD:[-100,350], TWE:[-50,350], TN:[-50,350], TX:[-50,450],
+    TN1:[-50,350], TX1:[-50,450],
+    TG:[-100,300], TW:[100,350], RH:[0,100],
+    FF:[0,200], FFX:[0,200], FM:[0,200], FM1:[0,200], FX1:[0,200],
+    PO:[8500,11000], PP:[8500,11000],
+    R01:[0,200], R06:[0,500], R12:[0,1000], R24:[0,2000],
+    GRD:[0,60000], GRH:[0,4000]
+};
+function getValsAtTime(pshort, tIdx) {
+    const tk = timeKeys[tIdx];
+    if (!data[tk]) return [];
+    return Object.values(data[tk]).map(function(s){ return s.values[pshort]; }).filter(function(v){ return v !== undefined && !isNaN(v); });
+}
+function getTimeVals(pshort) {
+    return getValsAtTime(pshort, timeIndex);
+}
+function valueColor(pshort, rawVal, pinfo) {
+    if (pshort === 'RH') return jetColor(1 - rawVal / 100);
+    if (pshort === 'VV') return jetColor(Math.min(rawVal, 50000) / 50000);
+    if (['R01','R06','R12','R24'].includes(pshort)) {
+        const mx = {R01:200,R06:500,R12:1000,R24:2000}[pshort];
+        const t = Math.min(rawVal, mx) / mx;
+        return 'rgb('+Math.round(180*(1-t))+','+Math.round(220*(1-t))+',255)';
+    }
+    if (['FF','FFX','FM','FM1','FX1'].includes(pshort)) {
+        const kmh = (rawVal / 10) * 3.6;
+        return jetColor(Math.min(kmh, 70) / 70);
+    }
+    const range = fixedRanges[pshort];
+    if (range) return jetColor((rawVal - range[0]) / (range[1] - range[0]));
+    const vals = getTimeVals(pshort);
+    if (vals.length < 2) return jetColor(0.5);
+    const mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+    return mn === mx ? jetColor(0.5) : jetColor((rawVal - mn) / (mx - mn));
+}
+function fmtVal(pshort, rawVal, pinfo) {
+    const v = rawVal / pinfo.scale;
+    if (['FF','FFX','FM','FM1','FX1'].includes(pshort)) return (v * 3.6).toFixed(1) + ' km/h';
+    if (pshort === 'VV')                    return (rawVal / 1000).toFixed(1) + ' km';
+    if (['GRD','GRH'].includes(pshort))     return v.toFixed(0) + ' W/m\u00b2';
+    if (pinfo.units === '%')                return v.toFixed(0) + '%';
+    if (pinfo.units.indexOf('C') >= 0)      return v.toFixed(1) + '\u00b0C';
+    if (pinfo.units.indexOf('hPa') >= 0)    return v.toFixed(1) + ' hPa';
+    if (pinfo.units.indexOf('mm') >= 0)     return v.toFixed(1) + ' mm';
+    if (pinfo.units === 'm')                return v.toFixed(0) + ' m';
+    if (pinfo.units === 'Minutes')          return v.toFixed(0) + ' min';
+    return v.toFixed(1) + (pinfo.units ? ' ' + pinfo.units : '');
+}
+function parseXML(xmlText) {
+    const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+    const titleEl = doc.querySelector('Title');
+    if (titleEl) {
+        xmlTitle = titleEl.textContent.trim();
+        document.getElementById('title-text').textContent = xmlTitle;
+        document.title = xmlTitle;
+    }
+    params = [];
+    doc.querySelectorAll('ParametersDescription > Parameter').forEach(function(el) {
+        const short = el.querySelector('ParameterShortName').textContent.trim();
+        const full  = el.querySelector('ParameterFullName').textContent.trim();
+        const units = el.querySelector('ParameterUnits').textContent.trim();
+        const scale = units.indexOf('Tenths') === 0 ? 10 : 1;
+        params.push({ short:short, full:full, units:units, scale:scale });
+    });
+    data = {};
+    doc.querySelectorAll('Observations > Observation').forEach(function(obs) {
+        const dt   = obs.querySelector('DateTime').textContent.trim();
+        const stn  = obs.querySelector('Station');
+        const num  = stn.querySelector('StationNumber').textContent.trim();
+        const lat  = parseFloat(stn.querySelector('StationLatitude').textContent);
+        const lon  = parseFloat(stn.querySelector('StationLongitude').textContent);
+        const name = stn.querySelector('StationName').textContent.trim();
+        if (!data[dt]) data[dt] = {};
+        if (!data[dt][num]) data[dt][num] = { lat:lat, lon:lon, name:name, values:{} };
+        obs.querySelectorAll('Observation > Parameter, Observations > Observation > Parameter').forEach(function(p) {
+            const s = p.querySelector('ParameterShortName').textContent.trim();
+            const v = parseFloat(p.querySelector('ParameterValue').textContent);
+            data[dt][num].values[s] = v;
+        });
+    });
+    timeKeys = Object.keys(data).sort();
+    timeIndex = timeKeys.length - 1;
+    // collect which param shorts have at least one real value
+    availableShorts = new Set();
+    Object.values(data).forEach(function(stns) {
+        Object.values(stns).forEach(function(stn) {
+            Object.keys(stn.values).forEach(function(k) { availableShorts.add(k); });
+        });
+    });
+}
+function buildDropdown() {
+    const sel = document.getElementById('measure-select');
+    const prev = sel.value || currentMeasure;
+    sel.innerHTML = '';
+    // DD is rendered together with wind-speed params as arrows, hide it from standalone list
+    params.forEach(function(p) {
+        if (p.short === 'DD') return; // direction shown via wind-speed arrows
+        if (availableShorts.size > 0 && !availableShorts.has(p.short)) return; // no data
+        const opt = document.createElement('option');
+        opt.value = p.short;
+        opt.textContent = p.short + ' \u2013 ' + (lang === 'he' ? (heParamNames[p.short] || p.full) : p.full);
+        if (['FF','FFX','FM','FM1','FX1'].includes(p.short)) opt.textContent += (lang === 'he' ? ' (חצים)' : ' (arrows)');
+        sel.appendChild(opt);
+    });
+    sel.value = (sel.querySelector('option[value="'+prev+'"]') ? prev : (sel.options[0]||{}).value) || prev;
+    currentMeasure = sel.value;
+}
+function clearMarkers() {
+    activeMarkers.forEach(function(m) { map.removeLayer(m); });
+    activeMarkers = [];
+}
+function renderMarkers() {
+    clearMarkers();
+    if (colorbarCtrl) { map.removeControl(colorbarCtrl); colorbarCtrl = null; }
+    const tk = timeKeys[timeIndex];
+    if (!tk) return;
+    const pinfo = params.find(function(p) { return p.short === currentMeasure; });
+    if (!pinfo) return;
+    document.getElementById('time-label').textContent = utcToIsrael(tk);
+    document.getElementById('btn-prev').disabled = (timeIndex === 0);
+    document.getElementById('btn-next').disabled = (timeIndex === timeKeys.length - 1);
+    document.getElementById('btn-latest').classList.toggle('active', autoLatest);
+    const stations = data[tk];
+    if (!stations) return;
+    const isWind = (['FF','FFX','FM','FM1','FX1'].includes(currentMeasure));
+    Object.values(stations).forEach(function(stn) {
+        const rawVal = stn.values[currentMeasure];
+        if (rawVal === undefined || isNaN(rawVal)) return;
+        if (isNaN(stn.lat) || isNaN(stn.lon)) return;
+        const color = valueColor(currentMeasure, rawVal, pinfo);
+        const dispVal = fmtVal(currentMeasure, rawVal, pinfo);
+        const dd = stn.values['DD'];
+        if (isWind && !isNaN(dd)) {
+            // Wind arrow marker
+            const wsKmh = (rawVal / 10) * 3.6;
+            const size = Math.max(14, Math.min(36, 10 + wsKmh * 0.5));
+            const rot = (dd + 180) % 360;
+            const icon = L.divIcon({
+                className: 'wind-arrow-marker',
+                html: '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" style="transform:rotate('+rot+'deg);display:block;" xmlns="http://www.w3.org/2000/svg"><polygon points="12,2 18,20 12,16 6,20" fill="'+color+'" stroke="white" stroke-width="1.5"/></svg>',
+                iconSize: [size, size], iconAnchor: [size/2, size/2]
+            });
+            const m = L.marker([stn.lat, stn.lon], { icon:icon }).addTo(map);
+            m.bindTooltip('<b>'+stn.name+'</b><br>'+dispVal+' | dir '+dd+'\u00b0', {
+                permanent:false, direction:'right', className:'obs-tooltip', sticky:false
+            });
+            activeMarkers.push(m);
+        } else {
+            const m = L.circleMarker([stn.lat, stn.lon], {
+                radius:8, fillColor:color, color:'#fff', weight:1.5, opacity:1, fillOpacity:0.92
+            }).addTo(map);
+            m.bindTooltip('<b>'+stn.name+'</b><br>'+dispVal, {
+                permanent:false, direction:'right', className:'obs-tooltip', sticky:false
+            });
+            activeMarkers.push(m);
+        }
+    });
+    renderColorbar(pinfo);
+}
+function renderColorbar(pinfo) {
+    colorbarCtrl = L.control({ position:'bottomleft' });
+    colorbarCtrl.onAdd = function() {
+        const div = L.DomUtil.create('div', 'colorbar-control');
+        const sh = currentMeasure;
+        const tickPx = 22;
+        let gradient = 'linear-gradient(to top,rgb(0,0,255),rgb(0,255,255),rgb(0,255,0),rgb(255,255,0),rgb(255,0,0))';
+        let labels = [];
+        let unitHdr = '';
+        if (sh === 'RH') {
+            gradient = 'linear-gradient(to top,rgb(255,0,0),rgb(255,255,0),rgb(0,255,0),rgb(0,255,255),rgb(0,0,255))';
+            for (var v=100; v>=0; v-=10) labels.push(v+'%');
+        } else if (['FF','FFX','FM'].includes(sh)) {
+            for (var v=70; v>=0; v-=10) labels.push(v+'');
+            unitHdr = 'km/h';
+        } else if (['R01','R06','R12','R24'].includes(sh)) {
+            gradient = 'linear-gradient(to top,rgb(180,220,255),rgb(0,100,255))';
+            const mxRaw = {R01:200,R06:500,R12:1000,R24:2000}[sh];
+            const mxMm  = mxRaw / 10;
+            const step  = mxMm <= 20 ? 2 : mxMm <= 50 ? 5 : mxMm <= 100 ? 10 : 20;
+            for (var v=mxMm; v>=0; v-=step) labels.push(v.toFixed(step<1?1:0)+'');
+            unitHdr = 'mm';
+        } else if (['TT','TD','TWE','TN','TX','TN1','TX1','TG','TW'].includes(sh)) {
+            for (var v=45; v>=-5; v-=5) labels.push(v+'\u00b0C');
+        } else if (['GRD','GRH'].includes(sh)) {
+            const mx = sh === 'GRD' ? 60000 : 4000;
+            const step = sh === 'GRD' ? 10000 : 500;
+            for (var v=mx; v>=0; v-=step) labels.push(v+'');
+            unitHdr = 'W/m\u00b2';
+        } else if (sh === 'VV') {
+            // horizontal visibility 0–50 km
+            for (var v=50; v>=0; v-=5) labels.push(v+'');
+            unitHdr = 'km';
+        } else if (['PO','PP'].includes(sh)) {
+            for (var v=1100; v>=850; v-=25) labels.push(v+'');
+            unitHdr = 'hPa';
+        } else {
+            const vals = getTimeVals(sh);
+            if (vals.length < 2) { div.innerHTML=''; return div; }
+            const mn = Math.min.apply(null,vals), mx = Math.max.apply(null,vals);
+            const range = mx - mn;
+            // choose step so we get at most ~8 ticks
+            const rawStep = range / 7;
+            const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+            const step = Math.ceil(rawStep / magnitude) * magnitude;
+            const lo = Math.ceil(mn/step)*step, hi = Math.floor(mx/step)*step;
+            for (var v=hi; v>=lo-0.001; v-=step) labels.push(parseFloat(v.toFixed(4))+'');
+            unitHdr = pinfo.units.replace('Tenths ','');
+        }
+        const barH = (labels.length - 1) * tickPx;
+        const labelsHtml = labels.map(function(l){return '<span>'+l+'</span>';}).join('');
+        if (unitHdr) {
+            div.innerHTML =
+                '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">' +
+                '<div style="font-size:9px;font-weight:700;color:#334155;text-align:right;padding-bottom:2px;">'+unitHdr+'</div>' +
+                '<div style="display:flex;gap:8px;">' +
+                '<div class="colorbar-labels" style="height:'+barH+'px;">'+labelsHtml+'</div>' +
+                '<div class="colorbar-gradient" style="background:'+gradient+';height:'+barH+'px;"></div>' +
+                '</div></div>';
+        } else {
+            div.innerHTML =
+                '<div class="colorbar-labels" style="height:'+barH+'px;">'+labelsHtml+'</div>' +
+                '<div class="colorbar-gradient" style="background:'+gradient+';height:'+barH+'px;"></div>';
+        }
+        return div;
+    };
+    colorbarCtrl.addTo(map);
+}
+function utcToIsrael(dtStr) {
+    // dtStr: "2026-07-30 05:00"  — treat as UTC, add 3h for IDT
+    var parts = dtStr.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+    if (!parts) return dtStr;
+    var d = new Date(Date.UTC(+parts[1],+parts[2]-1,+parts[3],+parts[4],+parts[5]));
+    d = new Date(d.getTime() + 3*60*60*1000);
+    var pad = function(n){ return String(n).padStart(2,'0'); };
+    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())
+        +' '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+' IDT';
+}
+function setLatestMode(on) {
+    autoLatest = on;
+    var btn = document.getElementById('btn-latest');
+    if (btn) btn.classList.toggle('active', on);
+}
+function latestIndexFor(pshort) {
+    for (var i = timeKeys.length - 1; i >= 0; i--) {
+        if (getValsAtTime(pshort, i).length > 0) return i;
+    }
+    return timeKeys.length - 1;
+}
+function goLatest() {
+    setLatestMode(true);
+    timeIndex = latestIndexFor(currentMeasure);
+    renderMarkers();
+}
+function stepTime(dir) {
+    setLatestMode(false);
+    const ni = timeIndex + dir;
+    if (ni < 0 || ni >= timeKeys.length) return;
+    timeIndex = ni;
+    renderMarkers();
+}
+function onMeasureChange() {
+    currentMeasure = document.getElementById('measure-select').value;
+    if (autoLatest) {
+        timeIndex = latestIndexFor(currentMeasure);
+    } else if (getTimeVals(currentMeasure).length === 0) {
+        // current step has no data; jump to latest for this measure but keep manual mode
+        timeIndex = latestIndexFor(currentMeasure);
+    }
+    renderMarkers();
+}
+function toggleLang() {
+    lang = lang === 'en' ? 'he' : 'en';
+    document.getElementById('lang-btn').textContent = lang === 'en' ? '\u05e2\u05d1' : 'EN';
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
+    if (lang === 'he') {
+        document.getElementById('title-text').textContent = heUI.title;
+        document.getElementById('measure-label').textContent = heUI.measure;
+        document.getElementById('home-label').textContent = heUI.home;
+        document.getElementById('source-label').textContent = heUI.sourceLabel;
+    } else {
+        document.getElementById('title-text').textContent = xmlTitle;
+        document.getElementById('measure-label').textContent = 'Measure:';
+        document.getElementById('home-label').textContent = 'Home';
+        document.getElementById('source-label').textContent = 'Data from';
+    }
+    buildDropdown();
+}
+fetch('https://ims-observ.yuvharpaz.workers.dev/')
+    .then(function(r){ return r.text(); })
+    .then(function(xmlText){
+        parseXML(xmlText);
+        buildDropdown();
+        // start in latest mode — jump to latest time for default measure
+        timeIndex = latestIndexFor(currentMeasure);
+        setLatestMode(true);
+        renderMarkers();
+        document.getElementById('loading').style.display = 'none';
+    })
+    .catch(function(err){
+        document.getElementById('loading').innerHTML =
+            '<div style="background:#fef2f2;color:#991b1b;padding:24px 32px;border-radius:12px;font-size:1.05em;text-align:center;">Error loading data<br><small>'+err.message+'</small></div>';
+    });
+</script>
+</body>
+</html>
