@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>מזג אוויר - שעה אחרונה</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="logo.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Assistant', sans-serif; margin: 0; padding: 0; }
+
+        .compact-tooltip {
+            background: rgba(255,255,255,0.97) !important;
+            border: none !important;
+            border-radius: 10px !important;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.18) !important;
+            padding: 6px 10px !important;
+            font-family: 'Assistant', sans-serif;
+            pointer-events: none !important;
+            white-space: nowrap !important;
+            font-size: 0.92em;
+            font-weight: 600;
+        }
+        .leaflet-tooltip-right.compact-tooltip::before { border-right-color: white !important; }
+        .leaflet-tooltip-left.compact-tooltip::before  { border-left-color:  white !important; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            background: #f0f4f8;
+            border: 1.5px solid #d1d5db;
+            border-radius: 7px;
+            padding: 3px 12px;
+            font-size: 0.88em;
+            font-weight: 600;
+            cursor: pointer;
+            color: #374151;
+            font-family: 'Assistant', sans-serif;
+            transition: all 0.18s;
+        }
+        .tab-btn:hover  { background: #e0e7ef; }
+        .tab-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+        /* time_obs badge */
+        #time-obs-badge {
+            font-size: 0.78em;
+            color: #475569;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        /* colorbar */
+        .colorbar-control {
+            background: rgba(255,255,255,0.95);
+            padding: 10px 8px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            display: flex;
+            gap: 8px;
+            border: 1px solid #e2e8f0;
+            direction: ltr;
+        }
+        .colorbar-gradient {
+            width: 13px;
+            height: 180px;
+            border-radius: 4px;
+        }
+        .colorbar-labels {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 180px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #334155;
+            padding: 2px 0;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        /* loading */
+        .loading-overlay {
+            position: fixed; top:0; left:0; right:0; bottom:0;
+            background: rgba(255,255,255,0.92);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 2000;
+        }
+        .loading-spinner {
+            width: 44px; height: 44px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 14px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 1.05em; color: #475569; font-weight: 600; }
+
+        /* wind arrow marker */
+        .wind-arrow-marker { display: flex; align-items: center; justify-content: center; }
+
+        @media (max-width:500px) {
+            #floating-title { padding: 6px 8px !important; }
+            #floating-title h1 { font-size: 1em !important; }
+        }
+        @media (max-width:600px) {
+            #floating-title { width: 96%; max-width: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">טוען נתונים...</div>
+</div>
+
+<div id="floating-title" style="flex-direction:column; align-items:center; gap:5px; padding:10px 15px;">
+    <div style="display:flex; justify-content:space-between; width:100%; align-items:center; gap:10px;">
+        <button onclick="document.getElementById('floating-title').style.display='none'"
+            style="background:none;border:none;font-size:1.4em;cursor:pointer;color:#64748b;padding:0;line-height:1;">×</button>
+        <h1 style="margin:0;font-size:1.25em;display:flex;align-items:center;gap:7px;">
+            <img src="logo.jpg" alt="Icon" class="title-icon" style="height:1.2em;">
+            מזג אוויר – שעה אחרונה
+            <button id="reload-btn" title="רענן" aria-label="רענן"
+                onclick="loadData()"
+                style="background:none;border:none;padding:0;margin:0;font-size:1em;line-height:1;cursor:pointer;color:#64748b;">⟳</button>
+        </h1>
+        <div style="width:20px;"></div>
+    </div>
+    <div id="time-obs-badge">טוען...</div>
+    <div class="tabs" id="tabs">
+        <button class="tab-btn active" data-mode="temp" onclick="setMode('temp',this)">🌡️ טמפרטורה</button>
+        <button class="tab-btn" data-mode="hum"  onclick="setMode('hum',this)">💧 לחות</button>
+        <button class="tab-btn" data-mode="wind" onclick="setMode('wind',this)">💨 רוח</button>
+        <button class="tab-btn" id="rain-tab" data-mode="rain" onclick="setMode('rain',this)"
+            style="display:none;">🌧️ גשם</button>
+    </div>
+    <div style="display:flex;flex-direction:row;justify-content:center;gap:18px;align-items:center;width:100%;">
+        <a href="index.html" class="home-btn" style="margin:0;">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span>דף הבית</span>
+        </a>
+        <div class="data-source" style="margin-top:0;">
+            <span>נתונים מ</span>
+            <a href="https://ims.gov.il/sites/default/files/ims_data/xml_files/imslasthour.xml" target="_blank" rel="noopener">
+                <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo" style="height:14px;">
+            </a>
+        </div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+// ── Map setup ────────────────────────────────────────────────────────────────
+const map = L.map('map').setView([31.5, 35.0], 8);
+L.tileLayer('https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png', {
+    attribution: '© המרכז למיפוי ישראל www.govmap.gov.il'
+}).addTo(map);
+
+// ── State ────────────────────────────────────────────────────────────────────
+let currentMode = 'temp';
+let stationsMap  = {};   // stn_num → {lat, lon, name}
+let observations = [];   // latest obs per station (with lat/lon merged)
+let activeMarkers = [];
+let colorbarCtrl  = null;
+
+// ── Color helpers ─────────────────────────────────────────────────────────────
+function jetColor(ratio) {
+    const r0 = Math.max(0, Math.min(1, ratio));
+    let r, g, b;
+    if      (r0 < 0.25) { r = 0;                      g = Math.round(r0*4*255);        b = 255; }
+    else if (r0 < 0.50) { r = 0;                      g = 255;                          b = Math.round((0.5-r0)*4*255); }
+    else if (r0 < 0.75) { r = Math.round((r0-0.5)*4*255); g = 255;                      b = 0; }
+    else                 { r = 255;                    g = Math.round((1-r0)*4*255);     b = 0; }
+    return `rgb(${r},${g},${b})`;
+}
+function humColor(rh) {
+    // green (low) → blue (high)
+    const t = Math.max(0, Math.min(100, rh)) / 100;
+    const r = Math.round((1-t)*0*255);
+    const g = Math.round((1-t)*180);
+    const b = Math.round(t*255 + (1-t)*80);
+    return `rgb(${Math.round(30*(1-t))},${g},${b})`;
+}
+function tempColor(td)  { return jetColor((td - 10) / 35); }  // 10–45 °C
+function windColor(ws)  { return jetColor(Math.min(ws, 20) / 20); } // 0–20 m/s
+function rainColor(mm)  {
+    const t = Math.max(0, Math.min(mm, 20)) / 20;
+    return `rgb(${Math.round(180*(1-t))},${Math.round(220*(1-t))},255)`;
+}
+
+// ── Parse ims_stations.csv ────────────────────────────────────────────────────
+function parseStationsCSV(csvText) {
+    const result = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+    result.data.forEach(row => {
+        const id = parseInt(row.stationId);
+        const loc = row.location || '';
+        const latM = loc.match(/latitude['\s:]+([0-9.]+)/);
+        const lonM = loc.match(/longitude['\s:]+([0-9.]+)/);
+        if (latM && lonM) {
+            stationsMap[id] = { lat: parseFloat(latM[1]), lon: parseFloat(lonM[1]), name: row.name };
+        }
+    });
+}
+
+// ── Parse last-hour XML ───────────────────────────────────────────────────────
+function parseXML(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+    const obsEls = doc.querySelectorAll('Observation');
+
+    // Group by stn_num, keep latest time_obs
+    const byStation = {};
+    obsEls.forEach(el => {
+        const stn = parseInt(getText(el, 'stn_num'));
+        const timeStr = getText(el, 'time_obs');
+        if (!stn || !timeStr) return;
+        if (!byStation[stn] || timeStr > byStation[stn].time_obs) {
+            byStation[stn] = {
+                stn_num:  stn,
+                stn_name: getText(el, 'stn_name'),
+                time_obs: timeStr,
+                TD:   parseFloat(getText(el, 'TD')),
+                RH:   parseFloat(getText(el, 'RH')),
+                WS:   parseFloat(getText(el, 'WS')),
+                WD:   parseFloat(getText(el, 'WD')),
+                Rain: parseFloat(getText(el, 'Rain')) || 0,
+            };
+        }
+    });
+
+    // Merge with coordinates
+    observations = [];
+    Object.values(byStation).forEach(obs => {
+        const st = stationsMap[obs.stn_num];
+        if (!st) return;
+        obs.lat = st.lat;
+        obs.lon = st.lon;
+        observations.push(obs);
+    });
+
+    // Determine latest time_obs across all stations
+    let latestTime = '';
+    observations.forEach(o => { if (o.time_obs > latestTime) latestTime = o.time_obs; });
+
+    // Update time badge
+    if (latestTime) {
+        const d = new Date(latestTime);
+        const pad = n => String(n).padStart(2,'0');
+        const timeStr = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        document.getElementById('time-obs-badge').textContent = 'עדכון אחרון: ' + timeStr;
+    }
+
+    // Show rain tab if any station has Rain > 0
+    const hasRain = observations.some(o => o.Rain > 0);
+    document.getElementById('rain-tab').style.display = hasRain ? '' : 'none';
+    if (currentMode === 'rain' && !hasRain) currentMode = 'temp';
+}
+
+function getText(el, tag) {
+    const n = el.querySelector(tag);
+    return n ? n.textContent.trim() : '';
+}
+
+// ── Render markers ────────────────────────────────────────────────────────────
+function clearMarkers() {
+    activeMarkers.forEach(m => map.removeLayer(m));
+    activeMarkers = [];
+}
+
+function renderMarkers() {
+    clearMarkers();
+    if (colorbarCtrl) { map.removeControl(colorbarCtrl); colorbarCtrl = null; }
+
+    observations.forEach(obs => {
+        if (isNaN(obs.lat) || isNaN(obs.lon)) return;
+
+        if (currentMode === 'temp') {
+            if (isNaN(obs.TD)) return;
+            const color = tempColor(obs.TD);
+            const m = L.circleMarker([obs.lat, obs.lon], {
+                radius: 9, fillColor: color, color: '#fff', weight: 1.5,
+                opacity: 1, fillOpacity: 0.92
+            }).addTo(map);
+            m.bindTooltip(`<b>${obs.stn_name}</b><br>${obs.TD.toFixed(1)}°C`, {
+                permanent: false, direction: 'right', className: 'compact-tooltip', sticky: false
+            });
+            activeMarkers.push(m);
+
+        } else if (currentMode === 'hum') {
+            if (isNaN(obs.RH)) return;
+            const color = humColor(obs.RH);
+            const m = L.circleMarker([obs.lat, obs.lon], {
+                radius: 9, fillColor: color, color: '#fff', weight: 1.5,
+                opacity: 1, fillOpacity: 0.92
+            }).addTo(map);
+            m.bindTooltip(`<b>${obs.stn_name}</b><br>${obs.RH.toFixed(0)}%`, {
+                permanent: false, direction: 'auto', className: 'compact-tooltip', sticky: false
+            });
+            activeMarkers.push(m);
+
+        } else if (currentMode === 'wind') {
+            if (isNaN(obs.WS) || isNaN(obs.WD)) return;
+            const color = windColor(obs.WS);
+            const wsKmh = obs.WS * 3.6;
+            const size = Math.max(14, Math.min(36, 10 + obs.WS * 2.2));
+            // Arrow points in direction wind is blowing (FROM WD direction → TO WD+180)
+            const rot = (obs.WD + 180) % 360;
+            const icon = L.divIcon({
+                className: 'wind-arrow-marker',
+                html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24"
+                            style="transform:rotate(${rot}deg);display:block;"
+                            xmlns="http://www.w3.org/2000/svg">
+                         <polygon points="12,2 18,20 12,16 6,20"
+                            fill="${color}" stroke="white" stroke-width="1.5"/>
+                       </svg>`,
+                iconSize: [size, size],
+                iconAnchor: [size/2, size/2]
+            });
+            const m = L.marker([obs.lat, obs.lon], { icon }).addTo(map);
+            m.bindTooltip(
+                `<b style="font-size:1.05em">${obs.stn_name}</b><br>` +
+                `<span style="font-size:1.1em">${wsKmh.toFixed(0)} קמ"ש | כיוון ${obs.WD.toFixed(0)}°</span>`,
+                { permanent: false, direction: 'auto', className: 'compact-tooltip', sticky: false }
+            );
+            activeMarkers.push(m);
+
+        } else if (currentMode === 'rain') {
+            if (obs.Rain <= 0) return;
+            const color = rainColor(obs.Rain);
+            const r = Math.max(7, Math.min(22, 7 + obs.Rain * 2));
+            const m = L.circleMarker([obs.lat, obs.lon], {
+                radius: r, fillColor: color, color: '#2563eb', weight: 1.5,
+                opacity: 1, fillOpacity: 0.85
+            }).addTo(map);
+            m.bindTooltip(`<b>${obs.stn_name}</b><br>${obs.Rain.toFixed(1)} מ"מ`, {
+                permanent: false, direction: 'right', className: 'compact-tooltip', sticky: false
+            });
+            activeMarkers.push(m);
+        }
+    });
+
+    // Colorbar
+    addColorbar();
+}
+
+function addColorbar() {
+    colorbarCtrl = L.control({ position: 'bottomleft' });
+    colorbarCtrl.onAdd = function() {
+        const div = L.DomUtil.create('div', 'colorbar-control');
+        let gradient = '', labels = [];
+
+        if (currentMode === 'temp') {
+            gradient = 'linear-gradient(to top,rgb(0,0,255),rgb(0,255,255),rgb(0,255,0),rgb(255,255,0),rgb(255,0,0))';
+            labels   = ['45°C','38.75°C','32.5°C','26.25°C','20°C','13.75°C','10°C'];
+        } else if (currentMode === 'hum') {
+            gradient = 'linear-gradient(to top,rgb(30,180,80),rgb(20,140,200),rgb(0,60,255))';
+            labels   = ['100%','83%','67%','50%','33%','17%','0%'];
+        } else if (currentMode === 'wind') {
+            gradient = 'linear-gradient(to top,rgb(0,0,255),rgb(0,255,255),rgb(0,255,0),rgb(255,255,0),rgb(255,0,0))';
+            labels   = ['20 מ/ש','17','13','10','7','3','0'];
+        } else if (currentMode === 'rain') {
+            gradient = 'linear-gradient(to top,rgb(180,220,255),rgb(0,100,255))';
+            labels   = ['20+ מ"מ','','10 מ"מ','','','','0'];
+        }
+
+        div.innerHTML = `
+            <div class="colorbar-labels">${labels.map(l=>`<span>${l}</span>`).join('')}</div>
+            <div class="colorbar-gradient" style="background:${gradient};"></div>
+        `;
+        return div;
+    };
+    colorbarCtrl.addTo(map);
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function setMode(mode, btn) {
+    currentMode = mode;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderMarkers();
+}
+
+// ── Load data ─────────────────────────────────────────────────────────────────
+function loadData() {
+    document.getElementById('time-obs-badge').textContent = 'מרענן...';
+    fetch('https://ims-lasthour.yuvharpaz.workers.dev/')
+        .then(r => r.text())
+        .then(xml => {
+            parseXML(xml);
+            renderMarkers();
+        })
+        .catch(err => {
+            document.getElementById('time-obs-badge').textContent = 'שגיאה בטעינה';
+            console.error('Error loading last-hour data:', err);
+        });
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+Promise.all([
+    fetch('https://raw.githubusercontent.com/yuval-harpaz/weather/main/data/ims_stations.csv').then(r => r.text()),
+    fetch('https://ims-lasthour.yuvharpaz.workers.dev/').then(r => r.text())
+]).then(([csvText, xmlText]) => {
+    parseStationsCSV(csvText);
+    parseXML(xmlText);
+    renderMarkers();
+    document.getElementById('loading').style.display = 'none';
+}).catch(err => {
+    console.error(err);
+    document.getElementById('loading').innerHTML =
+        `<div style="background:#fef2f2;color:#991b1b;padding:24px 32px;border-radius:12px;font-size:1.05em;text-align:center;">
+            שגיאה בטעינת הנתונים<br><small>${err.message}</small></div>`;
+});
+
+// Auto-reload every 60 seconds
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
+
