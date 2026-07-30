@@ -69,19 +69,19 @@
         }
         .colorbar-gradient {
             width: 13px;
-            height: 180px;
             border-radius: 4px;
+            /* height set inline per colorbar */
         }
         .colorbar-labels {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            height: 180px;
+            /* height set inline per colorbar */
             font-size: 10px;
             font-weight: 700;
             color: #334155;
             padding: 2px 0;
-            min-width: 30px;
+            min-width: 34px;
             text-align: right;
         }
 
@@ -190,16 +190,11 @@ function jetColor(ratio) {
     return `rgb(${r},${g},${b})`;
 }
 function humColor(rh) {
-    // sand/brown (low) → navy blue (high)
-    const t = Math.max(0, Math.min(100, rh)) / 100;
-    // low=0: rgb(194,154,108) sand brown   high=1: rgb(10,30,120) navy blue
-    const r = Math.round(194 - t * 184);
-    const g = Math.round(154 - t * 124);
-    const b = Math.round(108 + t * 12);
-    return `rgb(${r},${g},${b})`;
+    // jet reversed: red at 0% → blue at 100%
+    return jetColor(1 - Math.max(0, Math.min(100, rh)) / 100);
 }
 function tempColor(td)  { return jetColor((td - 10) / 35); }  // 10–45 °C
-function windColor(ws)  { return jetColor(Math.min(ws, 20) / 20); } // 0–20 m/s
+function windColor(ws)  { return jetColor(Math.min(ws * 3.6, 70) / 70); } // 0–70 km/h
 function rainColor(mm)  {
     const t = Math.max(0, Math.min(mm, 20)) / 20;
     return `rgb(${Math.round(180*(1-t))},${Math.round(220*(1-t))},255)`;
@@ -364,25 +359,43 @@ function addColorbar() {
     colorbarCtrl = L.control({ position: 'bottomleft' });
     colorbarCtrl.onAdd = function() {
         const div = L.DomUtil.create('div', 'colorbar-control');
-        let gradient = '', labels = [];
+        let gradient = '';
+        let labels = [];   // built dynamically
 
         if (currentMode === 'temp') {
+            // 10–45 °C, label every 5 °C  → 8 ticks: 45,40,35,30,25,20,15,10
             gradient = 'linear-gradient(to top,rgb(0,0,255),rgb(0,255,255),rgb(0,255,0),rgb(255,255,0),rgb(255,0,0))';
-            labels   = ['45°C','38.75°C','32.5°C','26.25°C','20°C','13.75°C','10°C'];
+            for (let v = 45; v >= 10; v -= 5) labels.push(v + '°C');
+
         } else if (currentMode === 'hum') {
-            gradient = 'linear-gradient(to top,rgb(194,154,108),rgb(120,80,70),rgb(60,40,100),rgb(10,30,120))';
-            labels   = ['100%','83%','67%','50%','33%','17%','0%'];
+            // 0–100 %, label every 10 %  → 11 ticks: 100,90,…,0
+            // gradient reversed (red at bottom = 0%, blue at top = 100%)
+            gradient = 'linear-gradient(to top,rgb(255,0,0),rgb(255,255,0),rgb(0,255,0),rgb(0,255,255),rgb(0,0,255))';
+            for (let v = 100; v >= 0; v -= 10) labels.push(v + '%');
+
         } else if (currentMode === 'wind') {
+            // 0–70 km/h, label every 10 km/h → 8 ticks: 70,60,…,0
             gradient = 'linear-gradient(to top,rgb(0,0,255),rgb(0,255,255),rgb(0,255,0),rgb(255,255,0),rgb(255,0,0))';
-            labels   = ['72 קמ"ש','60','46','36','25','11','0'];
+            for (let v = 70; v >= 0; v -= 10) labels.push(v + '');
+
         } else if (currentMode === 'rain') {
             gradient = 'linear-gradient(to top,rgb(180,220,255),rgb(0,100,255))';
-            labels   = ['20+ מ"מ','','10 מ"מ','','','','0'];
+            labels = ['20+ מ"מ', '', '10 מ"מ', '', '', '', '0'];
         }
 
+        // Colorbar height scales with number of labels so tick spacing stays constant (≈22px each)
+        const tickPx = 22;
+        const barH = (labels.length - 1) * tickPx;
+        const unit = currentMode === 'wind' ? 'קמ"ש' : '';
+
         div.innerHTML = `
-            <div class="colorbar-labels">${labels.map(l=>`<span>${l}</span>`).join('')}</div>
-            <div class="colorbar-gradient" style="background:${gradient};"></div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                ${unit ? `<div style="font-size:9px;font-weight:700;color:#334155;text-align:right;direction:rtl;padding-bottom:2px;">${unit}</div>` : ''}
+                <div style="display:flex;gap:8px;">
+                    <div class="colorbar-labels" style="height:${barH}px;">${labels.map(l=>`<span>${l}</span>`).join('')}</div>
+                    <div class="colorbar-gradient" style="background:${gradient};height:${barH}px;"></div>
+                </div>
+            </div>
         `;
         return div;
     };
