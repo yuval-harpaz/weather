@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מדדי חום וריצה</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="icon" href="logo.jpg">
+    <link rel="stylesheet" href="style.css">
+    <script src="station_translate.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            width: 100%;
+            max-width: 900px;
+            box-sizing: border-box;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 200px;
+            flex: 1;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        #map {
+            width: 100%;
+            max-width: 900px;
+            height: 420px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            margin-bottom: 20px;
+        }
+        #plot {
+            width: 100%;
+            max-width: 900px;
+            height: 480px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #status {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            direction: rtl; text-align: right;
+        }
+        .select2-results__option { direction: rtl; text-align: right; }
+        .legend-clear {
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            border: 1px solid #ccc;
+        }
+        .legend-clear:hover { background: #eee; }
+    </style>
+</head>
+<body>
+
+<header class="dashboard-header"
+    style="position: static; box-shadow: none; border-bottom: 1px solid #eee; padding: 15px 0; width: 100%;">
+    <div class="header-content" style="flex-direction: row; justify-content: center; gap: 20px;">
+        <a href="index.html" class="home-btn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <span>דף הבית</span>
+        </a>
+        <h1 style="font-size: 1.4em; margin: 0; display: flex; align-items: center; gap: 10px;">
+            <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
+            מדדי חום לריצה
+        </h1>
+    </div>
+</header>
+
+<div class="controls" style="margin-top: 20px;">
+    <div class="control-group">
+        <label for="measureSelect">מדד:</label>
+        <select id="measureSelect" style="width: 100%;">
+            <option value="RH">לחות יחסית (RH %)</option>
+            <option value="DewPoint">נקודת טל (°C)</option>
+            <option value="HeatIndex" selected>מדד חום (Heat Index °C)</option>
+            <option value="WBGT">WBGT משוקלל (°C)</option>
+        </select>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
+        <label>בחר תחנות על המפה (לחץ לבחור/לבטל)</label>
+        <button id="clearBtn" class="legend-clear">נקה בחירה</button>
+    </div>
+</div>
+
+<div id="status">טוען נתונים...</div>
+<div id="map"></div>
+<div id="plot"></div>
+
+<div class="footer">
+    <span>נתונים מ</span>
+    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
+        style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+        <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
+            style="height: 16px; margin-right: 5px;">
+    </a>
+</div>
+
+<script>
+const rawBase = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
+const stationsUrl = `${rawBase}/ims_stations.csv`;
+
+// Plotly color palette
+const COLORS = [
+    '#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd',
+    '#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf',
+    '#aec7e8','#ffbb78','#98df8a','#ff9896','#c5b0d5'
+];
+
+let map, stationMarkers = {}; // name -> {marker, selected}
+let selectedStations = [];
+let stationCoords = {}; // name -> {lat, lon}
+let computedMonthly = {}; // name -> { RH:[], DewPoint:[], HeatIndex:[], WBGT:[] } (12 values)
+let currentMeasure = 'HeatIndex';
+
+const measureLabels = {
+    RH: 'לחות יחסית (%)',
+    DewPoint: 'נקודת טל (°C)',
+    HeatIndex: 'מדד חום (°C)',
+    WBGT: 'WBGT (°C)'
+};
+
+// ---- Math helpers ----
+
+function dewPoint(T, RH) {
+    // Magnus formula
+    const a = 17.27, b = 237.7;
+    const alpha = (a * T / (b + T)) + Math.log(RH / 100);
+    return (b * alpha) / (a - alpha);
+}
+
+function heatIndex(T_c, RH) {
+    // NOAA Rothfusz in Fahrenheit, then convert back
+    const T = T_c * 9/5 + 32;
+    if (T < 80) return T_c; // below threshold, just return T
+    let HI = -42.379
+        + 2.04901523 * T
+        + 10.14333127 * RH
+        - 0.22475541 * T * RH
+        - 0.00683783 * T * T
+        - 0.05481717 * RH * RH
+        + 0.00122874 * T * T * RH
+        + 0.00085282 * T * RH * RH
+        - 0.00000199 * T * T * RH * RH;
+    // Adjustments
+    if (RH < 13 && T >= 80 && T <= 112) {
+        HI -= ((13 - RH) / 4) * Math.sqrt((17 - Math.abs(T - 95)) / 17);
+    } else if (RH > 85 && T >= 80 && T <= 87) {
+        HI += ((RH - 85) / 10) * ((87 - T) / 5);
+    }
+    return (HI - 32) * 5/9;
+}
+
+function wetBulb(T, RH) {
+    // Stull (2011) approximation
+    return T * Math.atan(0.151977 * Math.pow(RH + 8.313659, 0.5))
+        + Math.atan(T + RH)
+        - Math.atan(RH - 1.676331)
+        + 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH)
+        - 4.686035;
+}
+
+function wbgt(T, RH, ws, solar) {
+    // Simplified outdoor WBGT
+    // Wet bulb (natural) ≈ wet bulb approx
+    const Twb = wetBulb(T, RH);
+    // Globe temp: solar heating offset, reduced by wind
+    const windAdj = Math.max(0.5, ws);
+    const Tg = T + (solar / 1000) * 10 / (1 + 0.8 * windAdj);
+    return 0.7 * Twb + 0.2 * Tg + 0.1 * T;
+}
+
+// ---- Data loading ----
+
+function setStatus(msg) {
+    document.getElementById('status').textContent = msg;
+}
+
+$(document).ready(function () {
+    $('#measureSelect').select2({ minimumResultsForSearch: Infinity });
+
+    initMap();
+
+    setStatus('טוען נתונים...');
+
+    Promise.all([
+        d3.csv(stationsUrl),
+        loadStationTranslations(),
+        d3.csv(`${rawBase}/rh_2026.csv`),
+        d3.csv(`${rawBase}/temp_max_2026.csv`),
+        d3.csv(`${rawBase}/ws_2026.csv`),
+        d3.csv(`${rawBase}/grad_2026.csv`)
+    ]).then(([stations, _trans, rhData, tempData, wsData, gradData]) => {
+        // Parse station coordinates
+        stations.forEach(s => {
+            try {
+                const loc = JSON.parse(s.location.replace(/'/g, '"'));
+                stationCoords[s.name.trim()] = { lat: loc.latitude, lon: loc.longitude };
+            } catch(e) {}
+        });
+
+        // Compute monthly averages for each station present in RH file
+        const rhCols = Object.keys(rhData[0]).filter(k => k !== 'datetime');
+
+        // Build lookup maps keyed by datetime for temp, ws, grad
+        function buildMap(rows) {
+            const m = {};
+            rows.forEach(r => { m[r.datetime] = r; });
+            return m;
+        }
+        const tempMap = buildMap(tempData);
+        const wsMap   = buildMap(wsData);
+        const gradMap = buildMap(gradData);
+
+        // Accumulate sums per station per month
+        const sums = {}; // station -> month(0-11) -> {RH, DP, HI, WBGT, n}
+        rhCols.forEach(st => {
+            sums[st] = Array.from({length:12}, () => ({RH:0, DP:0, HI:0, WBGT:0, n:0}));
+        });
+
+        rhData.forEach(row => {
+            const dt = row.datetime;
+            const month = parseInt(dt.substring(5,7)) - 1; // 0-based
+            const tempRow = tempMap[dt] || {};
+            const wsRow   = wsMap[dt]   || {};
+            const gradRow = gradMap[dt] || {};
+
+            rhCols.forEach(st => {
+                const rh  = parseFloat(row[st]);
+                const t   = parseFloat(tempRow[st]);
+                const ws_  = parseFloat(wsRow[st]);
+                const sol = parseFloat(gradRow[st]);
+                if (isNaN(rh) || isNaN(t)) return;
+                const ws_val  = isNaN(ws_)  ? 2 : ws_;
+                const sol_val = isNaN(sol) ? 0 : sol;
+                const acc = sums[st][month];
+                acc.RH   += rh;
+                acc.DP   += dewPoint(t, rh);
+                acc.HI   += heatIndex(t, rh);
+                acc.WBGT += wbgt(t, rh, ws_val, sol_val);
+                acc.n    += 1;
+            });
+        });
+
+        // Finalize averages
+        rhCols.forEach(st => {
+            computedMonthly[st] = { RH:[], DewPoint:[], HeatIndex:[], WBGT:[] };
+            sums[st].forEach(acc => {
+                const n = acc.n || 1;
+                computedMonthly[st].RH.push(acc.RH / n);
+                computedMonthly[st].DewPoint.push(acc.DP / n);
+                computedMonthly[st].HeatIndex.push(acc.HI / n);
+                computedMonthly[st].WBGT.push(acc.WBGT / n);
+            });
+        });
+
+        // Add markers to map
+        addStationMarkers(rhCols);
+        setStatus('לחץ על תחנות במפה לבחירה');
+        updatePlot();
+    }).catch(err => {
+        console.error(err);
+        setStatus('שגיאה בטעינת נתונים: ' + err.message);
+    });
+
+    $('#measureSelect').on('change', function() {
+        currentMeasure = $(this).val();
+        updatePlot();
+    });
+
+    $('#clearBtn').on('click', function() {
+        selectedStations = [];
+        Object.values(stationMarkers).forEach(({marker}) => {
+            marker.setStyle({ color: '#1976d2', fillColor: '#42a5f5', weight: 1.5, opacity: 0.5, fillOpacity: 0.5 });
+        });
+        updatePlot();
+    });
+});
+
+function initMap() {
+    map = L.map('map').setView([31.5, 35.0], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18
+    }).addTo(map);
+}
+
+function addStationMarkers(stationNames) {
+    stationNames.forEach(name => {
+        const coords = stationCoords[name];
+        if (!coords) return;
+        const heb = getHebrewName(name);
+        const marker = L.circleMarker([coords.lat, coords.lon], {
+            radius: 7,
+            color: '#1976d2',
+            fillColor: '#42a5f5',
+            fillOpacity: 0.7,
+            weight: 1.5,
+            opacity: 0.5
+        }).addTo(map);
+        marker.bindTooltip(`${heb} (${name})`, {direction:'top'});
+        marker.on('click', () => toggleStation(name));
+        stationMarkers[name] = { marker };
+    });
+}
+
+function toggleStation(name) {
+    const idx = selectedStations.indexOf(name);
+    if (idx === -1) {
+        selectedStations.push(name);
+        stationMarkers[name].marker.setStyle({ color: '#b71c1c', fillColor: '#ef5350', weight: 2.5, opacity: 1, fillOpacity: 0.9 });
+    } else {
+        selectedStations.splice(idx, 1);
+        stationMarkers[name].marker.setStyle({ color: '#1976d2', fillColor: '#42a5f5', weight: 1.5, opacity: 0.5, fillOpacity: 0.5 });
+    }
+    updatePlot();
+}
+
+const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function updatePlot() {
+    if (selectedStations.length === 0) {
+        Plotly.newPlot('plot', [], {
+            title: { text: 'בחר תחנה אחת או יותר במפה', x: 0.5 },
+            paper_bgcolor: 'white'
+        }, { responsive: true });
+        return;
+    }
+
+    const traces = selectedStations.map((name, i) => {
+        const monthly = computedMonthly[name];
+        const yVals = monthly ? monthly[currentMeasure] : [];
+        return {
+            x: monthNames,
+            y: yVals,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: getHebrewName(name),
+            line: { color: COLORS[i % COLORS.length], width: 2.5 },
+            marker: { size: 6 }
+        };
+    });
+
+    const layout = {
+        title: {
+            text: measureLabels[currentMeasure] + ' — ממוצע חודשי 2026',
+            x: 0.95, xanchor: 'right'
+        },
+        xaxis: { title: 'חודש' },
+        yaxis: { title: measureLabels[currentMeasure] },
+        legend: { orientation: 'h', y: -0.2 },
+        dir: 'rtl',
+        paper_bgcolor: 'white',
+        plot_bgcolor: '#fafafa',
+        margin: { t: 50, r: 20, l: 50, b: 80 }
+    };
+
+    Plotly.newPlot('plot', traces, layout, { responsive: true });
+}
+</script>
+</body>
+</html>
+
