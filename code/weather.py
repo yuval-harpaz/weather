@@ -636,6 +636,157 @@ def temp_1h(monitor='TDmin', stations=None, from_date='2025-01-01', to_date='202
     return df_temp
 
 
+def query_monitor(station, from_date, to_date, monitor):
+    """
+    Queries a generic monitor channel from the IMS API for a station and date range.
+
+    Inputs:
+        station (str): Station name.
+        from_date (str): Start date 'YYYY-MM-DD'.
+        to_date (str): End date 'YYYY-MM-DD'.
+        monitor (str): Monitor name as it appears in the stations metadata (e.g. 'Grad', 'RH', 'WS', 'WD').
+
+    Outputs:
+        list or None: List of data dicts from the API, or None on failure / missing monitor.
+    """
+    stationid = df_sta['stationId'].values[df_sta['name'] == station][0]
+    monitors = df_sta['monitors'].values[df_sta['name'] == station][0]
+    if f"'{monitor}'" not in monitors:
+        return None
+    imonitor = monitors.index(f"'{monitor}'")
+    tmp = monitors[:imonitor]
+    channel = int(tmp[::-1][tmp[::-1].index(","):tmp[::-1].index(":'dI")][1:].strip()[::-1])
+    url = (f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/{channel}'
+           f'?from={from_date.replace("-","/")}&to={to_date.replace("-","/")}')
+    data = None
+    for itry in range(10):
+        try:
+            response = requests.request("GET", url, headers=headers)
+        except Exception:
+            time.sleep(0.2)
+            continue
+        txt = response.text.encode('utf8')
+        if len(txt) == 0 or 'error.png' in str(txt):
+            time.sleep(0.1)
+        else:
+            try:
+                data = json.loads(txt)
+                data = data['data']
+                break
+            except (json.JSONDecodeError, KeyError):
+                break
+    return data
+
+
+def monitor_1h(monitor='Grad', stations=None, from_date='2026-01-01', to_date='2026-12-31', save_csv=True):
+    """
+    Collects and aggregates hourly data for a generic monitor (e.g. Grad, RH, WS, WD)
+    by averaging all valid sub-hourly readings that fall within each 1-hour bin.
+
+    Inputs:
+        monitor (str): Monitor name as in IMS metadata (e.g. 'Grad', 'RH', 'WS', 'WD').
+        stations (list or None): Station names to query. None means all stations.
+        from_date (str): Start date 'YYYY-MM-DD'.
+        to_date (str): End date 'YYYY-MM-DD'.
+        save_csv (bool or str): True → auto path; str → custom path; False → no save.
+
+    Outputs:
+        pandas.DataFrame: 'datetime' column + one column per station with hourly averages.
+    """
+    monitor_prefix = monitor.lower()
+
+    if from_date[5:] == '01-01' and to_date[5:] == '12-31':
+        yearly = True
+        year = from_date[:4]
+        if isinstance(save_csv, bool):
+            opcsv = f'data/{monitor_prefix}_{year}.csv' if save_csv else ''
+        elif isinstance(save_csv, str):
+            opcsv = save_csv
+        else:
+            opcsv = ''
+    else:
+        yearly = False
+        year = None
+        if isinstance(save_csv, bool):
+            opcsv = f'data/{monitor_prefix}_{from_date}_to_{to_date}.csv' if save_csv else ''
+        elif isinstance(save_csv, str):
+            opcsv = save_csv
+        else:
+            opcsv = ''
+
+    df_activity = pd.read_csv('data/ims_activity.csv')
+    hours = hour_vector(from_date, to_date)
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    if hours[-1] > now_str:
+        hours = [h for h in hours if h <= now_str]
+    if stations is None:
+        stations = df_sta['name'].values
+
+    if opcsv and os.path.exists(opcsv):
+        df_out = pd.read_csv(opcsv)
+    else:
+        df_out = pd.DataFrame({'datetime': hours})
+        if opcsv and save_csv:
+            df_out.to_csv(opcsv, index=False)
+
+    count = 0
+    for station in stations:
+        count += 1
+        if '_1m' in station:
+            continue
+        t1 = time.time()
+        if opcsv and save_csv:
+            df_out = pd.read_csv(opcsv)
+
+        if station in df_out.columns:
+            msg = f'{station} already in {monitor} data'
+            print(f'\r{msg:<80}', end='', flush=True)
+            continue
+
+        monitors_str = df_sta['monitors'].values[df_sta['name'] == station][0]
+        if f"'{monitor}'" not in monitors_str:
+            continue
+
+        earliest = df_activity['earliest'].values[df_activity['name'] == station][0]
+        latest = df_activity['latest'].values[df_activity['name'] == station][0]
+        if from_date < '2026':
+            if from_date > latest or to_date < earliest:
+                continue
+
+        data = query_monitor(station=station, from_date=from_date, to_date=to_date, monitor=monitor)
+        if data is None:
+            continue
+
+        data = [d for d in data if d['channels'][0]['valid'] == True and d['channels'][0]['status'] == 1]
+        if len(data) == 0:
+            continue
+
+        # Accumulate values per hour bin then average
+        df_out[station] = np.nan
+        hour_vals = {}  # datetime_str -> list of values
+        for idata in range(len(data)):
+            date_time = data[idata]['datetime'][:16].replace('T', ' ')
+            date_time = date_time[:-3] + ':00'  # round to hour
+            value = data[idata]['channels'][0]['value']
+            hour_vals.setdefault(date_time, []).append(value)
+
+        for date_time, vals in hour_vals.items():
+            row_idx = np.where(df_out['datetime'].values == date_time)[0]
+            if len(row_idx) == 0:
+                continue
+            df_out.at[row_idx[0], station] = np.round(np.mean(vals), 2)
+
+        t2 = time.time()
+        label = from_date[:4] if yearly else ''
+        msg = f'updated {label} {monitor} for {station} {t2 - t1:.2f}s ({count}/{len(stations)})'
+        print(f'\r{msg:<80}', end='', flush=True)
+        if opcsv and save_csv:
+            df_out.to_csv(opcsv, index=False)
+
+    print()
+    return df_out
+
+
 def smooth(vector, window=24*6, method='conv'):
     offset =np.ceil(window/2) - 1
     vector[np.isnan(vector)] = 0

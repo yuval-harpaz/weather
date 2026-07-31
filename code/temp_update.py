@@ -38,7 +38,7 @@ def update_monitor(monitor_type):
         print(f"Updating {monitor_type} {y} incrementally...")
         df_temp = pd.read_csv(opcsv)
         
-        # Identify stations that should have this monitor and where active when laast checked
+        # Identify stations that should have this monitor and where active when last checked
         latest_act = df_act['latest'].max()[:10]
         active_stations = df_act[df_act['latest'] >= latest_act]['name'].tolist()
         
