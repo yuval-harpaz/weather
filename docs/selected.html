@@ -136,11 +136,13 @@
         // Config
         const dataUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/station_monthly.csv';
         const stationsUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv';
+        const translatedUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations_translated.csv';
         const rawDataBase = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
 
         // State
         let allData = [];
         let stationsMeta = [];
+        let translatedMeta = [];
         let currentMeasure = 'Rain';
         let currentStation = 'JERUSALEM CENTRE';
 
@@ -160,8 +162,9 @@
             // Load Data
             Promise.all([
                 d3.csv(dataUrl),
-                d3.csv(stationsUrl)
-            ]).then(([data, stations]) => {
+                d3.csv(stationsUrl),
+                d3.csv(translatedUrl)
+            ]).then(([data, stations, translated]) => {
                 // Parse numbers
                 data.forEach(d => {
                     d.Value = +d.Value;
@@ -170,6 +173,7 @@
 
                 allData = data;
                 stationsMeta = stations;
+                translatedMeta = translated;
 
                 initStationsList();
                 updatePlot(); // This will trigger updateHourlyPlot too if we chain it
@@ -191,19 +195,40 @@
         });
 
         function initStationsList() {
-            const stationMap = new Map();
-            stationsMeta.forEach(s => {
-                stationMap.set(s.name.trim(), s.hebrew_name || s.name);
+            // Build lookup: english name -> hebrew name (from translated CSV)
+            const hebMap = new Map();
+            translatedMeta.forEach(s => {
+                const heb = s.hebrew_name ? s.hebrew_name.trim() : '';
+                if (!heb) return;
+                if (s.matched_english_name && s.matched_english_name.trim())
+                    hebMap.set(s.matched_english_name.trim(), heb);
+                if (s.another_name && s.another_name.trim())
+                    hebMap.set(s.another_name.trim(), heb);
             });
 
-            const dataStations = [...new Set(allData.map(d => d.Station))].sort();
+            const dataStations = [...new Set(allData.map(d => d.Station))];
+
+            // Build display list with Hebrew labels
+            const stationList = dataStations.map(s => {
+                let latinKey = s;
+                // Strip _1m suffix for lookup
+                if (s.endsWith('_1m')) {
+                    latinKey = s.slice(0, -3);
+                }
+                // Strip trailing long numeral (e.g. date like 20060907) for lookup
+                latinKey = latinKey.replace(/\s+\d{5,}$/, '');
+                const hebName = hebMap.get(latinKey) || latinKey;
+                return { value: s, label: `${hebName} (${s})`, hebName };
+            });
+
+            // Sort by Hebrew name
+            stationList.sort((a, b) => a.hebName.localeCompare(b.hebName, 'he'));
 
             const select = $('#stationSelect');
             select.empty();
 
-            dataStations.forEach(s => {
-                const hebName = stationMap.get(s) || s;
-                const option = new Option(`${hebName} (${s})`, s, false, s === currentStation);
+            stationList.forEach(({ value, label }) => {
+                const option = new Option(label, value, false, value === currentStation);
                 select.append(option);
             });
 
