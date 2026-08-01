@@ -45,6 +45,18 @@
         .select2-container--default .select2-selection--single .select2-selection__rendered
             { direction:rtl; text-align:right; }
         .select2-results__option { direction:rtl; text-align:right; }
+        .hourly-nav {
+            display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+            padding:6px 8px; background:white; border-radius:6px;
+            box-shadow:0 1px 4px rgba(0,0,0,0.08); flex-shrink:0;
+        }
+        .nav-btn {
+            padding:4px 12px; border:1px solid #aaa; border-radius:4px;
+            background:#f0f0f0; cursor:pointer; font-size:0.88em;
+        }
+        .nav-btn:hover { background:#ddd; }
+        .nav-btn.active { background:#3a7bd5; color:white; border-color:#3a7bd5; }
+        #hourlyPeriodLabel { font-weight:bold; flex:1; text-align:center; color:#333; font-size:0.9em; }
     </style>
 </head>
 <body>
@@ -70,7 +82,7 @@
             <label for="measureSelect">מדד:</label>
             <select id="measureSelect" style="width:210px;">
                 <option value="RH">לחות יחסית (RH %)</option>
-                <option value="DewPoint">נקודת טל (°C)</option>
+                <option value="DewPoint">טמפ' נקודת הטל (°C)</option>
                 <option value="HeatIndex" selected>מדד חום (Heat Index °C)</option>
                 <option value="WBGT">WBGT משוקלל (°C)</option>
             </select>
@@ -78,6 +90,10 @@
         <div style="display:flex;flex-direction:column;gap:4px;">
             <label>בחר תחנות על המפה</label>
             <button id="clearBtn" class="legend-clear">נקה בחירה</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            <label for="dataYearSelect">שנה:</label>
+            <select id="dataYearSelect" style="padding:4px 8px;border-radius:4px;border:1px solid #aaa;"></select>
         </div>
         <div id="status">טוען נתונים...</div>
     </div>
@@ -87,6 +103,12 @@
     <div id="map-col"><div id="map"></div></div>
     <div id="charts-col">
         <div id="monthlyPlot" class="chart-box"></div>
+        <div class="hourly-nav">
+            <button class="nav-btn" id="btnPrevMonth">&#x2190; חודש קודם</button>
+            <span id="hourlyPeriodLabel">30 ימים אחרונים</span>
+            <button class="nav-btn" id="btnNextMonth">חודש הבא &#x2192;</button>
+            <button class="nav-btn active" id="btnLast30">30 ימים אחרונים</button>
+        </div>
         <div id="hourlyPlot"  class="chart-box"></div>
     </div>
 </div>
@@ -101,8 +123,34 @@
 </div>
 
 <script>
-const rawBase = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
+const rawBase     = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
 const stationsUrl = `${rawBase}/ims_stations.csv`;
+
+// Years will be detected dynamically by probing for required files.
+const AVAILABLE_HEAT_YEARS = [];  // filled at startup by detectAvailableYears()
+
+async function detectAvailableYears() {
+    const currentYear = new Date().getFullYear();
+    const candidates = [];
+    for (let y = 2020; y <= currentYear; y++) candidates.push(y);
+    const results = await Promise.all(candidates.map(async y => {
+        try {
+            const checks = await Promise.all([
+                fetch(`${rawBase}/rh_${y}.csv`,   {method:'HEAD'}),
+                fetch(`${rawBase}/ws_${y}.csv`,   {method:'HEAD'}),
+                fetch(`${rawBase}/grad_${y}.csv`, {method:'HEAD'})
+            ]);
+            return checks.every(r => r.ok) ? y : null;
+        } catch(e) { return null; }
+    }));
+    results.filter(y => y !== null).forEach(y => AVAILABLE_HEAT_YEARS.push(y));
+}
+
+// Stations that borrow grad (solar radiation) data from a linked station.
+// Key = station name in rh/temp/ws files, Value = station name in grad file.
+const GRAD_LINKS = {
+    'BET DAGAN': 'BET DAGAN RAD'
+};
 
 const COLORS = [
     '#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd',
@@ -111,256 +159,386 @@ const COLORS = [
 ];
 
 let map;
-let stationMarkers   = {};   // name -> { marker }
+let stationMarkers   = {};
 let selectedStations = [];
-let stationCoords    = {};   // name -> { lat, lon }
-let computedMonthly  = {};   // name -> { RH, DewPoint, HeatIndex, WBGT } – 12 values, null if no data
-let rawRows          = [];   // { dt:Date, st, rh, t, ws, sol }
+let stationCoords    = {};
+let computedMonthly  = {};   // name -> { RH, DewPoint, HeatIndex, WBGT } 12 monthly averages
+let rawRows          = [];   // loaded rows for current data year
 
-let currentMeasure = 'HeatIndex';
+let currentMeasure  = 'HeatIndex';
+const NOW           = new Date();
+let currentDataYear = NOW.getFullYear();  // dynamic – not hardcoded
+
+// Hourly view state
+let hourlyMode  = 'last30';
+let hourlyYear  = currentDataYear;
+let hourlyMonth = NOW.getMonth() + 1;
 
 const measureLabels = {
     RH:        'לחות יחסית (%)',
-    DewPoint:  'נקודת טל (°C)',
+    DewPoint:  'נקודת הטל (°C)',
     HeatIndex: 'מדד חום (°C)',
     WBGT:      'WBGT (°C)'
 };
-const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const monthNames   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const monthNamesHe = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+// Approximate Israeli sunrise/sunset (decimal hours) per month index 0=Jan
+const ISRAEL_SUN = [
+    [6.67,17.00],[6.33,17.50],[5.83,18.00],[6.17,19.50],
+    [5.67,19.83],[5.50,19.83],[5.67,19.67],[6.00,19.25],
+    [6.33,18.50],[6.67,17.83],[5.83,17.00],[6.50,16.83]
+];
 
 // ---- formulas ----
 function dewPoint(T, RH) {
-    const a = 17.27, b = 237.7;
-    const alpha = (a * T / (b + T)) + Math.log(RH / 100);
-    return (b * alpha) / (a - alpha);
+    const a=17.27, b=237.7;
+    const alpha = (a*T/(b+T)) + Math.log(RH/100);
+    return (b*alpha)/(a-alpha);
 }
 function heatIndex(T_c, RH) {
-    const T = T_c * 9/5 + 32;
+    const T = T_c*9/5+32;
     if (T < 80) return T_c;
     let HI = -42.379 + 2.04901523*T + 10.14333127*RH - 0.22475541*T*RH
         - 0.00683783*T*T - 0.05481717*RH*RH + 0.00122874*T*T*RH
         + 0.00085282*T*RH*RH - 0.00000199*T*T*RH*RH;
-    if (RH < 13 && T >= 80 && T <= 112)
-        HI -= ((13-RH)/4) * Math.sqrt((17 - Math.abs(T-95))/17);
-    else if (RH > 85 && T >= 80 && T <= 87)
-        HI += ((RH-85)/10) * ((87-T)/5);
-    return (HI - 32) * 5/9;
+    if (RH<13 && T>=80 && T<=112)
+        HI -= ((13-RH)/4)*Math.sqrt((17-Math.abs(T-95))/17);
+    else if (RH>85 && T>=80 && T<=87)
+        HI += ((RH-85)/10)*((87-T)/5);
+    return (HI-32)*5/9;
 }
 function wetBulb(T, RH) {
-    return T * Math.atan(0.151977 * Math.pow(RH+8.313659, 0.5))
-        + Math.atan(T+RH) - Math.atan(RH-1.676331)
-        + 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101*RH) - 4.686035;
+    return T*Math.atan(0.151977*Math.pow(RH+8.313659,0.5))
+        +Math.atan(T+RH)-Math.atan(RH-1.676331)
+        +0.00391838*Math.pow(RH,1.5)*Math.atan(0.023101*RH)-4.686035;
 }
 function wbgt(T, RH, ws, solar) {
-    const Twb = wetBulb(T, RH);
-    const Tg  = T + (solar/1000) * 10 / (1 + 0.8 * Math.max(0.5, ws));
-    return 0.7*Twb + 0.2*Tg + 0.1*T;
+    const Twb=wetBulb(T,RH);
+    const Tg=T+(solar/1000)*10/(1+0.8*Math.max(0.5,ws));
+    return 0.7*Twb+0.2*Tg+0.1*T;
 }
 function computeMeasure(t, rh, ws, sol, measure) {
     switch(measure) {
         case 'RH':        return rh;
-        case 'DewPoint':  return dewPoint(t, rh);
-        case 'HeatIndex': return heatIndex(t, rh);
-        case 'WBGT':      return wbgt(t, rh, isNaN(ws)?2:ws, isNaN(sol)?0:sol);
+        case 'DewPoint':  return dewPoint(t,rh);
+        case 'HeatIndex': return heatIndex(t,rh);
+        case 'WBGT':
+            // Require solar radiation – return null if missing so no point is plotted.
+            if (isNaN(sol)) return null;
+            return wbgt(t, rh, isNaN(ws) ? 2 : ws, sol);
     }
 }
 
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
-// ---- init ----
-$(document).ready(function () {
-    $('#measureSelect').select2({ minimumResultsForSearch: Infinity });
-    initMap();
+// ---- day/night shapes ----
+function fmtDt(d) {
+    const p=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function getDayNightShapes(start, end) {
+    const shapes=[];
+    const cur=new Date(start); cur.setHours(0,0,0,0);
+    while (cur<=end) {
+        const [srDec,ssDec]=ISRAEL_SUN[cur.getMonth()];
+        const srH=Math.floor(srDec), srM=Math.round((srDec%1)*60);
+        const ssH=Math.floor(ssDec), ssM=Math.round((ssDec%1)*60);
+        const midnight0=new Date(cur);
+        const sunrise=new Date(cur); sunrise.setHours(srH,srM,0,0);
+        const sunset=new Date(cur);  sunset.setHours(ssH,ssM,0,0);
+        const midnight1=new Date(cur); midnight1.setDate(cur.getDate()+1);
+        const segs=[
+            {x0:midnight0,x1:sunrise, fill:'rgba(100,150,255,0.18)'},
+            {x0:sunrise,  x1:sunset,  fill:'rgba(255,215,0,0.13)'},
+            {x0:sunset,   x1:midnight1,fill:'rgba(100,150,255,0.18)'}
+        ];
+        segs.forEach(({x0,x1,fill})=>{
+            const cs=new Date(Math.max(x0,start)), ce=new Date(Math.min(x1,end));
+            if(cs>=ce) return;
+            shapes.push({type:'rect',xref:'x',yref:'paper',
+                x0:fmtDt(cs),x1:fmtDt(ce),y0:0,y1:1,
+                fillcolor:fill,line:{width:0},layer:'below'});
+        });
+        cur.setDate(cur.getDate()+1);
+    }
+    return shapes;
+}
+
+// ---- hourly range ----
+function getHourlyRange() {
+    if (hourlyMode==='last30') {
+        const end=new Date(NOW), start=new Date(NOW);
+        start.setDate(start.getDate()-30);
+        return [start,end];
+    }
+    return [
+        new Date(hourlyYear,hourlyMonth-1,1,0,0,0),
+        new Date(hourlyYear,hourlyMonth,0,23,59,59)
+    ];
+}
+
+function updateHourlyNav() {
+    const label=document.getElementById('hourlyPeriodLabel');
+    const btn30=document.getElementById('btnLast30');
+    if (hourlyMode==='last30') {
+        label.textContent='30 ימים אחרונים'; btn30.classList.add('active');
+    } else {
+        label.textContent=`${monthNamesHe[hourlyMonth-1]} ${hourlyYear}`; btn30.classList.remove('active');
+    }
+}
+
+// ---- load year data ----
+function loadYearData(year) {
     setStatus('טוען נתונים...');
+    return Promise.all([
+        d3.csv(`${rawBase}/rh_${year}.csv`),
+        d3.csv(`${rawBase}/temp_max_${year}.csv`),
+        d3.csv(`${rawBase}/ws_${year}.csv`),
+        d3.csv(`${rawBase}/grad_${year}.csv`)
+    ]).then(([rhData, tempData, wsData, gradData]) => {
+        const rhCols = Object.keys(rhData[0]).filter(k=>k!=='datetime');
+        const tempMap={}, wsMap={}, gradMap={};
+        tempData.forEach(r=>{tempMap[r.datetime]=r;});
+        wsData.forEach(r=>{wsMap[r.datetime]=r;});
+        gradData.forEach(r=>{gradMap[r.datetime]=r;});
 
-    Promise.all([
-        d3.csv(stationsUrl),
-        loadStationTranslations(),
-        d3.csv(`${rawBase}/rh_2026.csv`),
-        d3.csv(`${rawBase}/temp_max_2026.csv`),
-        d3.csv(`${rawBase}/ws_2026.csv`),
-        d3.csv(`${rawBase}/grad_2026.csv`)
-    ]).then(([stations, _t, rhData, tempData, wsData, gradData]) => {
-
-        stations.forEach(s => {
-            try {
-                const loc = JSON.parse(s.location.replace(/'/g, '"'));
-                stationCoords[s.name.trim()] = { lat: loc.latitude, lon: loc.longitude };
-            } catch(e) {}
+        const sums={};
+        rhCols.forEach(st=>{
+            sums[st]=Array.from({length:12},()=>({RH:0,DP:0,HI:0,WB:0,n:0,nWB:0}));
         });
 
-        const rhCols = Object.keys(rhData[0]).filter(k => k !== 'datetime');
+        const parseTime=d3.timeParse('%Y-%m-%d %H:%M');
+        rawRows=[];
+        computedMonthly={};
 
-        const tempMap = {}, wsMap = {}, gradMap = {};
-        tempData.forEach(r => { tempMap[r.datetime] = r; });
-        wsData.forEach(r   => { wsMap[r.datetime]   = r; });
-        gradData.forEach(r => { gradMap[r.datetime] = r; });
-
-        const sums = {};
-        rhCols.forEach(st => {
-            sums[st] = Array.from({length:12}, () => ({RH:0,DP:0,HI:0,WB:0,n:0}));
-        });
-
-        const parseTime = d3.timeParse('%Y-%m-%d %H:%M');
-
-        rhData.forEach(row => {
-            const dt  = row.datetime;
-            const mo  = parseInt(dt.substring(5,7)) - 1;
-            const dtObj = parseTime(dt);
-            const tempRow = tempMap[dt] || {};
-            const wsRow   = wsMap[dt]   || {};
-            const gradRow = gradMap[dt] || {};
-
-            rhCols.forEach(st => {
-                const rh  = parseFloat(row[st]);
-                const t   = parseFloat(tempRow[st]);
-                const ws_ = parseFloat(wsRow[st]);
-                const sol = parseFloat(gradRow[st]);
-                if (isNaN(rh) || isNaN(t)) return;
-
-                const acc = sums[st][mo];
-                acc.RH += rh;
-                acc.DP += dewPoint(t, rh);
-                acc.HI += heatIndex(t, rh);
-                acc.WB += wbgt(t, rh, isNaN(ws_)?2:ws_, isNaN(sol)?0:sol);
-                acc.n  += 1;
-
-                rawRows.push({ dt: dtObj, st, rh, t, ws: ws_, sol });
+        rhData.forEach(row=>{
+            const dt=row.datetime;
+            const mo=parseInt(dt.substring(5,7))-1;
+            const dtObj=parseTime(dt);
+            const tempRow=tempMap[dt]||{}, wsRow=wsMap[dt]||{}, gradRow=gradMap[dt]||{};
+            rhCols.forEach(st=>{
+                const rh=parseFloat(row[st]), t=parseFloat(tempRow[st]);
+                const ws_=parseFloat(wsRow[st]);
+                // Use linked grad station if this station has no grad column
+                const gradSt = GRAD_LINKS[st] || st;
+                const sol=parseFloat(gradRow[gradSt]);
+                if(isNaN(rh)||isNaN(t)) return;
+                const acc=sums[st][mo];
+                acc.RH+=rh; acc.DP+=dewPoint(t,rh); acc.HI+=heatIndex(t,rh);
+                if(!isNaN(sol)){acc.WB+=wbgt(t,rh,isNaN(ws_)?2:ws_,sol); acc.nWB+=1;}
+                acc.n+=1;
+                rawRows.push({dt:dtObj,st,rh,t,ws:ws_,sol});
             });
         });
 
-        rhCols.forEach(st => {
-            computedMonthly[st] = { RH:[], DewPoint:[], HeatIndex:[], WBGT:[] };
-            sums[st].forEach(acc => {
-                if (acc.n === 0) {
-                    computedMonthly[st].RH.push(null);
-                    computedMonthly[st].DewPoint.push(null);
-                    computedMonthly[st].HeatIndex.push(null);
-                    computedMonthly[st].WBGT.push(null);
+        rhCols.forEach(st=>{
+            computedMonthly[st]={RH:[],DewPoint:[],HeatIndex:[],WBGT:[]};
+            sums[st].forEach(acc=>{
+                if(acc.n===0){
+                    computedMonthly[st].RH.push(null); computedMonthly[st].DewPoint.push(null);
+                    computedMonthly[st].HeatIndex.push(null); computedMonthly[st].WBGT.push(null);
                 } else {
-                    computedMonthly[st].RH.push(acc.RH / acc.n);
-                    computedMonthly[st].DewPoint.push(acc.DP / acc.n);
-                    computedMonthly[st].HeatIndex.push(acc.HI / acc.n);
-                    computedMonthly[st].WBGT.push(acc.WB / acc.n);
+                    computedMonthly[st].RH.push(acc.RH/acc.n); computedMonthly[st].DewPoint.push(acc.DP/acc.n);
+                    computedMonthly[st].HeatIndex.push(acc.HI/acc.n);
+                    computedMonthly[st].WBGT.push(acc.nWB>0 ? acc.WB/acc.nWB : null);
                 }
             });
         });
+        return rhCols;
+    });
+}
 
+// ---- init ----
+$(document).ready(function () {
+    $('#measureSelect').select2({minimumResultsForSearch:Infinity});
+
+    const yearSel=document.getElementById('dataYearSelect');
+
+    initMap();
+    setStatus('טוען נתונים...');
+
+    function populateYearSelector() {
+        yearSel.innerHTML='';
+        AVAILABLE_HEAT_YEARS.slice().reverse().forEach(y=>{
+            const opt=document.createElement('option');
+            opt.value=y; opt.textContent=y;
+            if(y===currentDataYear) opt.selected=true;
+            yearSel.appendChild(opt);
+        });
+        // If current year isn't available, default to the most recent available year
+        if(!AVAILABLE_HEAT_YEARS.includes(currentDataYear) && AVAILABLE_HEAT_YEARS.length>0){
+            currentDataYear=AVAILABLE_HEAT_YEARS[AVAILABLE_HEAT_YEARS.length-1];
+            yearSel.value=currentDataYear;
+        }
+    }
+
+    detectAvailableYears().then(()=>{
+        populateYearSelector();
+        return Promise.all([d3.csv(stationsUrl), loadStationTranslations()]);
+    }).then(([stations])=>{
+        stations.forEach(s=>{
+            try {
+                const loc=JSON.parse(s.location.replace(/'/g,'"'));
+                stationCoords[s.name.trim()]={lat:loc.latitude,lon:loc.longitude};
+            } catch(e){}
+        });
+        return loadYearData(currentDataYear);
+    }).then(rhCols=>{
         addStationMarkers(rhCols);
         setStatus('לחץ על תחנות במפה לבחירה');
         updatePlots();
-    }).catch(err => {
+    }).catch(err=>{
         console.error(err);
-        setStatus('שגיאה: ' + err.message);
+        setStatus('שגיאה: '+err.message);
     });
 
-    $('#measureSelect').on('change', function() {
-        currentMeasure = $(this).val();
-        updatePlots();
-    });
-    $('#clearBtn').on('click', function() {
-        selectedStations = [];
-        Object.values(stationMarkers).forEach(({marker}) =>
+    $('#measureSelect').on('change',function(){currentMeasure=$(this).val(); updatePlots();});
+    $('#clearBtn').on('click',function(){
+        selectedStations=[];
+        Object.values(stationMarkers).forEach(({marker})=>
             marker.setStyle({color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5}));
         updatePlots();
+    });
+
+    // Year selector
+    yearSel.addEventListener('change',function(){
+        currentDataYear=+this.value;
+        hourlyYear=currentDataYear;
+        if(hourlyMode==='last30'){hourlyMode='month'; hourlyMonth=NOW.getMonth()+1;}
+        updateHourlyNav();
+        loadYearData(currentDataYear).then(()=>{
+            setStatus('לחץ על תחנות במפה לבחירה');
+            updatePlots();
+        }).catch(err=>{setStatus('שגיאה: '+err.message);});
+    });
+
+    // Hourly nav buttons
+    document.getElementById('btnLast30').addEventListener('click',()=>{
+        hourlyMode='last30'; hourlyYear=currentDataYear; updateHourlyNav(); updateHourlyPlot();
+    });
+    document.getElementById('btnPrevMonth').addEventListener('click',()=>{
+        if(hourlyMode==='last30'){hourlyYear=currentDataYear; hourlyMonth=NOW.getMonth()+1;}
+        hourlyMode='month'; hourlyMonth--;
+        if(hourlyMonth<1){hourlyMonth=12; hourlyYear--;}
+        updateHourlyNav(); updateHourlyPlot();
+    });
+    document.getElementById('btnNextMonth').addEventListener('click',()=>{
+        if(hourlyMode==='last30') return;
+        hourlyMonth++;
+        if(hourlyMonth>12){hourlyMonth=1; hourlyYear++;}
+        updateHourlyNav(); updateHourlyPlot();
     });
 });
 
 // ---- map ----
 function initMap() {
-    map = L.map('map').setView([31.5, 35.0], 7);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution:'© OpenStreetMap contributors', maxZoom:18
+    map=L.map('map').setView([31.5,35.0],7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        attribution:'© OpenStreetMap contributors',maxZoom:18
     }).addTo(map);
 }
 
 function addStationMarkers(stationNames) {
-    stationNames.forEach(name => {
-        const coords = stationCoords[name];
-        if (!coords) return;
-        const marker = L.circleMarker([coords.lat, coords.lon], {
-            radius:7, color:'#1976d2', fillColor:'#42a5f5',
-            fillOpacity:0.6, weight:1.5, opacity:0.55
+    // Remove old markers
+    Object.values(stationMarkers).forEach(({marker})=>marker.remove());
+    stationMarkers={};
+    stationNames.forEach(name=>{
+        const coords=stationCoords[name];
+        if(!coords) return;
+        const marker=L.circleMarker([coords.lat,coords.lon],{
+            radius:7,color:'#1976d2',fillColor:'#42a5f5',fillOpacity:0.6,weight:1.5,opacity:0.55
         }).addTo(map);
-        marker.bindTooltip(`${getHebrewName(name)} (${name})`, {direction:'top'});
-        marker.on('click', () => toggleStation(name));
-        stationMarkers[name] = { marker };
+        marker.bindTooltip(`${getHebrewName(name)} (${name})`,{direction:'top'});
+        marker.on('click',()=>toggleStation(name));
+        stationMarkers[name]={marker};
     });
 }
 
 function toggleStation(name) {
-    const idx = selectedStations.indexOf(name);
-    if (idx === -1) {
+    const idx=selectedStations.indexOf(name);
+    if(idx===-1){
         selectedStations.push(name);
         stationMarkers[name].marker.setStyle({color:'#b71c1c',fillColor:'#ef5350',weight:2.5,opacity:1,fillOpacity:0.9});
     } else {
-        selectedStations.splice(idx, 1);
+        selectedStations.splice(idx,1);
         stationMarkers[name].marker.setStyle({color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5});
     }
     updatePlots();
 }
 
 // ---- plots ----
-function updatePlots() { updateMonthlyPlot(); updateHourlyPlot(); }
+function updatePlots(){ updateMonthlyPlot(); updateHourlyPlot(); }
 
 function emptyLayout(msg) {
-    return { title:{text:msg,x:0.5}, paper_bgcolor:'white', plot_bgcolor:'#fafafa',
-             margin:{t:45,r:15,l:50,b:50} };
+    return {title:{text:msg,x:0.5},paper_bgcolor:'white',plot_bgcolor:'#fafafa',margin:{t:45,r:15,l:50,b:50}};
 }
 
 function updateMonthlyPlot() {
-    if (selectedStations.length === 0) {
-        Plotly.newPlot('monthlyPlot', [], emptyLayout('בחר תחנה אחת או יותר במפה'), {responsive:true});
+    if(selectedStations.length===0){
+        Plotly.newPlot('monthlyPlot',[],emptyLayout('בחר תחנה אחת או יותר במפה'),{responsive:true});
         return;
     }
-    const traces = selectedStations.map((name, i) => ({
-        x: monthNames,
-        y: (computedMonthly[name] || {})[currentMeasure] || new Array(12).fill(null),
-        type: 'scatter', mode: 'lines+markers',
-        name: getHebrewName(name),
-        connectgaps: false,
-        line: { color: COLORS[i % COLORS.length], width:2.5 },
-        marker: { size:6 }
+    const traces=selectedStations.map((name,i)=>({
+        x:monthNames,
+        y:(computedMonthly[name]||{})[currentMeasure]||new Array(12).fill(null),
+        type:'scatter',mode:'lines+markers',
+        name:getHebrewName(name),connectgaps:false,
+        line:{color:COLORS[i%COLORS.length],width:2.5},marker:{size:6}
     }));
-    Plotly.newPlot('monthlyPlot', traces, {
-        title:{ text: measureLabels[currentMeasure] + ' — ממוצע חודשי 2026', x:0.95, xanchor:'right' },
-        xaxis:{ title:'חודש', tickvals:monthNames, ticktext:monthNames },
-        yaxis:{ title: measureLabels[currentMeasure] },
-        legend:{ orientation:'h', y:-0.28 },
-        dir:'rtl', paper_bgcolor:'white', plot_bgcolor:'#fafafa',
-        margin:{ t:45, r:15, l:50, b:75 }
-    }, {responsive:true});
+    Plotly.newPlot('monthlyPlot',traces,{
+        title:{text:`${measureLabels[currentMeasure]} - ממוצע חודשי ${currentDataYear}`,x:0.95,xanchor:'right'},
+        xaxis:{title:'חודש',tickvals:monthNames,ticktext:monthNames},
+        yaxis:{title:measureLabels[currentMeasure]},
+        hovermode:'x unified',
+        legend:{orientation:'h',y:-0.28},
+        dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
+        margin:{t:45,r:15,l:50,b:75}
+    },{responsive:true});
+
+    // Click on monthly chart → navigate hourly to that month
+    document.getElementById('monthlyPlot').on('plotly_click',(data)=>{
+        if(!data.points.length) return;
+        const mIdx=monthNames.indexOf(data.points[0].x);
+        if(mIdx<0) return;
+        hourlyMode='month';
+        hourlyMonth=mIdx+1;
+        hourlyYear=currentDataYear;
+        updateHourlyNav();
+        updateHourlyPlot();
+    });
 }
 
 function updateHourlyPlot() {
-    if (selectedStations.length === 0) {
-        Plotly.newPlot('hourlyPlot', [], emptyLayout('נתונים שעתיים — 30 ימים אחרונים'), {responsive:true});
+    if(selectedStations.length===0){
+        Plotly.newPlot('hourlyPlot',[],emptyLayout('נתונים שעתיים'),{responsive:true});
         return;
     }
-    const now = new Date();
-    const startDate = new Date(now);
-    startDate.setDate(startDate.getDate() - 30);
-
-    const traces = selectedStations.map((name, i) => {
-        const pts = rawRows
-            .filter(r => r.st === name && r.dt >= startDate && r.dt <= now)
-            .sort((a, b) => a.dt - b.dt);
+    const [startDate,endDate]=getHourlyRange();
+    const traces=selectedStations.map((name,i)=>{
+        const pts=rawRows
+            .filter(r=>r.st===name && r.dt>=startDate && r.dt<=endDate)
+            .sort((a,b)=>a.dt-b.dt);
         return {
-            x: pts.map(p => p.dt),
-            y: pts.map(p => computeMeasure(p.t, p.rh, p.ws, p.sol, currentMeasure)),
-            type:'scatter', mode:'lines',
-            name: getHebrewName(name),
-            line:{ color: COLORS[i % COLORS.length], width:1.5 }
+            x:pts.map(p=>p.dt),
+            y:pts.map(p=>computeMeasure(p.t,p.rh,p.ws,p.sol,currentMeasure)),
+            type:'scatter',mode:'lines',
+            name:getHebrewName(name),
+            line:{color:COLORS[i%COLORS.length],width:1.5}
         };
     });
-    Plotly.newPlot('hourlyPlot', traces, {
-        title:{ text: measureLabels[currentMeasure] + ' — 30 ימים אחרונים (שעתי)', x:0.95, xanchor:'right' },
-        xaxis:{ title:'זמן' },
-        yaxis:{ title: measureLabels[currentMeasure] },
-        legend:{ orientation:'h', y:-0.28 },
-        dir:'rtl', paper_bgcolor:'white', plot_bgcolor:'#fafafa',
-        margin:{ t:45, r:15, l:50, b:75 }
-    }, {responsive:true});
+    Plotly.newPlot('hourlyPlot',traces,{
+        title:{text:`${measureLabels[currentMeasure]} - שעתי`,x:0.95,xanchor:'right'},
+        xaxis:{title:'זמן'},
+        yaxis:{title:measureLabels[currentMeasure]},
+        shapes:getDayNightShapes(startDate,endDate),
+        hovermode:'x unified',
+        legend:{orientation:'h',y:-0.28},
+        dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
+        margin:{t:45,r:15,l:50,b:75}
+    },{responsive:true});
 }
 </script>
+
 </body>
 </html>
