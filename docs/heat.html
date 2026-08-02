@@ -73,7 +73,7 @@
             </a>
             <h1 style="font-size:1.3em;margin:0;display:flex;align-items:center;gap:8px;">
                 <img src="logo.jpg" alt="Icon" class="title-icon" style="height:1.2em;">
-                מדדי חום לריצה
+                מדדי עומס חום
             </h1>
         </div>
     </header>
@@ -94,6 +94,14 @@
         <div style="display:flex;flex-direction:column;gap:4px;">
             <label for="dataYearSelect">שנה:</label>
             <select id="dataYearSelect" style="padding:4px 8px;border-radius:4px;border:1px solid #aaa;"></select>
+        </div>
+        <div id="paceGroup" style="display:none;flex-direction:column;gap:4px;">
+            <label for="paceInput">קצב ריצה (דקות/ק"מ):</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <input id="paceInput" type="number" min="0" max="20" step="0.5" value="0"
+                    style="width:80px;padding:4px 8px;border-radius:4px;border:1px solid #aaa;font-size:0.95em;">
+                <span id="paceMs" style="font-size:0.82em;color:#666;white-space:nowrap;">= 0.00 m/s</span>
+            </div>
         </div>
         <div id="status">טוען נתונים...</div>
     </div>
@@ -162,8 +170,10 @@ let map;
 let stationMarkers   = {};
 let selectedStations = [];
 let stationCoords    = {};
-let computedMonthly  = {};   // name -> { RH, DewPoint, HeatIndex, WBGT } 12 monthly averages
+let computedMonthly  = {};   // name -> { RH, DewPoint, HeatIndex } 12 monthly averages
+let monthlySums      = {};   // name -> per-month raw accumulators (used for pace-aware WBGT)
 let rawRows          = [];   // loaded rows for current data year
+let completeStations = new Set(); // stations with valid Grad, TD, WS and RH data
 
 let currentMeasure  = 'HeatIndex';
 const NOW           = new Date();
@@ -179,6 +189,25 @@ const measureLabels = {
     DewPoint:  'נקודת הטל (°C)',
     HeatIndex: 'מדד חום (°C)',
     WBGT:      'WBGT (°C)'
+};
+
+const measureInfo = {
+    RH: {
+        wiki: 'https://en.wikipedia.org/wiki/Relative_humidity',
+        desc: 'Relative Humidity – direct measurement (%)'
+    },
+    DewPoint: {
+        wiki: 'https://en.wikipedia.org/wiki/Dew_point',
+        desc: 'Dew Point – Magnus approx: α=a·T/(b+T)+ln(RH/100), Td=b·α/(a−α), a=17.27, b=237.7'
+    },
+    HeatIndex: {
+        wiki: 'https://en.wikipedia.org/wiki/Heat_index',
+        desc: 'Heat Index – NWS Rothfusz regression (°F→°C), applied when T≥27°C'
+    },
+    WBGT: {
+        wiki: 'https://en.wikipedia.org/wiki/Wet-bulb_globe_temperature',
+        desc: 'WBGT = 0.7·Twb + 0.2·Tg + 0.1·T  |  Tg = T + (solar/1000)·10/(1+0.8·(ws+pace))  |  pace (min/km) → m/s added to ambient WS'
+    },
 };
 const monthNames   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const monthNamesHe = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
@@ -218,6 +247,12 @@ function wbgt(T, RH, ws, solar) {
     const Tg=T+(solar/1000)*10/(1+0.8*Math.max(0.5,ws));
     return 0.7*Twb+0.2*Tg+0.1*T;
 }
+// Returns wind speed (m/s) contributed by running at the entered pace. 0 if pace is 0 or empty.
+function paceWindMs() {
+    const v = parseFloat(document.getElementById('paceInput').value);
+    if (isNaN(v) || v <= 0) return 0;
+    return 1000 / (v * 60);
+}
 function computeMeasure(t, rh, ws, sol, measure) {
     switch(measure) {
         case 'RH':        return rh;
@@ -226,7 +261,7 @@ function computeMeasure(t, rh, ws, sol, measure) {
         case 'WBGT':
             // Require solar radiation – return null if missing so no point is plotted.
             if (isNaN(sol)) return null;
-            return wbgt(t, rh, isNaN(ws) ? 2 : ws, sol);
+            return wbgt(t, rh, (isNaN(ws) ? 2 : ws) + paceWindMs(), sol);
     }
 }
 
@@ -305,12 +340,14 @@ function loadYearData(year) {
 
         const sums={};
         rhCols.forEach(st=>{
-            sums[st]=Array.from({length:12},()=>({RH:0,DP:0,HI:0,WB:0,n:0,nWB:0}));
+            sums[st]=Array.from({length:12},()=>({RH:0,DP:0,HI:0,T:0,RH2:0,WS:0,SOL:0,n:0,nWB:0}));
         });
 
         const parseTime=d3.timeParse('%Y-%m-%d %H:%M');
         rawRows=[];
         computedMonthly={};
+        monthlySums={};
+        completeStations=new Set();
 
         rhData.forEach(row=>{
             const dt=row.datetime;
@@ -326,22 +363,24 @@ function loadYearData(year) {
                 if(isNaN(rh)||isNaN(t)) return;
                 const acc=sums[st][mo];
                 acc.RH+=rh; acc.DP+=dewPoint(t,rh); acc.HI+=heatIndex(t,rh);
-                if(!isNaN(sol)){acc.WB+=wbgt(t,rh,isNaN(ws_)?2:ws_,sol); acc.nWB+=1;}
+                if(!isNaN(sol)){ acc.T+=t; acc.RH2+=rh; acc.WS+=(isNaN(ws_)?2:ws_); acc.SOL+=sol; acc.nWB+=1; }
+                if(!isNaN(sol)&&!isNaN(ws_)) completeStations.add(st);
                 acc.n+=1;
                 rawRows.push({dt:dtObj,st,rh,t,ws:ws_,sol});
             });
         });
 
         rhCols.forEach(st=>{
-            computedMonthly[st]={RH:[],DewPoint:[],HeatIndex:[],WBGT:[]};
+            computedMonthly[st]={RH:[],DewPoint:[],HeatIndex:[]};
+            monthlySums[st]=sums[st];
             sums[st].forEach(acc=>{
                 if(acc.n===0){
                     computedMonthly[st].RH.push(null); computedMonthly[st].DewPoint.push(null);
-                    computedMonthly[st].HeatIndex.push(null); computedMonthly[st].WBGT.push(null);
+                    computedMonthly[st].HeatIndex.push(null);
                 } else {
-                    computedMonthly[st].RH.push(acc.RH/acc.n); computedMonthly[st].DewPoint.push(acc.DP/acc.n);
+                    computedMonthly[st].RH.push(acc.RH/acc.n);
+                    computedMonthly[st].DewPoint.push(acc.DP/acc.n);
                     computedMonthly[st].HeatIndex.push(acc.HI/acc.n);
-                    computedMonthly[st].WBGT.push(acc.nWB>0 ? acc.WB/acc.nWB : null);
                 }
             });
         });
@@ -393,11 +432,26 @@ $(document).ready(function () {
         setStatus('שגיאה: '+err.message);
     });
 
-    $('#measureSelect').on('change',function(){currentMeasure=$(this).val(); updatePlots();});
+    $('#measureSelect').on('change',function(){
+        currentMeasure=$(this).val();
+        const pg=document.getElementById('paceGroup');
+        pg.style.display = currentMeasure==='WBGT' ? 'flex' : 'none';
+        updatePlots();
+    });
+
+    const paceInput=document.getElementById('paceInput');
+    const paceMsSpan=document.getElementById('paceMs');
+    paceInput.addEventListener('input',function(){
+        const ms=paceWindMs();
+        paceMsSpan.textContent = ms>0 ? `= ${ms.toFixed(2)} m/s` : '= 0.00 m/s';
+        if(currentMeasure==='WBGT') updatePlots();
+    });
     $('#clearBtn').on('click',function(){
         selectedStations=[];
-        Object.values(stationMarkers).forEach(({marker})=>
-            marker.setStyle({color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5}));
+        Object.entries(stationMarkers).forEach(([name,{marker,complete}])=>
+            marker.setStyle(complete
+                ? {color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5}
+                : {color:'#ad1457',fillColor:'#f48fb1',weight:1.5,opacity:0.5,fillOpacity:0.5}));
         updatePlots();
     });
 
@@ -446,12 +500,16 @@ function addStationMarkers(stationNames) {
     stationNames.forEach(name=>{
         const coords=stationCoords[name];
         if(!coords) return;
+        const complete = completeStations.has(name);
+        const baseStyle = complete
+            ? {color:'#1976d2', fillColor:'#42a5f5'}   // blue  – all 4 measures
+            : {color:'#ad1457', fillColor:'#f48fb1'};  // pink  – missing some measures
         const marker=L.circleMarker([coords.lat,coords.lon],{
-            radius:7,color:'#1976d2',fillColor:'#42a5f5',fillOpacity:0.6,weight:1.5,opacity:0.55
+            radius:7, ...baseStyle, fillOpacity:0.6, weight:1.5, opacity:0.55
         }).addTo(map);
         marker.bindTooltip(`${getHebrewName(name)} (${name})`,{direction:'top'});
         marker.on('click',()=>toggleStation(name));
-        stationMarkers[name]={marker};
+        stationMarkers[name]={marker, complete};
     });
 }
 
@@ -462,12 +520,25 @@ function toggleStation(name) {
         stationMarkers[name].marker.setStyle({color:'#b71c1c',fillColor:'#ef5350',weight:2.5,opacity:1,fillOpacity:0.9});
     } else {
         selectedStations.splice(idx,1);
-        stationMarkers[name].marker.setStyle({color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5});
+        const complete=stationMarkers[name].complete;
+        stationMarkers[name].marker.setStyle(complete
+            ? {color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5}
+            : {color:'#ad1457',fillColor:'#f48fb1',weight:1.5,opacity:0.5,fillOpacity:0.5});
     }
     updatePlots();
 }
 
 // ---- plots ----
+function getMonthlyWBGT(stName) {
+    const sums = monthlySums[stName];
+    if (!sums) return new Array(12).fill(null);
+    const extra = paceWindMs();
+    return sums.map(acc => {
+        if (acc.nWB === 0) return null;
+        return wbgt(acc.T/acc.nWB, acc.RH2/acc.nWB, acc.WS/acc.nWB + extra, acc.SOL/acc.nWB);
+    });
+}
+
 function updatePlots(){ updateMonthlyPlot(); updateHourlyPlot(); }
 
 function emptyLayout(msg) {
@@ -481,19 +552,26 @@ function updateMonthlyPlot() {
     }
     const traces=selectedStations.map((name,i)=>({
         x:monthNames,
-        y:(computedMonthly[name]||{})[currentMeasure]||new Array(12).fill(null),
+        y: currentMeasure==='WBGT' ? getMonthlyWBGT(name)
+            : ((computedMonthly[name]||{})[currentMeasure]||new Array(12).fill(null)),
         type:'scatter',mode:'lines+markers',
         name:getHebrewName(name),connectgaps:false,
         line:{color:COLORS[i%COLORS.length],width:2.5},marker:{size:6}
     }));
+    const info = measureInfo[currentMeasure];
     Plotly.newPlot('monthlyPlot',traces,{
-        title:{text:`${measureLabels[currentMeasure]} - ממוצע חודשי ${currentDataYear}`,x:0.95,xanchor:'right'},
+        title:{
+            text:`${measureLabels[currentMeasure]} - ממוצע חודשי ${currentDataYear}<br>` +
+                 `<span style="font-size:0.78em;color:#555">${info.desc} ` +
+                 `[<a href="${info.wiki}" target="_blank" style="color:#1976d2">Wikipedia</a>]</span>`,
+            x:0.95, xanchor:'right'
+        },
         xaxis:{title:'חודש',tickvals:monthNames,ticktext:monthNames},
         yaxis:{title:measureLabels[currentMeasure]},
         hovermode:'x unified',
-        legend:{orientation:'h',y:-0.28},
+        legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
         dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
-        margin:{t:45,r:15,l:50,b:75}
+        margin:{t:70,r:15,l:50,b:40}
     },{responsive:true});
 
     // Click on monthly chart → navigate hourly to that month
@@ -533,9 +611,9 @@ function updateHourlyPlot() {
         yaxis:{title:measureLabels[currentMeasure]},
         shapes:getDayNightShapes(startDate,endDate),
         hovermode:'x unified',
-        legend:{orientation:'h',y:-0.28},
+        showlegend:false,
         dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
-        margin:{t:45,r:15,l:50,b:75}
+        margin:{t:45,r:15,l:50,b:40}
     },{responsive:true});
 }
 </script>
