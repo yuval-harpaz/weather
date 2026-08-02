@@ -96,12 +96,17 @@
             <select id="dataYearSelect" style="padding:4px 8px;border-radius:4px;border:1px solid #aaa;"></select>
         </div>
         <div id="paceGroup" style="display:none;flex-direction:column;gap:4px;">
-            <label for="paceInput">קצב ריצה (דקות/ק"מ):</label>
+            <label id="paceLabel">קצב ריצה (דק'/ק"מ):</label>
             <div style="display:flex;align-items:center;gap:6px;">
-                <input id="paceInput" type="number" min="0" max="20" step="0.5" value="0"
+                <input id="paceInput" type="number" min="0" max="60" step="0.5" value="0"
                     style="width:80px;padding:4px 8px;border-radius:4px;border:1px solid #aaa;font-size:0.95em;">
                 <span id="paceMs" style="font-size:0.82em;color:#666;white-space:nowrap;">= 0.00 m/s</span>
+                <button id="paceUnitBtn" class="legend-clear" style="font-size:0.8em;padding:3px 7px;">קמ"ש</button>
             </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            <label>ממוצע חודשי:</label>
+            <button id="dailyModeBtn" class="legend-clear">מקסימום יומי</button>
         </div>
         <div id="status">טוען נתונים...</div>
     </div>
@@ -177,7 +182,9 @@ let completeStations = new Set(); // stations with valid Grad, TD, WS and RH dat
 
 let currentMeasure  = 'HeatIndex';
 const NOW           = new Date();
-let currentDataYear = NOW.getFullYear();  // dynamic – not hardcoded
+let currentDataYear = NOW.getFullYear();
+let dailyMode = 'mean';   // 'mean' | 'max'
+let paceUnit  = 'minperkm'; // 'minperkm' | 'kmh'
 
 // Hourly view state
 let hourlyMode  = 'last30';
@@ -247,11 +254,12 @@ function wbgt(T, RH, ws, solar) {
     const Tg=T+(solar/1000)*10/(1+0.8*Math.max(0.5,ws));
     return 0.7*Twb+0.2*Tg+0.1*T;
 }
-// Returns wind speed (m/s) contributed by running at the entered pace. 0 if pace is 0 or empty.
+// Returns wind speed (m/s) contributed by running. 0 if value is 0 or empty.
 function paceWindMs() {
     const v = parseFloat(document.getElementById('paceInput').value);
     if (isNaN(v) || v <= 0) return 0;
-    return 1000 / (v * 60);
+    if (paceUnit === 'kmh') return v / 3.6;
+    return 1000 / (v * 60); // min/km → m/s
 }
 function computeMeasure(t, rh, ws, sol, measure) {
     switch(measure) {
@@ -338,11 +346,6 @@ function loadYearData(year) {
         wsData.forEach(r=>{wsMap[r.datetime]=r;});
         gradData.forEach(r=>{gradMap[r.datetime]=r;});
 
-        const sums={};
-        rhCols.forEach(st=>{
-            sums[st]=Array.from({length:12},()=>({RH:0,DP:0,HI:0,T:0,RH2:0,WS:0,SOL:0,n:0,nWB:0}));
-        });
-
         const parseTime=d3.timeParse('%Y-%m-%d %H:%M');
         rawRows=[];
         computedMonthly={};
@@ -351,38 +354,70 @@ function loadYearData(year) {
 
         rhData.forEach(row=>{
             const dt=row.datetime;
-            const mo=parseInt(dt.substring(5,7))-1;
             const dtObj=parseTime(dt);
             const tempRow=tempMap[dt]||{}, wsRow=wsMap[dt]||{}, gradRow=gradMap[dt]||{};
             rhCols.forEach(st=>{
                 const rh=parseFloat(row[st]), t=parseFloat(tempRow[st]);
                 const ws_=parseFloat(wsRow[st]);
-                // Use linked grad station if this station has no grad column
                 const gradSt = GRAD_LINKS[st] || st;
                 const sol=parseFloat(gradRow[gradSt]);
                 if(isNaN(rh)||isNaN(t)) return;
-                const acc=sums[st][mo];
-                acc.RH+=rh; acc.DP+=dewPoint(t,rh); acc.HI+=heatIndex(t,rh);
-                if(!isNaN(sol)){ acc.T+=t; acc.RH2+=rh; acc.WS+=(isNaN(ws_)?2:ws_); acc.SOL+=sol; acc.nWB+=1; }
                 if(!isNaN(sol)&&!isNaN(ws_)) completeStations.add(st);
-                acc.n+=1;
                 rawRows.push({dt:dtObj,st,rh,t,ws:ws_,sol});
             });
         });
 
+        // Group rawRows by station → day string
+        const byStDay={};
+        rawRows.forEach(r=>{
+            const key=r.dt.toISOString().slice(0,10);
+            if(!byStDay[r.st]) byStDay[r.st]={};
+            if(!byStDay[r.st][key]) byStDay[r.st][key]=[];
+            byStDay[r.st][key].push(r);
+        });
+
+        const avg=arr=>arr.length>0?arr.reduce((a,b)=>a+b)/arr.length:null;
+
         rhCols.forEach(st=>{
-            computedMonthly[st]={RH:[],DewPoint:[],HeatIndex:[]};
-            monthlySums[st]=sums[st];
-            sums[st].forEach(acc=>{
-                if(acc.n===0){
-                    computedMonthly[st].RH.push(null); computedMonthly[st].DewPoint.push(null);
-                    computedMonthly[st].HeatIndex.push(null);
-                } else {
-                    computedMonthly[st].RH.push(acc.RH/acc.n);
-                    computedMonthly[st].DewPoint.push(acc.DP/acc.n);
-                    computedMonthly[st].HeatIndex.push(acc.HI/acc.n);
-                }
-            });
+            computedMonthly[st]={RH:[],DewPoint:[],HeatIndex:[],RH_max:[],DewPoint_max:[],HeatIndex_max:[]};
+            monthlySums[st]=Array.from({length:12},()=>({T:0,RH2:0,WS:0,SOL:0,nWB:0,peaks:[]}));
+
+            const daysByMo=Array.from({length:12},()=>[]);
+            if(byStDay[st]){
+                Object.entries(byStDay[st]).forEach(([ds,rows])=>{
+                    const mo=parseInt(ds.slice(5,7))-1;
+                    daysByMo[mo].push(rows);
+                });
+            }
+
+            for(let mo=0;mo<12;mo++){
+                const days=daysByMo[mo];
+                const acc=monthlySums[st][mo];
+                const dRH=[],dDP=[],dHI=[],dRHx=[],dDPx=[],dHIx=[];
+
+                days.forEach(rows=>{
+                    const valid=rows.filter(r=>!isNaN(r.rh)&&!isNaN(r.t));
+                    if(valid.length===0) return;
+                    const rhs=valid.map(r=>r.rh);
+                    const dps=valid.map(r=>dewPoint(r.t,r.rh));
+                    const his=valid.map(r=>heatIndex(r.t,r.rh));
+                    dRH.push(avg(rhs)); dDP.push(avg(dps)); dHI.push(avg(his));
+                    dRHx.push(Math.max(...rhs)); dDPx.push(Math.max(...dps)); dHIx.push(Math.max(...his));
+
+                    const wv=valid.filter(r=>!isNaN(r.sol));
+                    wv.forEach(r=>{acc.T+=r.t;acc.RH2+=r.rh;acc.WS+=(isNaN(r.ws)?2:r.ws);acc.SOL+=r.sol;acc.nWB++;});
+                    if(wv.length>0){
+                        let mw=-Infinity,pr=null;
+                        wv.forEach(r=>{const w=wbgt(r.t,r.rh,isNaN(r.ws)?2:r.ws,r.sol);if(w>mw){mw=w;pr=r;}});
+                        acc.peaks.push({t:pr.t,rh:pr.rh,ws:isNaN(pr.ws)?2:pr.ws,sol:pr.sol});
+                    }
+                });
+
+                computedMonthly[st].RH.push(avg(dRH));       computedMonthly[st].DewPoint.push(avg(dDP));
+                computedMonthly[st].HeatIndex.push(avg(dHI));
+                computedMonthly[st].RH_max.push(avg(dRHx));  computedMonthly[st].DewPoint_max.push(avg(dDPx));
+                computedMonthly[st].HeatIndex_max.push(avg(dHIx));
+            }
         });
         return rhCols;
     });
@@ -445,6 +480,22 @@ $(document).ready(function () {
         const ms=paceWindMs();
         paceMsSpan.textContent = ms>0 ? `= ${ms.toFixed(2)} m/s` : '= 0.00 m/s';
         if(currentMeasure==='WBGT') updatePlots();
+    });
+
+    document.getElementById('paceUnitBtn').addEventListener('click',function(){
+        paceUnit = paceUnit==='minperkm' ? 'kmh' : 'minperkm';
+        this.textContent = paceUnit==='minperkm' ? 'קמ"ש' : 'דק\'/ק"מ';
+        document.getElementById('paceLabel').textContent =
+            paceUnit==='minperkm' ? 'קצב ריצה (דק\'/ק"מ):' : 'מהירות ריצה (קמ"ש):';
+        paceInput.value = 0;
+        paceMsSpan.textContent = '= 0.00 m/s';
+        if(currentMeasure==='WBGT') updatePlots();
+    });
+
+    document.getElementById('dailyModeBtn').addEventListener('click',function(){
+        dailyMode = dailyMode==='mean' ? 'max' : 'mean';
+        this.textContent = dailyMode==='mean' ? 'מקסימום יומי' : 'ממוצע יומי';
+        updateMonthlyPlot();
     });
     $('#clearBtn').on('click',function(){
         selectedStations=[];
@@ -534,9 +585,25 @@ function getMonthlyWBGT(stName) {
     if (!sums) return new Array(12).fill(null);
     const extra = paceWindMs();
     return sums.map(acc => {
-        if (acc.nWB === 0) return null;
-        return wbgt(acc.T/acc.nWB, acc.RH2/acc.nWB, acc.WS/acc.nWB + extra, acc.SOL/acc.nWB);
+        if (dailyMode === 'max') {
+            if (acc.peaks.length === 0) return null;
+            const ws = acc.peaks.map(p => wbgt(p.t, p.rh, p.ws + extra, p.sol));
+            return ws.reduce((a,b)=>a+b) / ws.length;
+        } else {
+            if (acc.nWB === 0) return null;
+            return wbgt(acc.T/acc.nWB, acc.RH2/acc.nWB, acc.WS/acc.nWB + extra, acc.SOL/acc.nWB);
+        }
     });
+}
+function getMonthlyY(stName, measure) {
+    if (measure === 'WBGT') return getMonthlyWBGT(stName);
+    const key = dailyMode === 'max' ? measure + '_max' : measure;
+    const data = computedMonthly[stName];
+    if (!data) return new Array(12).fill(null);
+    return data[key] || data[measure] || new Array(12).fill(null);
+}
+function yRange(measure) {
+    return measure === 'RH' ? [0, 100] : [-5, 50];
 }
 
 function updatePlots(){ updateMonthlyPlot(); updateHourlyPlot(); }
@@ -550,10 +617,10 @@ function updateMonthlyPlot() {
         Plotly.newPlot('monthlyPlot',[],emptyLayout('בחר תחנה אחת או יותר במפה'),{responsive:true});
         return;
     }
+    const modeLabel = dailyMode === 'max' ? 'ממוצע מקסימומים יומיים' : 'ממוצע יומי';
     const traces=selectedStations.map((name,i)=>({
         x:monthNames,
-        y: currentMeasure==='WBGT' ? getMonthlyWBGT(name)
-            : ((computedMonthly[name]||{})[currentMeasure]||new Array(12).fill(null)),
+        y: getMonthlyY(name, currentMeasure),
         type:'scatter',mode:'lines+markers',
         name:getHebrewName(name),connectgaps:false,
         line:{color:COLORS[i%COLORS.length],width:2.5},marker:{size:6}
@@ -561,13 +628,13 @@ function updateMonthlyPlot() {
     const info = measureInfo[currentMeasure];
     Plotly.newPlot('monthlyPlot',traces,{
         title:{
-            text:`${measureLabels[currentMeasure]} - ממוצע חודשי ${currentDataYear}<br>` +
+            text:`${measureLabels[currentMeasure]} - ${modeLabel} ${currentDataYear}<br>` +
                  `<span style="font-size:0.78em;color:#555">${info.desc} ` +
                  `[<a href="${info.wiki}" target="_blank" style="color:#1976d2">Wikipedia</a>]</span>`,
             x:0.95, xanchor:'right'
         },
         xaxis:{title:'חודש',tickvals:monthNames,ticktext:monthNames},
-        yaxis:{title:measureLabels[currentMeasure]},
+        yaxis:{title:measureLabels[currentMeasure], range:yRange(currentMeasure)},
         hovermode:'x unified',
         legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
         dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
@@ -593,14 +660,20 @@ function updateHourlyPlot() {
         return;
     }
     const [startDate,endDate]=getHourlyRange();
+    const GAP_MS = 3 * 3600 * 1000; // 3-hour gap threshold
     const traces=selectedStations.map((name,i)=>{
         const pts=rawRows
             .filter(r=>r.st===name && r.dt>=startDate && r.dt<=endDate)
             .sort((a,b)=>a.dt-b.dt);
+        const xArr=[], yArr=[];
+        pts.forEach((p,idx)=>{
+            if(idx>0 && (p.dt - pts[idx-1].dt) > GAP_MS){ xArr.push(null); yArr.push(null); }
+            xArr.push(p.dt);
+            yArr.push(computeMeasure(p.t,p.rh,p.ws,p.sol,currentMeasure));
+        });
         return {
-            x:pts.map(p=>p.dt),
-            y:pts.map(p=>computeMeasure(p.t,p.rh,p.ws,p.sol,currentMeasure)),
-            type:'scatter',mode:'lines',
+            x:xArr, y:yArr,
+            type:'scatter',mode:'lines',connectgaps:false,
             name:getHebrewName(name),
             line:{color:COLORS[i%COLORS.length],width:1.5}
         };
@@ -608,7 +681,7 @@ function updateHourlyPlot() {
     Plotly.newPlot('hourlyPlot',traces,{
         title:{text:`${measureLabels[currentMeasure]} - שעתי`,x:0.95,xanchor:'right'},
         xaxis:{title:'זמן'},
-        yaxis:{title:measureLabels[currentMeasure]},
+        yaxis:{title:measureLabels[currentMeasure], range:yRange(currentMeasure)},
         shapes:getDayNightShapes(startDate,endDate),
         hovermode:'x unified',
         showlegend:false,
