@@ -276,6 +276,10 @@ function computeMeasure(t, rh, ws, sol, measure) {
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
 // ---- day/night shapes ----
+function localDayKey(d) {
+    const p=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
 function fmtDt(d) {
     const p=n=>String(n).padStart(2,'0');
     return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
@@ -370,7 +374,7 @@ function loadYearData(year) {
         // Group rawRows by station → day string
         const byStDay={};
         rawRows.forEach(r=>{
-            const key=r.dt.toISOString().slice(0,10);
+            const key=localDayKey(r.dt);
             if(!byStDay[r.st]) byStDay[r.st]={};
             if(!byStDay[r.st][key]) byStDay[r.st][key]=[];
             byStDay[r.st][key].push(r);
@@ -385,7 +389,9 @@ function loadYearData(year) {
             const daysByMo=Array.from({length:12},()=>[]);
             if(byStDay[st]){
                 Object.entries(byStDay[st]).forEach(([ds,rows])=>{
-                    const mo=parseInt(ds.slice(5,7))-1;
+                    const [dsYear,dsMonth]=ds.split('-');
+                    if(parseInt(dsYear)!==year) return; // guard: skip dates outside requested year
+                    const mo=parseInt(dsMonth)-1;
                     daysByMo[mo].push(rows);
                 });
             }
@@ -538,29 +544,46 @@ $(document).ready(function () {
 
 // ---- map ----
 function initMap() {
-    map=L.map('map').setView([31.5,35.0],7);
+    map=L.map('map').setView([31.5,35.0],8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
         attribution:'© OpenStreetMap contributors',maxZoom:18
     }).addTo(map);
+
+    // Legend below zoom buttons
+    const legend = L.control({position:'topleft'});
+    legend.onAdd = function() {
+        const div = L.DomUtil.create('div','leaflet-bar');
+        div.style.cssText = 'background:white;padding:5px 8px;font-size:0.78em;line-height:1.6;cursor:default;direction:rtl;';
+        div.innerHTML =
+            '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#42a5f5;border:1.5px solid #1976d2;vertical-align:middle;margin-left:4px;"></span>כל החיישנים<br>' +
+            '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#f48fb1;border:1.5px solid #ad1457;vertical-align:middle;margin-left:4px;"></span>חלק מהחיישנים';
+        L.DomEvent.disableClickPropagation(div);
+        return div;
+    };
+    legend.addTo(map);
 }
 
 function addStationMarkers(stationNames) {
-    // Remove old markers
     Object.values(stationMarkers).forEach(({marker})=>marker.remove());
     stationMarkers={};
-    stationNames.forEach(name=>{
+
+    // Add incomplete (pink) stations first so complete (blue) render on top and are easier to click
+    const incomplete = stationNames.filter(n => !completeStations.has(n));
+    const complete   = stationNames.filter(n =>  completeStations.has(n));
+
+    [...incomplete, ...complete].forEach(name=>{
         const coords=stationCoords[name];
         if(!coords) return;
-        const complete = completeStations.has(name);
-        const baseStyle = complete
-            ? {color:'#1976d2', fillColor:'#42a5f5'}   // blue  – all 4 measures
-            : {color:'#ad1457', fillColor:'#f48fb1'};  // pink  – missing some measures
+        const isComplete = completeStations.has(name);
+        const baseStyle = isComplete
+            ? {color:'#1976d2', fillColor:'#42a5f5'}
+            : {color:'#ad1457', fillColor:'#f48fb1'};
         const marker=L.circleMarker([coords.lat,coords.lon],{
             radius:7, ...baseStyle, fillOpacity:0.6, weight:1.5, opacity:0.55
         }).addTo(map);
         marker.bindTooltip(`${getHebrewName(name)} (${name})`,{direction:'top'});
         marker.on('click',()=>toggleStation(name));
-        stationMarkers[name]={marker, complete};
+        stationMarkers[name]={marker, complete:isComplete};
     });
 }
 
