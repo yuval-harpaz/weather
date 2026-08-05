@@ -314,7 +314,10 @@
                 radius: 7, ...markerStyle(name, false)
             }).addTo(map);
             const hebrewName = (window.stationTranslations && window.stationTranslations[name]) || name;
-            marker.bindTooltip(`${hebrewName} (${name})`, { direction: 'top' });
+            // direction:'left' avoids Leaflet's translateX(-50%) centering transform used by
+            // 'top'/'auto', which gets mirrored incorrectly under dir="rtl" ancestors and makes
+            // the tooltip render far to the left. See forecast.html for the same workaround.
+            marker.bindTooltip(`${hebrewName} (${name})`, { direction: 'left', offset: [-12, 0] });
             marker.on('click', () => selectStation(name));
             stationMarkers[name] = { marker };
         });

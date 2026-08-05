@@ -711,7 +711,10 @@ function addStationMarkers(stationNames) {
         const marker=L.circleMarker([coords.lat,coords.lon],{
             radius:7, ...baseStyle, fillOpacity:0.6, weight:1.5, opacity:0.55
         }).addTo(map);
-        marker.bindTooltip(`${getHebrewName(name)} (${name})`,{direction:'top'});
+        // direction:'left' avoids Leaflet's translateX(-50%) centering transform used by
+        // 'top'/'auto', which gets mirrored incorrectly under dir="rtl" ancestors and makes
+        // the tooltip render far to the left. See forecast.html for the same workaround.
+        marker.bindTooltip(`${getHebrewName(name)} (${name})`,{direction:'right', offset:[-5,0]});
         marker.on('click',()=>toggleStation(name));
         stationMarkers[name]={marker, complete:isComplete};
     });
