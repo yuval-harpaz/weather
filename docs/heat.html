@@ -57,6 +57,7 @@
         .nav-btn:hover { background:#ddd; }
         .nav-btn.active { background:#3a7bd5; color:white; border-color:#3a7bd5; }
         #hourlyPeriodLabel { font-weight:bold; flex:1; text-align:center; color:#333; font-size:0.9em; }
+        .legend-clear.active { background:#3a7bd5; color:white; border-color:#3a7bd5; }
     </style>
 </head>
 <body>
@@ -107,6 +108,15 @@
         <div style="display:flex;flex-direction:column;gap:4px;">
             <label>ממוצע חודשי:</label>
             <button id="dailyModeBtn" class="legend-clear">מקסימום יומי</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            <label>קיצון יומי (שעתי):</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <button id="extremaBtn" class="legend-clear">כבוי</button>
+                <input id="extremaHourInput" type="text" inputmode="numeric" maxlength="2" placeholder="שעה"
+                    aria-label="שעה (00-23)"
+                    style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #aaa;font-size:0.9em;text-align:center;">
+            </div>
         </div>
         <div id="status">טוען נתונים...</div>
     </div>
@@ -171,6 +181,16 @@ const COLORS = [
     '#aec7e8','#ffbb78','#98df8a','#ff9896','#c5b0d5'
 ];
 
+// Explicit color per measure (used in single-station "all measures" view),
+// kept stable regardless of legend/trace order.
+const MEASURE_COLORS = {
+    DewPoint:    '#0d1b8c', // dark blue
+    RH:          '#00bcd4', // cyan
+    WBGT:        '#2ca02c', // green (unchanged)
+    Temperature: '#ff7f0e', // orange (unchanged)
+    HeatIndex:   '#d62728'  // red
+};
+
 let map;
 let stationMarkers   = {};
 let selectedStations = [];
@@ -191,11 +211,16 @@ let hourlyMode  = 'last30';
 let hourlyYear  = currentDataYear;
 let hourlyMonth = NOW.getMonth() + 1;
 
+// Daily extrema markers (hourly chart, single-station mode only)
+let extremaOn    = false;
+let extremaHour  = null; // 0-23 fixed hour, or null for auto max/min-in-daytime mode
+
 const measureLabels = {
-    RH:        'לחות יחסית (%)',
-    DewPoint:  'נקודת הטל (°C)',
-    HeatIndex: 'מדד חום (°C)',
-    WBGT:      'WBGT (°C)'
+    RH:          'לחות יחסית (%)',
+    DewPoint:    'נקודת הטל (°C)',
+    HeatIndex:   'מדד חום (°C)',
+    WBGT:        'WBGT (°C)',
+    Temperature: 'טמפרטורה (°C)'
 };
 
 const measureInfo = {
@@ -266,12 +291,17 @@ function computeMeasure(t, rh, ws, sol, measure) {
         case 'RH':        return rh;
         case 'DewPoint':  return dewPoint(t,rh);
         case 'HeatIndex': return heatIndex(t,rh);
+        case 'Temperature': return t;
         case 'WBGT':
             // Require solar radiation – return null if missing so no point is plotted.
             if (isNaN(sol)) return null;
             return wbgt(t, rh, (isNaN(ws) ? 2 : ws) + paceWindMs(), sol);
     }
 }
+
+// Measures shown together when exactly one station is selected.
+// Order controls legend order (top→bottom): Heat Index, Temp, WBGT, RH, Dew Point.
+const ALL_MEASURES = ['HeatIndex','Temperature','WBGT','RH','DewPoint'];
 
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
@@ -310,6 +340,80 @@ function getDayNightShapes(start, end) {
         cur.setDate(cur.getDate()+1);
     }
     return shapes;
+}
+
+// Returns the sunrise/sunset Date objects for the calendar day of `date`.
+function getDaySunWindow(date) {
+    const [srDec,ssDec]=ISRAEL_SUN[date.getMonth()];
+    const srH=Math.floor(srDec), srM=Math.round((srDec%1)*60);
+    const ssH=Math.floor(ssDec), ssM=Math.round((ssDec%1)*60);
+    const sunrise=new Date(date); sunrise.setHours(srH,srM,0,0);
+    const sunset=new Date(date);  sunset.setHours(ssH,ssM,0,0);
+    return {sunrise,sunset};
+}
+
+// Computes one marker trace per measure for the daily-extrema overlay
+// (hourly chart, single-station mode). `entries` is the same gap-aware
+// point list used to build the line traces (nulls mark gaps).
+//   - If extremaHour (0-23) is set: for each day, pick the single data point
+//     closest to that hour and use it for ALL measures (same x for all).
+//   - Otherwise (auto mode): for each day, restrict to daytime (sunrise→sunset)
+//     and find the extremum per measure — minimum for RH, maximum for others.
+function computeExtremaTraces(entries) {
+    if (!extremaOn) return [];
+    const pts = entries.filter(e => e !== null);
+    if (!pts.length) return [];
+
+    const byDay = {};
+    pts.forEach(p => {
+        const key = localDayKey(p.dt);
+        (byDay[key] = byDay[key] || []).push(p);
+    });
+
+    const perMeasure = {};
+    ALL_MEASURES.forEach(m => perMeasure[m] = { x: [], y: [] });
+
+    Object.values(byDay).forEach(dayPts => {
+        if (extremaHour !== null) {
+            const d0 = dayPts[0].dt;
+            const target = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), extremaHour, 0, 0);
+            let best = null, bestDiff = Infinity;
+            dayPts.forEach(p => {
+                const diff = Math.abs(p.dt - target);
+                if (diff < bestDiff) { bestDiff = diff; best = p; }
+            });
+            if (!best) return;
+            ALL_MEASURES.forEach(measure => {
+                const val = computeMeasure(best.t, best.rh, best.ws, best.sol, measure);
+                if (val === null || isNaN(val)) return;
+                perMeasure[measure].x.push(best.dt);
+                perMeasure[measure].y.push(val);
+            });
+        } else {
+            const { sunrise, sunset } = getDaySunWindow(dayPts[0].dt);
+            const dayWindowPts = dayPts.filter(p => p.dt >= sunrise && p.dt < sunset);
+            if (!dayWindowPts.length) return;
+            ALL_MEASURES.forEach(measure => {
+                let best = null, bestVal = measure === 'RH' ? Infinity : -Infinity;
+                dayWindowPts.forEach(p => {
+                    const val = computeMeasure(p.t, p.rh, p.ws, p.sol, measure);
+                    if (val === null || isNaN(val)) return;
+                    if (measure === 'RH' ? val < bestVal : val > bestVal) { bestVal = val; best = p; }
+                });
+                if (!best) return;
+                perMeasure[measure].x.push(best.dt);
+                perMeasure[measure].y.push(bestVal);
+            });
+        }
+    });
+
+    return ALL_MEASURES.map(measure => ({
+        x: perMeasure[measure].x, y: perMeasure[measure].y,
+        type: 'scatter', mode: 'markers',
+        marker: { color: MEASURE_COLORS[measure], size: 9, line: { color: 'white', width: 1 } },
+        yaxis: measure === 'RH' ? 'y' : 'y2',
+        showlegend: false, hoverinfo: 'x+y', name: measureLabels[measure]
+    })).filter(t => t.x.length > 0);
 }
 
 // ---- hourly range ----
@@ -383,7 +487,7 @@ function loadYearData(year) {
         const avg=arr=>arr.length>0?arr.reduce((a,b)=>a+b)/arr.length:null;
 
         rhCols.forEach(st=>{
-            computedMonthly[st]={RH:[],DewPoint:[],HeatIndex:[],RH_max:[],DewPoint_max:[],HeatIndex_max:[]};
+            computedMonthly[st]={RH:[],DewPoint:[],HeatIndex:[],Temperature:[],RH_max:[],DewPoint_max:[],HeatIndex_max:[],Temperature_max:[]};
             monthlySums[st]=Array.from({length:12},()=>({T:0,RH2:0,WS:0,SOL:0,nWB:0,peaks:[]}));
 
             const daysByMo=Array.from({length:12},()=>[]);
@@ -399,7 +503,7 @@ function loadYearData(year) {
             for(let mo=0;mo<12;mo++){
                 const days=daysByMo[mo];
                 const acc=monthlySums[st][mo];
-                const dRH=[],dDP=[],dHI=[],dRHx=[],dDPx=[],dHIx=[];
+                const dRH=[],dDP=[],dHI=[],dT=[],dRHx=[],dDPx=[],dHIx=[],dTx=[];
 
                 days.forEach(rows=>{
                     const valid=rows.filter(r=>!isNaN(r.rh)&&!isNaN(r.t));
@@ -407,8 +511,10 @@ function loadYearData(year) {
                     const rhs=valid.map(r=>r.rh);
                     const dps=valid.map(r=>dewPoint(r.t,r.rh));
                     const his=valid.map(r=>heatIndex(r.t,r.rh));
-                    dRH.push(avg(rhs)); dDP.push(avg(dps)); dHI.push(avg(his));
-                    dRHx.push(Math.max(...rhs)); dDPx.push(Math.max(...dps)); dHIx.push(Math.max(...his));
+                    const ts=valid.map(r=>r.t);
+                    // Daily RH baseline uses the day's minimum (driest point), not the mean.
+                    dRH.push(Math.min(...rhs)); dDP.push(avg(dps)); dHI.push(avg(his)); dT.push(avg(ts));
+                    dRHx.push(Math.max(...rhs)); dDPx.push(Math.max(...dps)); dHIx.push(Math.max(...his)); dTx.push(Math.max(...ts));
 
                     const wv=valid.filter(r=>!isNaN(r.sol));
                     wv.forEach(r=>{acc.T+=r.t;acc.RH2+=r.rh;acc.WS+=(isNaN(r.ws)?2:r.ws);acc.SOL+=r.sol;acc.nWB++;});
@@ -420,9 +526,9 @@ function loadYearData(year) {
                 });
 
                 computedMonthly[st].RH.push(avg(dRH));       computedMonthly[st].DewPoint.push(avg(dDP));
-                computedMonthly[st].HeatIndex.push(avg(dHI));
+                computedMonthly[st].HeatIndex.push(avg(dHI)); computedMonthly[st].Temperature.push(avg(dT));
                 computedMonthly[st].RH_max.push(avg(dRHx));  computedMonthly[st].DewPoint_max.push(avg(dDPx));
-                computedMonthly[st].HeatIndex_max.push(avg(dHIx));
+                computedMonthly[st].HeatIndex_max.push(avg(dHIx)); computedMonthly[st].Temperature_max.push(avg(dTx));
             }
         });
         return rhCols;
@@ -467,7 +573,13 @@ $(document).ready(function () {
     }).then(rhCols=>{
         addStationMarkers(rhCols);
         setStatus('לחץ על תחנות במפה לבחירה');
-        updatePlots();
+        const DEFAULT_STATION = 'BET DAGAN';
+        if (selectedStations.length===0 && rhCols.includes(DEFAULT_STATION)) {
+            toggleStation(DEFAULT_STATION); // also calls updatePlots()
+        } else {
+            updatePaceVisibility();
+            updatePlots();
+        }
     }).catch(err=>{
         console.error(err);
         setStatus('שגיאה: '+err.message);
@@ -475,8 +587,7 @@ $(document).ready(function () {
 
     $('#measureSelect').on('change',function(){
         currentMeasure=$(this).val();
-        const pg=document.getElementById('paceGroup');
-        pg.style.display = currentMeasure==='WBGT' ? 'flex' : 'none';
+        updatePaceVisibility();
         updatePlots();
     });
 
@@ -485,7 +596,7 @@ $(document).ready(function () {
     paceInput.addEventListener('input',function(){
         const ms=paceWindMs();
         paceMsSpan.textContent = ms>0 ? `= ${ms.toFixed(2)} m/s` : '= 0.00 m/s';
-        if(currentMeasure==='WBGT') updatePlots();
+        if(currentMeasure==='WBGT' || selectedStations.length===1) updatePlots();
     });
 
     document.getElementById('paceUnitBtn').addEventListener('click',function(){
@@ -495,7 +606,7 @@ $(document).ready(function () {
             paceUnit==='minperkm' ? 'קצב ריצה (דק\'/ק"מ):' : 'מהירות ריצה (קמ"ש):';
         paceInput.value = 0;
         paceMsSpan.textContent = '= 0.00 m/s';
-        if(currentMeasure==='WBGT') updatePlots();
+        if(currentMeasure==='WBGT' || selectedStations.length===1) updatePlots();
     });
 
     document.getElementById('dailyModeBtn').addEventListener('click',function(){
@@ -503,12 +614,31 @@ $(document).ready(function () {
         this.textContent = dailyMode==='mean' ? 'מקסימום יומי' : 'ממוצע יומי';
         updateMonthlyPlot();
     });
+
+    document.getElementById('extremaBtn').addEventListener('click',function(){
+        extremaOn = !extremaOn;
+        this.textContent = extremaOn ? 'דלוק' : 'כבוי';
+        this.classList.toggle('active', extremaOn);
+        updateHourlyPlot();
+    });
+    document.getElementById('extremaHourInput').addEventListener('input',function(){
+        const v = this.value.replace(/[^0-9]/g,'').slice(0,2);
+        this.value = v;
+        if (v.length===2) {
+            const num = parseInt(v,10);
+            extremaHour = (num>=0 && num<=23) ? num : null;
+        } else {
+            extremaHour = null;
+        }
+        if (extremaOn) updateHourlyPlot();
+    });
     $('#clearBtn').on('click',function(){
         selectedStations=[];
         Object.entries(stationMarkers).forEach(([name,{marker,complete}])=>
             marker.setStyle(complete
                 ? {color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5}
                 : {color:'#ad1457',fillColor:'#f48fb1',weight:1.5,opacity:0.5,fillOpacity:0.5}));
+        updatePaceVisibility();
         updatePlots();
     });
 
@@ -599,7 +729,23 @@ function toggleStation(name) {
             ? {color:'#1976d2',fillColor:'#42a5f5',weight:1.5,opacity:0.5,fillOpacity:0.5}
             : {color:'#ad1457',fillColor:'#f48fb1',weight:1.5,opacity:0.5,fillOpacity:0.5});
     }
+    // When moving from a single station (all-measures view) to a second station,
+    // reset to the default measure (Heat Index) for the normal multi-station view.
+    if (selectedStations.length === 2) {
+        currentMeasure = 'HeatIndex';
+        const ms = document.getElementById('measureSelect');
+        ms.value = 'HeatIndex';
+        $(ms).val('HeatIndex').trigger('change.select2');
+    }
+    updatePaceVisibility();
     updatePlots();
+}
+
+function updatePaceVisibility() {
+    const pg = document.getElementById('paceGroup');
+    // Show pace control whenever WBGT is relevant: always in single-station
+    // (all-measures) mode, or when WBGT is the chosen measure in multi-station mode.
+    pg.style.display = (selectedStations.length===1 || currentMeasure==='WBGT') ? 'flex' : 'none';
 }
 
 // ---- plots ----
@@ -629,6 +775,18 @@ function yRange(measure) {
     return measure === 'RH' ? [0, 100] : [-5, 50];
 }
 
+// Dual-axis config for the single-station "all measures" view.
+// RH (%) on the left: 11 ticks 0..100 step 10, range extended to -10 so that
+// the 0% gridline aligns exactly with the 0°C gridline on the right axis
+// (both axes share the same -1/11 fractional buffer below zero).
+function dualAxisLayout() {
+    const gridStyle = { gridcolor:'rgba(80,80,80,0.35)', gridwidth:1, zeroline:false };
+    return {
+        yaxis:  { title:'לחות יחסית (%)', range:[-10,100], tick0:0, dtick:10, side:'left', ...gridStyle },
+        yaxis2: { title:'°C', range:[-5,50], tick0:0, dtick:5, overlaying:'y', side:'right', ...gridStyle }
+    };
+}
+
 function updatePlots(){ updateMonthlyPlot(); updateHourlyPlot(); }
 
 function emptyLayout(msg) {
@@ -641,28 +799,54 @@ function updateMonthlyPlot() {
         return;
     }
     const modeLabel = dailyMode === 'max' ? 'ממוצע מקסימומים יומיים' : 'ממוצע יומי';
-    const traces=selectedStations.map((name,i)=>({
-        x:monthNames,
-        y: getMonthlyY(name, currentMeasure),
-        type:'scatter',mode:'lines+markers',
-        name:getHebrewName(name),connectgaps:false,
-        line:{color:COLORS[i%COLORS.length],width:2.5},marker:{size:6}
-    }));
-    const info = measureInfo[currentMeasure];
-    Plotly.newPlot('monthlyPlot',traces,{
-        title:{
-            text:`${measureLabels[currentMeasure]} - ${modeLabel} ${currentDataYear}<br>` +
-                 `<span style="font-size:0.78em;color:#555">${info.desc} ` +
-                 `[<a href="${info.wiki}" target="_blank" style="color:#1976d2">Wikipedia</a>]</span>`,
-            x:0.95, xanchor:'right'
-        },
-        xaxis:{title:'חודש',tickvals:monthNames,ticktext:monthNames},
-        yaxis:{title:measureLabels[currentMeasure], range:yRange(currentMeasure)},
-        hovermode:'x unified',
-        legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
-        dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
-        margin:{t:70,r:15,l:50,b:40}
-    },{responsive:true});
+
+    if (selectedStations.length === 1) {
+        // Single station: show ALL measures together, dual y-axis (RH % left, °C right).
+        const name = selectedStations[0];
+        const traces = ALL_MEASURES.map((measure)=>({
+            x:monthNames,
+            y: getMonthlyY(name, measure),
+            type:'scatter',mode:'lines+markers',
+            name:measureLabels[measure], connectgaps:false,
+            yaxis: measure==='RH' ? 'y' : 'y2',
+            line:{color:MEASURE_COLORS[measure],width:2.5},marker:{size:6}
+        }));
+        Plotly.newPlot('monthlyPlot',traces,{
+            title:{
+                text:`${getHebrewName(name)} - כל המדדים - ${modeLabel} ${currentDataYear}`,
+                x:0.95, xanchor:'right'
+            },
+            xaxis:{title:'חודש',tickvals:monthNames,ticktext:monthNames},
+            ...dualAxisLayout(),
+            hovermode:'x unified',
+            legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top',title:{text:getHebrewName(name)}},
+            dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
+            margin:{t:70,r:50,l:50,b:40}
+        },{responsive:true});
+    } else {
+        const traces=selectedStations.map((name,i)=>({
+            x:monthNames,
+            y: getMonthlyY(name, currentMeasure),
+            type:'scatter',mode:'lines+markers',
+            name:getHebrewName(name),connectgaps:false,
+            line:{color:COLORS[i%COLORS.length],width:2.5},marker:{size:6}
+        }));
+        const info = measureInfo[currentMeasure];
+        Plotly.newPlot('monthlyPlot',traces,{
+            title:{
+                text:`${measureLabels[currentMeasure]} - ${modeLabel} ${currentDataYear}<br>` +
+                     `<span style="font-size:0.78em;color:#555">${info.desc} ` +
+                     `[<a href="${info.wiki}" target="_blank" style="color:#1976d2">Wikipedia</a>]</span>`,
+                x:0.95, xanchor:'right'
+            },
+            xaxis:{title:'חודש',tickvals:monthNames,ticktext:monthNames},
+            yaxis:{title:measureLabels[currentMeasure], range:yRange(currentMeasure)},
+            hovermode:'x unified',
+            legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
+            dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
+            margin:{t:70,r:15,l:50,b:40}
+        },{responsive:true});
+    }
 
     // Click on monthly chart → navigate hourly to that month
     document.getElementById('monthlyPlot').on('plotly_click',(data)=>{
@@ -684,6 +868,42 @@ function updateHourlyPlot() {
     }
     const [startDate,endDate]=getHourlyRange();
     const GAP_MS = 3 * 3600 * 1000; // 3-hour gap threshold
+
+    if (selectedStations.length === 1) {
+        // Single station: show ALL measures together, dual y-axis (RH % left, °C right).
+        const name = selectedStations[0];
+        const pts=rawRows
+            .filter(r=>r.st===name && r.dt>=startDate && r.dt<=endDate)
+            .sort((a,b)=>a.dt-b.dt);
+        // Build a common list of entries (with null gaps) so all measure traces align.
+        const entries=[];
+        pts.forEach((p,idx)=>{
+            if(idx>0 && (p.dt - pts[idx-1].dt) > GAP_MS) entries.push(null);
+            entries.push(p);
+        });
+        const xArr = entries.map(e=> e ? e.dt : null);
+        const traces = ALL_MEASURES.map((measure)=>({
+            x:xArr,
+            y:entries.map(e=> e ? computeMeasure(e.t,e.rh,e.ws,e.sol,measure) : null),
+            type:'scatter',mode:'lines',connectgaps:false,
+            name:measureLabels[measure],
+            yaxis: measure==='RH' ? 'y' : 'y2',
+            line:{color:MEASURE_COLORS[measure],width:1.5}
+        }));
+        traces.push(...computeExtremaTraces(entries));
+        Plotly.newPlot('hourlyPlot',traces,{
+            title:{text:`${getHebrewName(name)} - כל המדדים - שעתי`,x:0.95,xanchor:'right'},
+            xaxis:{title:'זמן'},
+            ...dualAxisLayout(),
+            shapes:getDayNightShapes(startDate,endDate),
+            hovermode:'x unified',
+            showlegend:false,
+            dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
+            margin:{t:45,r:50,l:50,b:40}
+        },{responsive:true});
+        return;
+    }
+
     const traces=selectedStations.map((name,i)=>{
         const pts=rawRows
             .filter(r=>r.st===name && r.dt>=startDate && r.dt<=endDate)

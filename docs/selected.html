@@ -10,127 +10,80 @@
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="icon" href="logo.jpg">
     <link rel="stylesheet" href="style.css">
     <script src="station_translate.js"></script>
     <style>
+        * { box-sizing: border-box; }
+        html, body { margin:0; padding:0; height:100%; font-family:Arial,sans-serif; background:#f5f5f5; }
+        body { display:flex; flex-direction:column; }
+        .top-bar { flex-shrink:0; width:100%; }
+        .controls {
+            background:white; padding:8px 20px;
+            box-shadow:0 2px 4px rgba(0,0,0,0.08);
+            display:flex; gap:20px; align-items:center; flex-wrap:wrap;
+        }
+        .control-group { display:flex; flex-direction:column; min-width:180px; }
+        label { font-weight:bold; margin-bottom:3px; color:#333; font-size:0.9em; }
+        #main { display:flex; flex:1; min-height:0; }
+        #map-col { width:33.33%; flex-shrink:0; position:relative; }
+        #map { position:absolute; inset:0; }
+        #charts-col { flex:1; display:flex; flex-direction:column; min-height:0; padding:8px; gap:8px; overflow-y:auto; }
+        .chart-box { flex:0 0 auto; height:380px; background:white; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
         .hourly-nav {
-            background: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 10px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            width: 100%;
-            max-width: 700px;
-            box-sizing: border-box;
+            flex-shrink:0;
+            display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+            padding:6px 8px; background:white; border-radius:6px;
+            box-shadow:0 1px 4px rgba(0,0,0,0.08);
         }
         .nav-btn {
-            padding: 6px 14px;
-            border: 1px solid #aaa;
-            border-radius: 5px;
-            background: #f0f0f0;
-            cursor: pointer;
-            font-size: 0.95em;
+            padding:4px 12px; border:1px solid #aaa; border-radius:4px;
+            background:#f0f0f0; cursor:pointer; font-size:0.88em;
         }
-        .nav-btn:hover { background: #ddd; }
-        .nav-btn.active { background: #3a7bd5; color: white; border-color: #3a7bd5; }
-        #hourlyPeriodLabel {
-            font-weight: bold;
-            flex: 1;
-            text-align: center;
-            color: #333;
+        .nav-btn:hover { background:#ddd; }
+        .nav-btn.active { background:#3a7bd5; color:white; border-color:#3a7bd5; }
+        #hourlyPeriodLabel { font-weight:bold; flex:1; text-align:center; color:#333; font-size:0.9em; }
+        #status { font-size:0.8em; color:#888; padding:2px 0; }
+        .legend-clear {
+            background:white; padding:4px 10px; border-radius:4px;
+            cursor:pointer; font-size:0.85em; border:1px solid #ccc;
         }
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .controls {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            flex-wrap: wrap;
-            width: 100%;
-            max-width: 800px;
-            box-sizing: border-box;
-        }
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            min-width: 200px;
-            flex: 1;
-        }
-        label {
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #333;
-        }
-        #plot, #hourlyPlot {
-            width: 100%;
-            max-width: 700px;
-            height: 500px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
+        .legend-clear:hover { background:#eee; }
         .footer {
-            margin-top: 20px;
-            font-size: 0.9em;
-            color: #666;
-            display: flex;
-            align-items: center;
-            gap: 5px;
+            flex-shrink:0; padding:6px 16px; font-size:0.85em; color:#666;
+            display:flex; align-items:center; gap:5px;
+            background:white; border-top:1px solid #eee;
         }
-        /* Select2 RTL support tweaks */
-        .select2-container--default .select2-selection--single .select2-selection__rendered,
-        .select2-container--default .select2-selection--multiple .select2-selection__rendered {
-            direction: rtl;
-            text-align: right;
-        }
-
-        .select2-results__option {
-            direction: rtl;
-            text-align: right;
-        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered
+            { direction:rtl; text-align:right; }
+        .select2-results__option { direction:rtl; text-align:right; }
     </style>
 </head>
 
 <body>
 
+<div class="top-bar">
     <header class="dashboard-header"
-        style="position: static; box-shadow: none; border-bottom: 1px solid #eee; padding: 15px 0; width: 100%;">
-        <div class="header-content" style="flex-direction: row; justify-content: center; gap: 20px;">
+        style="position:static;box-shadow:none;border-bottom:1px solid #eee;padding:10px 0;width:100%;">
+        <div class="header-content" style="flex-direction:row;justify-content:center;gap:20px;">
             <a href="index.html" class="home-btn">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
                 <span>דף הבית</span>
             </a>
-            <h1 style="font-size: 1.4em; margin: 0; display: flex; align-items: center; gap: 10px;">
-                <img src="logo.jpg" alt="Icon" class="title-icon" style="height: 1.2em;">
+            <h1 style="font-size:1.3em;margin:0;display:flex;align-items:center;gap:8px;">
+                <img src="logo.jpg" alt="Icon" class="title-icon" style="height:1.2em;">
                 נתוני תחנות - גרפים
             </h1>
         </div>
     </header>
-
-    <div class="controls" style="margin-top: 20px;">
+    <div class="controls">
         <div class="control-group">
             <label for="measureSelect">מדד:</label>
-            <select id="measureSelect" style="width: 100%;">
+            <select id="measureSelect" style="width:220px;">
                 <option value="Rain" selected>גשם (Rain)</option>
                 <option value="MinTemp">טמפרטורת מינימום (Min Temp)</option>
                 <option value="MaxTemp">טמפרטורת מקסימום (Max Temp)</option>
@@ -138,466 +91,649 @@
             </select>
         </div>
         <div class="control-group">
-            <label for="stationSelect">תחנות:</label>
-            <select id="stationSelect" multiple style="width: 100%;">
+            <label for="stationSelect">תחנה:</label>
+            <select id="stationSelect" style="width:100%;">
                 <!-- Populated by JS -->
             </select>
         </div>
-    </div>
-
-    <div id="plot"></div>
-
-    <!-- Hourly navigation bar -->
-    <div class="hourly-nav">
-        <button class="nav-btn" id="btnPrevMonth">&#x2190; חודש קודם</button>
-        <span id="hourlyPeriodLabel">30 ימים אחרונים</span>
-        <button class="nav-btn" id="btnNextMonth">חודש הבא &#x2192;</button>
-        <button class="nav-btn active" id="btnLast30">30 ימים אחרונים</button>
-        <div style="display:flex;align-items:center;gap:6px;">
-            <label for="hourlyYearSelect" style="margin:0;white-space:nowrap;">שנה:</label>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            <label for="hourlyYearSelect">שנה (שעתי):</label>
             <select id="hourlyYearSelect" style="padding:4px 8px;border-radius:4px;border:1px solid #aaa;"></select>
         </div>
+        <div id="status">טוען נתונים...</div>
     </div>
+</div>
 
-    <div id="hourlyPlot"></div>
-
-    <div class="footer">
-        <span>נתונים מ</span>
-        <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
-            style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-            <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
-                style="height: 16px; margin-right: 5px;">
-        </a>
+<div id="main">
+    <div id="map-col"><div id="map"></div></div>
+    <div id="charts-col">
+        <div id="plot" class="chart-box"></div>
+        <div class="hourly-nav">
+            <button class="nav-btn" id="btnPrevMonth">&#x2190; חודש קודם</button>
+            <span id="hourlyPeriodLabel">30 ימים אחרונים</span>
+            <button class="nav-btn" id="btnNextMonth">חודש הבא &#x2192;</button>
+            <button class="nav-btn active" id="btnLast30">30 ימים אחרונים</button>
+        </div>
+        <div id="hourlyPlot" class="chart-box"></div>
     </div>
+</div>
 
-    <script>
-        // ── Config ──────────────────────────────────────────────────────────────
-        const dataUrl     = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/station_monthly.csv';
-        const stationsUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv';
-        const rawDataBase = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
+<div class="footer">
+    <span>נתונים מ</span>
+    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
+        style="text-decoration:none;color:inherit;display:flex;align-items:center;">
+        <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
+            style="height:16px;margin-right:5px;">
+    </a>
+</div>
 
-        // Available years per measure (based on data files in the repo)
-        const AVAILABLE_YEARS = {
-            Rain:     d3.range(1989, 2027),
-            MinTemp:  d3.range(1994, 2027),
-            MaxTemp:  d3.range(1994, 2027),
-            MeanTemp: d3.range(1994, 2027),
-        };
+<script>
+    // ── Config ──────────────────────────────────────────────────────────────
+    const dataUrl     = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/station_monthly.csv';
+    const stationsUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv';
+    const rawDataBase = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
 
-        // Approximate Israeli sunrise/sunset (decimal hours) per month index 0=Jan
-        const ISRAEL_SUN = [
-            [6.67, 17.00], // Jan
-            [6.33, 17.50], // Feb
-            [5.83, 18.00], // Mar
-            [6.17, 19.50], // Apr (DST on)
-            [5.67, 19.83], // May
-            [5.50, 19.83], // Jun
-            [5.67, 19.67], // Jul
-            [6.00, 19.25], // Aug
-            [6.33, 18.50], // Sep
-            [6.67, 17.83], // Oct (DST off)
-            [5.83, 17.00], // Nov
-            [6.50, 16.83], // Dec
-        ];
+    // Available years per measure (based on data files in the repo)
+    const AVAILABLE_YEARS = {
+        Rain:     d3.range(1989, 2027),
+        MinTemp:  d3.range(1994, 2027),
+        MaxTemp:  d3.range(1994, 2027),
+        MeanTemp: d3.range(1994, 2027),
+    };
 
-        const STATION_COLORS = [
-            '#1f77b4','#ff7f0e','#2ca02c','#d62728',
-            '#9467bd','#8c564b','#e377c2','#17becf'
-        ];
+    // Approximate Israeli sunrise/sunset (decimal hours) per month index 0=Jan
+    const ISRAEL_SUN = [
+        [6.67, 17.00], [6.33, 17.50], [5.83, 18.00], [6.17, 19.50],
+        [5.67, 19.83], [5.50, 19.83], [5.67, 19.67], [6.00, 19.25],
+        [6.33, 18.50], [6.67, 17.83], [5.83, 17.00], [6.50, 16.83],
+    ];
 
-        const monthNames = {
-            1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',
-            7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec'
-        };
-        const monthNamesHe = {
-            1:'ינואר',2:'פברואר',3:'מרץ',4:'אפריל',5:'מאי',6:'יוני',
-            7:'יולי',8:'אוגוסט',9:'ספטמבר',10:'אוקטובר',11:'נובמבר',12:'דצמבר'
-        };
+    const STATION_COLORS = [
+        '#1f77b4','#ff7f0e','#2ca02c','#d62728',
+        '#9467bd','#8c564b','#e377c2','#17becf'
+    ];
 
-        // ── State ───────────────────────────────────────────────────────────────
-        let allData        = [];
-        let stationsMeta   = [];
-        let currentMeasure   = 'Rain';
-        let currentStations  = ['JERUSALEM CENTRE'];
-        let rawDataCache     = {};
+    const monthNames = {
+        1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',
+        7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec'
+    };
+    const monthNamesHe = {
+        1:'ינואר',2:'פברואר',3:'מרץ',4:'אפריל',5:'מאי',6:'יוני',
+        7:'יולי',8:'אוגוסט',9:'ספטמבר',10:'אוקטובר',11:'נובמבר',12:'דצמבר'
+    };
 
-        const NOW          = new Date();
-        const DEFAULT_YEAR = NOW.getFullYear(); // dynamic — not hardcoded
+    // ── State ───────────────────────────────────────────────────────────────
+    let allData        = [];
+    let stationsMeta   = [];
+    let currentMeasure   = 'Rain';
+    let currentStations  = ['JERUSALEM CENTRE'];
+    let rawDataCache     = {};
+    let stationCoords    = {};  // name -> {lat, lon}
+    let stationMonitors   = {}; // name -> monitors string (from ims_stations.csv)
+    let stationMarkers   = {};  // name -> {marker}
+    let map;
 
-        let hourlyMode  = 'last30';   // 'last30' | 'month'
-        let hourlyYear  = DEFAULT_YEAR;
-        let hourlyMonth = NOW.getMonth() + 1;
+    const NOW          = new Date();
+    const DEFAULT_YEAR = NOW.getFullYear();
 
-        // ── Helpers ─────────────────────────────────────────────────────────────
+    let hourlyMode  = 'last30';
+    let hourlyYear  = DEFAULT_YEAR;
+    let hourlyMonth = NOW.getMonth() + 1;
 
-        function fmtDt(d) {
-            const p = n => String(n).padStart(2,'0');
-            return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    function fmtDt(d) {
+        const p = n => String(n).padStart(2,'0');
+        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    }
+
+    function getDayNightShapes(start, end) {
+        const shapes = [];
+        const cur = new Date(start); cur.setHours(0,0,0,0);
+        while (cur <= end) {
+            const [srDec, ssDec] = ISRAEL_SUN[cur.getMonth()];
+            const srH = Math.floor(srDec), srM = Math.round((srDec%1)*60);
+            const ssH = Math.floor(ssDec), ssM = Math.round((ssDec%1)*60);
+            const midnight0 = new Date(cur);
+            const sunrise   = new Date(cur); sunrise.setHours(srH, srM, 0, 0);
+            const sunset    = new Date(cur); sunset.setHours(ssH, ssM, 0, 0);
+            const midnight1 = new Date(cur); midnight1.setDate(cur.getDate()+1);
+            const segs = [
+                { x0: midnight0, x1: sunrise,   fill: 'rgba(100,150,255,0.18)' },
+                { x0: sunrise,   x1: sunset,    fill: 'rgba(255,215,0,0.13)'   },
+                { x0: sunset,    x1: midnight1, fill: 'rgba(100,150,255,0.18)' },
+            ];
+            segs.forEach(({ x0, x1, fill }) => {
+                const cs = new Date(Math.max(x0, start));
+                const ce = new Date(Math.min(x1, end));
+                if (cs >= ce) return;
+                shapes.push({ type:'rect', xref:'x', yref:'paper',
+                    x0: fmtDt(cs), x1: fmtDt(ce), y0:0, y1:1,
+                    fillcolor: fill, line:{ width:0 }, layer:'below' });
+            });
+            cur.setDate(cur.getDate()+1);
         }
+        return shapes;
+    }
 
-        /** Build Plotly background shapes for day (yellow) / night (blue). */
-        function getDayNightShapes(start, end) {
-            const shapes = [];
-            const cur = new Date(start); cur.setHours(0,0,0,0);
-            while (cur <= end) {
-                const [srDec, ssDec] = ISRAEL_SUN[cur.getMonth()];
-                const srH = Math.floor(srDec), srM = Math.round((srDec%1)*60);
-                const ssH = Math.floor(ssDec), ssM = Math.round((ssDec%1)*60);
-
-                const midnight0 = new Date(cur);
-                const sunrise   = new Date(cur); sunrise.setHours(srH, srM, 0, 0);
-                const sunset    = new Date(cur); sunset.setHours(ssH, ssM, 0, 0);
-                const midnight1 = new Date(cur); midnight1.setDate(cur.getDate()+1);
-
-                const clamp = (d,lo,hi) => new Date(Math.min(Math.max(d,lo), hi));
-
-                const segs = [
-                    { x0: midnight0, x1: sunrise,  fill: 'rgba(100,150,255,0.18)' }, // night
-                    { x0: sunrise,   x1: sunset,   fill: 'rgba(255,215,0,0.13)'   }, // day
-                    { x0: sunset,    x1: midnight1, fill: 'rgba(100,150,255,0.18)' }, // night
-                ];
-                segs.forEach(({ x0, x1, fill }) => {
-                    const cs = new Date(Math.max(x0, start));
-                    const ce = new Date(Math.min(x1, end));
-                    if (cs >= ce) return;
-                    shapes.push({ type:'rect', xref:'x', yref:'paper',
-                        x0: fmtDt(cs), x1: fmtDt(ce), y0:0, y1:1,
-                        fillcolor: fill, line:{ width:0 }, layer:'below' });
-                });
-                cur.setDate(cur.getDate()+1);
-            }
-            return shapes;
-        }
-
-        function getHourlyRange() {
-            if (hourlyMode === 'last30') {
-                const end   = new Date(NOW);
-                const start = new Date(NOW); start.setDate(start.getDate()-30);
-                return [start, end];
-            }
-            const start = new Date(hourlyYear, hourlyMonth-1, 1, 0, 0, 0);
-            const end   = new Date(hourlyYear, hourlyMonth,   0, 23, 59, 59);
+    function getHourlyRange() {
+        if (hourlyMode === 'last30') {
+            const end   = new Date(NOW);
+            const start = new Date(NOW); start.setDate(start.getDate()-30);
             return [start, end];
         }
+        const start = new Date(hourlyYear, hourlyMonth-1, 1, 0, 0, 0);
+        const end   = new Date(hourlyYear, hourlyMonth,   0, 23, 59, 59);
+        return [start, end];
+    }
 
-        function updateHourlyNav() {
-            const label = document.getElementById('hourlyPeriodLabel');
-            const btn30 = document.getElementById('btnLast30');
-            if (hourlyMode === 'last30') {
-                label.textContent = '30 ימים אחרונים';
-                btn30.classList.add('active');
-            } else {
-                label.textContent = `${monthNamesHe[hourlyMonth]} ${hourlyYear}`;
-                btn30.classList.remove('active');
+    function updateHourlyNav() {
+        const label = document.getElementById('hourlyPeriodLabel');
+        const btn30 = document.getElementById('btnLast30');
+        if (hourlyMode === 'last30') {
+            label.textContent = '30 ימים אחרונים';
+            btn30.classList.add('active');
+        } else {
+            label.textContent = `${monthNamesHe[hourlyMonth]} ${hourlyYear}`;
+            btn30.classList.remove('active');
+        }
+        const sel = document.getElementById('hourlyYearSelect');
+        if (sel) sel.value = hourlyYear;
+    }
+
+    function populateYearSelect() {
+        const sel = document.getElementById('hourlyYearSelect');
+        sel.innerHTML = '';
+        const years = (AVAILABLE_YEARS[currentMeasure] || AVAILABLE_YEARS.Rain).slice().reverse();
+        years.forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = y; opt.textContent = y;
+            if (y === hourlyYear) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    }
+
+    // ── Map ─────────────────────────────────────────────────────────────────
+
+    function initMap() {
+        map = L.map('map').setView([31.5, 35.0], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors', maxZoom: 18
+        }).addTo(map);
+
+        // Legend
+        const legend = L.control({ position: 'topleft' });
+        legend.onAdd = function() {
+            const div = L.DomUtil.create('div', 'leaflet-bar');
+            div.style.cssText = 'background:white;padding:5px 8px;font-size:0.78em;line-height:1.6;cursor:default;direction:rtl;';
+            div.innerHTML =
+                '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#42a5f5;border:1.5px solid #1976d2;vertical-align:middle;margin-left:4px;"></span>יש נתונים למדד<br>' +
+                '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#bdbdbd;border:1.5px solid #757575;vertical-align:middle;margin-left:4px;"></span>אין נתונים למדד';
+            L.DomEvent.disableClickPropagation(div);
+            return div;
+        };
+        legend.addTo(map);
+    }
+
+    function isRelevantForMeasure(stationName, measure) {
+        const monitors = stationMonitors[stationName];
+        if (!monitors) return false;
+        if (measure === 'Rain')     return monitors.includes("'Rain'") || monitors.includes("'Rain_1_min'");
+        if (measure === 'MinTemp')  return monitors.includes("'TDmin'");
+        if (measure === 'MaxTemp')  return monitors.includes("'TDmax'");
+        if (measure === 'MeanTemp') return monitors.includes("'TDmin'") && monitors.includes("'TDmax'");
+        return false;
+    }
+
+    function markerStyle(stationName, selected) {
+        if (selected) {
+            return { color:'#b71c1c', fillColor:'#ef5350', weight:2.5, opacity:1, fillOpacity:0.9 };
+        }
+        const relevant = isRelevantForMeasure(stationName, currentMeasure);
+        if (relevant) {
+            return { color:'#1976d2', fillColor:'#42a5f5', weight:1.5, opacity:0.55, fillOpacity:0.6 };
+        }
+        return { color:'#757575', fillColor:'#bdbdbd', weight:1.5, opacity:0.45, fillOpacity:0.5 };
+    }
+
+    function addStationMarkers(allStationNames) {
+        Object.values(stationMarkers).forEach(({marker}) => marker.remove());
+        stationMarkers = {};
+
+        // Draw irrelevant (grey) stations first, then relevant (blue) ones on top,
+        // so co-located stations (e.g. main + _1m) don't hide the relevant one.
+        const irrelevant = allStationNames.filter(n => !isRelevantForMeasure(n, currentMeasure));
+        const relevant   = allStationNames.filter(n =>  isRelevantForMeasure(n, currentMeasure));
+
+        [...irrelevant, ...relevant].forEach(name => {
+            const coords = stationCoords[name];
+            if (!coords) return;
+            const marker = L.circleMarker([coords.lat, coords.lon], {
+                radius: 7, ...markerStyle(name, false)
+            }).addTo(map);
+            const hebrewName = (window.stationTranslations && window.stationTranslations[name]) || name;
+            marker.bindTooltip(`${hebrewName} (${name})`, { direction: 'top' });
+            marker.on('click', () => selectStation(name));
+            stationMarkers[name] = { marker };
+        });
+    }
+
+    function selectStation(name, opts) {
+        opts = opts || {};
+        // Only relevant stations can be selected
+        if (!isRelevantForMeasure(name, currentMeasure)) return;
+
+        const prev = currentStations[0];
+        // Deselect previous
+        if (prev && stationMarkers[prev]) {
+            stationMarkers[prev].marker.setStyle(markerStyle(prev, false));
+        }
+        if (prev === name) {
+            // clicking same station deselects
+            currentStations = [];
+        } else {
+            currentStations = [name];
+            stationMarkers[name].marker.setStyle(markerStyle(name, true));
+        }
+        if (!opts.skipDropdownSync) syncDropdownSelection();
+        updatePlot();
+    }
+
+    function syncDropdownSelection() {
+        const sel = $('#stationSelect');
+        const val = currentStations[0] || null;
+        if (sel.val() !== val) sel.val(val).trigger('change.select2');
+    }
+
+    function refreshMarkerStyles() {
+        Object.keys(stationMarkers).forEach(name => {
+            const selected = currentStations.includes(name);
+            stationMarkers[name].marker.setStyle(markerStyle(name, selected));
+        });
+        // Re-order: irrelevant to back, relevant to front, so blue (relevant)
+        // stations are never hidden behind grey (irrelevant) co-located stations.
+        Object.keys(stationMarkers).forEach(name => {
+            if (!isRelevantForMeasure(name, currentMeasure)) stationMarkers[name].marker.bringToBack();
+        });
+        Object.keys(stationMarkers).forEach(name => {
+            if (isRelevantForMeasure(name, currentMeasure)) stationMarkers[name].marker.bringToFront();
+        });
+        // Selected station always on very top
+        if (currentStations[0] && stationMarkers[currentStations[0]]) {
+            stationMarkers[currentStations[0]].marker.bringToFront();
+        }
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+
+    function populateStationDropdown() {
+        const relevantNames = Object.keys(stationCoords).filter(n => isRelevantForMeasure(n, currentMeasure));
+        const options = buildSortedStationOptions(relevantNames);
+        const sel = $('#stationSelect');
+        sel.empty();
+        sel.append(new Option('', '', false, false)); // empty option for placeholder
+        options.forEach(o => sel.append(new Option(o.label, o.value, false, currentStations[0] === o.value)));
+        sel.trigger('change.select2');
+    }
+
+    $(document).ready(function () {
+        $('#measureSelect').select2({ minimumResultsForSearch: Infinity });
+        $('#stationSelect').select2({ placeholder: 'חפש תחנה...', allowClear: true });
+
+        initMap();
+        setStatus('טוען נתונים...');
+
+        Promise.all([
+            d3.csv(dataUrl),
+            d3.csv(stationsUrl),
+            loadStationTranslations()
+        ]).then(([data, stations]) => {
+            data.forEach(d => { d.Value = +d.Value; d.Month = +d.Month; });
+            allData = data;
+            stationsMeta = stations;
+
+            // Build coordinate map and monitors map (monitors used for relevance checks,
+            // mirroring the monitor-string checks in code/weather.py query_rain/query_temp).
+            stations.forEach(s => {
+                try {
+                    const loc = JSON.parse(s.location.replace(/'/g, '"'));
+                    stationCoords[s.name.trim()] = { lat: loc.latitude, lon: loc.longitude };
+                } catch(e) {}
+                stationMonitors[s.name.trim()] = s.monitors || '';
+            });
+
+            const allStationNames = Object.keys(stationCoords);
+
+            addStationMarkers(allStationNames);
+            populateYearSelect();
+            populateStationDropdown();
+            setStatus('לחץ על תחנה במפה או בחר מהרשימה');
+
+            // Pre-select default station only if relevant for the default measure
+            if (currentStations.length && !isRelevantForMeasure(currentStations[0], currentMeasure)) {
+                currentStations = [];
             }
-            const sel = document.getElementById('hourlyYearSelect');
-            if (sel) sel.value = hourlyYear;
-        }
+            if (currentStations.length && stationMarkers[currentStations[0]]) {
+                stationMarkers[currentStations[0]].marker.setStyle(markerStyle(currentStations[0], true));
+                stationMarkers[currentStations[0]].marker.bringToFront();
+            }
+            updatePlot();
+        }).catch(err => {
+            console.error("Error loading data:", err);
+            setStatus('שגיאה בטעינת נתונים');
+        });
 
-        function populateYearSelect() {
-            const sel = document.getElementById('hourlyYearSelect');
-            sel.innerHTML = '';
-            const years = (AVAILABLE_YEARS[currentMeasure] || AVAILABLE_YEARS.Rain).slice().reverse();
-            years.forEach(y => {
-                const opt = document.createElement('option');
-                opt.value = y; opt.textContent = y;
-                if (y === hourlyYear) opt.selected = true;
-                sel.appendChild(opt);
-            });
-        }
+        $('#measureSelect').on('change', function () {
+            currentMeasure = $(this).val();
+            // If current station is not relevant for new measure, deselect
+            if (currentStations.length && !isRelevantForMeasure(currentStations[0], currentMeasure)) {
+                currentStations = [];
+            }
+            refreshMarkerStyles();
+            populateYearSelect();
+            populateStationDropdown();
+            updatePlot();
+        });
 
-        // ── Init ─────────────────────────────────────────────────────────────────
-
-        $(document).ready(function () {
-            $('#measureSelect').select2({ minimumResultsForSearch: Infinity });
-            $('#stationSelect').select2();
-
-            Promise.all([
-                d3.csv(dataUrl),
-                d3.csv(stationsUrl),
-                loadStationTranslations()
-            ]).then(([data, stations]) => {
-                data.forEach(d => { d.Value = +d.Value; d.Month = +d.Month; });
-                allData = data; stationsMeta = stations;
-                initStationsList();
-                populateYearSelect();
-                updatePlot();
-            }).catch(err => {
-                console.error("Error loading data:", err);
-                $('#plot').html('<div style="padding:20px;color:red;">Error loading data.</div>');
-            });
-
-            $('#measureSelect').on('change', function () {
-                currentMeasure = $(this).val();
-                populateYearSelect();
-                updatePlot();
-            });
-
-            $('#stationSelect').on('change', function () {
-                currentStations = $(this).val() || [];
-                updatePlot();
-            });
-
-            document.getElementById('btnLast30').addEventListener('click', () => {
-                hourlyMode = 'last30'; hourlyYear = DEFAULT_YEAR;
-                updateHourlyNav(); updateHourlyPlot();
-            });
-
-            document.getElementById('btnPrevMonth').addEventListener('click', () => {
-                if (hourlyMode === 'last30') {
-                    hourlyYear = NOW.getFullYear(); hourlyMonth = NOW.getMonth()+1;
+        $('#stationSelect').on('change', function () {
+            const val = $(this).val();
+            if (!val) {
+                if (currentStations.length) {
+                    stationMarkers[currentStations[0]] && stationMarkers[currentStations[0]].marker.setStyle(markerStyle(currentStations[0], false));
                 }
-                hourlyMode = 'month';
-                hourlyMonth--;
-                if (hourlyMonth < 1) { hourlyMonth = 12; hourlyYear--; }
-                updateHourlyNav(); updateHourlyPlot();
-            });
+                currentStations = [];
+                updatePlot();
+                return;
+            }
+            selectStation(val, { skipDropdownSync: true });
+        });
 
-            document.getElementById('btnNextMonth').addEventListener('click', () => {
-                if (hourlyMode === 'last30') return;
-                hourlyMonth++;
-                if (hourlyMonth > 12) { hourlyMonth = 1; hourlyYear++; }
-                updateHourlyNav(); updateHourlyPlot();
-            });
 
-            document.getElementById('hourlyYearSelect').addEventListener('change', function () {
-                hourlyYear = +this.value;
-                if (hourlyMode === 'last30') { hourlyMode = 'month'; hourlyMonth = NOW.getMonth()+1; }
-                updateHourlyNav(); updateHourlyPlot();
+        document.getElementById('btnLast30').addEventListener('click', () => {
+            hourlyMode = 'last30'; hourlyYear = DEFAULT_YEAR;
+            updateHourlyNav(); updateHourlyPlot();
+        });
+
+        document.getElementById('btnPrevMonth').addEventListener('click', () => {
+            if (hourlyMode === 'last30') {
+                hourlyYear = NOW.getFullYear(); hourlyMonth = NOW.getMonth()+1;
+            }
+            hourlyMode = 'month';
+            hourlyMonth--;
+            if (hourlyMonth < 1) { hourlyMonth = 12; hourlyYear--; }
+            updateHourlyNav(); updateHourlyPlot();
+        });
+
+        document.getElementById('btnNextMonth').addEventListener('click', () => {
+            if (hourlyMode === 'last30') return;
+            hourlyMonth++;
+            if (hourlyMonth > 12) { hourlyMonth = 1; hourlyYear++; }
+            updateHourlyNav(); updateHourlyPlot();
+        });
+
+        document.getElementById('hourlyYearSelect').addEventListener('change', function () {
+            hourlyYear = +this.value;
+            if (hourlyMode === 'last30') { hourlyMode = 'month'; hourlyMonth = NOW.getMonth()+1; }
+            updateHourlyNav(); updateHourlyPlot();
+        });
+    });
+
+    // ── Monthly Chart ─────────────────────────────────────────────────────────
+
+    function emptyLayout(msg) {
+        return { title:{ text:msg, x:0.5 }, paper_bgcolor:'white', plot_bgcolor:'#fafafa',
+            margin:{ t:45, r:15, l:50, b:50 } };
+    }
+
+    function updatePlot() {
+        if (!allData.length || !currentStations.length) {
+            Plotly.newPlot('plot', [], emptyLayout('בחר תחנה על המפה'), { responsive:true });
+            updateHourlyPlot();
+            return;
+        }
+        updateHourlyPlot();
+
+        let monthOrder;
+        if (currentMeasure === 'Rain' || currentMeasure === 'MinTemp') {
+            monthOrder = [9,10,11,12,1,2,3,4,5,6,7,8];
+        } else if (currentMeasure === 'MaxTemp') {
+            monthOrder = [3,4,5,6,7,8,9,10,11,12,1,2];
+        } else {
+            monthOrder = [1,2,3,4,5,6,7,8,9,10,11,12];
+        }
+        const xVals  = [...Array(12).keys()];
+        const xLabels = monthOrder.map(m => monthNames[m]);
+        const isCumulative = (currentMeasure === 'Rain');
+
+        const primaryStation = currentStations[0];
+        const primaryData    = allData.filter(d => d.Measure === currentMeasure && d.Station === primaryStation);
+
+        // If no monthly data for this station/measure, show empty plot
+        if (!primaryData.length) {
+            Plotly.newPlot('plot', [], emptyLayout('אין נתונים חודשיים לתחנה זו'), { responsive:true });
+            updateHourlyPlot();
+            return;
+        }
+
+        const cycles     = [...new Set(primaryData.map(d => d.Cycle))].sort();
+        const currCycle  = cycles[cycles.length - 1];
+        const histCycles = cycles.slice(Math.max(0, cycles.length-11), cycles.length-1);
+
+        function getCycleVec(station, cycle) {
+            const cData = allData.filter(d => d.Measure === currentMeasure && d.Station === station && d.Cycle === cycle);
+            return monthOrder.map(m => { const r = cData.find(d=>d.Month===m); return r ? r.Value : null; });
+        }
+
+        const histVecs = histCycles.map(c => getCycleVec(primaryStation, c));
+        const medianLine=[], minLine=[], maxLine=[];
+
+        if (isCumulative) {
+            const histCum = histVecs.map(v => { let s=0; return v.map(x=>{ s+=(x===null?0:x); return s; }); });
+            for (let i=0;i<12;i++) {
+                const vals = histCum.map(r=>r[i]).filter(v => v!=null && !isNaN(v));
+                medianLine.push(vals.length ? d3.median(vals) : null);
+                minLine.push(vals.length ? d3.min(vals) : null);
+                maxLine.push(vals.length ? d3.max(vals) : null);
+            }
+        } else {
+            for (let i=0;i<12;i++) {
+                const vals = histVecs.map(r=>r[i]).filter(v=>v!==null && !isNaN(v));
+                if (vals.length) { medianLine.push(d3.median(vals)); minLine.push(d3.min(vals)); maxLine.push(d3.max(vals)); }
+                else { medianLine.push(null); minLine.push(null); maxLine.push(null); }
+            }
+        }
+
+        const traces = [];
+        traces.push({ x:xVals, y:maxLine, mode:'lines', line:{width:0}, showlegend:false, hoverinfo:'skip' });
+        traces.push({ x:xVals, y:minLine, mode:'lines', line:{width:0}, fill:'tonexty', fillcolor:'rgba(200,200,200,0.3)', name:'טווח 10 שנים' });
+        traces.push({ x:xVals, y:medianLine, mode:'lines', line:{color:'gray',dash:'dash'}, name:'חציון 10 שנים' });
+
+        const currMonthReal = NOW.getMonth()+1, currDayReal = NOW.getDate();
+        const daysInMonth   = new Date(NOW.getFullYear(), currMonthReal, 0).getDate();
+        const monthFraction = currDayReal / daysInMonth;
+
+        currentStations.forEach((station, si) => {
+            const stData   = allData.filter(d => d.Measure === currentMeasure && d.Station === station);
+            const stCycles = [...new Set(stData.map(d=>d.Cycle))].sort();
+            const stCycle  = stCycles[stCycles.length-1];
+            const currRaw  = stData.filter(d=>d.Cycle===stCycle)
+                .sort((a,b)=>monthOrder.indexOf(a.Month)-monthOrder.indexOf(b.Month));
+
+            let currX=[], currY=[], currText=[];
+            if (isCumulative) {
+                let sum=0;
+                currRaw.forEach((d,idx)=>{
+                    const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
+                    sum += d.Value;
+                    let xVal=mIdx, hover=monthNames[d.Month];
+                    if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
+                    currX.push(xVal); currY.push(sum); currText.push(hover);
+                });
+            } else {
+                currRaw.forEach((d,idx)=>{
+                    const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
+                    let xVal=mIdx, hover=monthNames[d.Month];
+                    if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
+                    currX.push(xVal); currY.push(d.Value); currText.push(hover);
+                });
+            }
+
+            const lbl = window.stationTranslations?.[station] || station;
+            traces.push({
+                x:currX, y:currY, mode:'lines+markers',
+                line:{ color:STATION_COLORS[si % STATION_COLORS.length], width:3 },
+                name: lbl, text:currText,
+                hovertemplate: '%{text}<br>%{y:.1f}<extra>'+lbl+'</extra>'
             });
         });
 
-        // ── Station list ─────────────────────────────────────────────────────────
+        const measureTitle = currentMeasure==='Rain' ? 'גשם מצטבר' :
+            currentMeasure==='MinTemp' ? 'טמפרטורת מינימום' :
+            currentMeasure==='MaxTemp' ? 'טמפרטורת מקסימום' : 'טמפרטורה ממוצעת';
 
-        function initStationsList() {
-            const dataStations = [...new Set(allData.map(d => d.Station))];
-            const stationList  = buildSortedStationOptions(dataStations);
-            const select = $('#stationSelect');
-            select.empty();
-            stationList.forEach(({ value, label }) => {
-                select.append(new Option(label, value, false, currentStations.includes(value)));
-            });
-            select.trigger('change');
+        Plotly.newPlot('plot', traces, {
+            title: { text:`נתוני ${measureTitle}`, x:0.95, xanchor:'right' },
+            xaxis: { tickvals:xVals, ticktext:xLabels, title:'חודש' },
+            yaxis: { title: currentMeasure==='Rain' ? 'מ"מ' : '°C' },
+            hovermode: 'x unified',
+            paper_bgcolor:'white', plot_bgcolor:'#fafafa',
+            margin:{ t:45, r:15, l:50, b:40 },
+            dir: 'rtl'
+        }, { responsive:true });
+
+        document.getElementById('plot').on('plotly_click', (data) => {
+            if (!data.points.length) return;
+            const xIdx = Math.round(data.points[0].x);
+            if (xIdx < 0 || xIdx >= monthOrder.length) return;
+            const clickedMonth = monthOrder[xIdx];
+            let yr = NOW.getFullYear();
+            if ((currentMeasure==='Rain'||currentMeasure==='MinTemp') && clickedMonth>=9) {
+                yr = (NOW.getMonth()+1) < 9 ? NOW.getFullYear()-1 : NOW.getFullYear();
+            } else if (clickedMonth > NOW.getMonth()+1) {
+                yr = NOW.getFullYear()-1;
+            }
+            hourlyMode = 'month'; hourlyYear = yr; hourlyMonth = clickedMonth;
+            updateHourlyNav(); updateHourlyPlot();
+        });
+    }
+
+    // ── Hourly Chart ─────────────────────────────────────────────────────────
+
+    async function updateHourlyPlot() {
+        if (!currentStations.length) {
+            Plotly.newPlot('hourlyPlot', [], emptyLayout('נתונים שעתיים'), { responsive:true });
+            return;
         }
 
-        // ── Monthly Chart ─────────────────────────────────────────────────────────
+        let filePrefix;
+        if      (currentMeasure==='Rain')     filePrefix='rain';
+        else if (currentMeasure==='MinTemp')  filePrefix='temp_min';
+        else if (currentMeasure==='MaxTemp')  filePrefix='temp_max';
+        else if (currentMeasure==='MeanTemp') filePrefix=null;
+        else return;
 
-        function updatePlot() {
-            if (!allData.length || !currentStations.length) return;
-            updateHourlyPlot();
+        const [startDate, endDate] = getHourlyRange();
+        const parseTime = d3.timeParse("%Y-%m-%d %H:%M");
 
-            let monthOrder;
-            if (currentMeasure === 'Rain' || currentMeasure === 'MinTemp') {
-                monthOrder = [9,10,11,12,1,2,3,4,5,6,7,8];
-            } else if (currentMeasure === 'MaxTemp') {
-                monthOrder = [3,4,5,6,7,8,9,10,11,12,1,2];
-            } else {
-                monthOrder = [1,2,3,4,5,6,7,8,9,10,11,12];
+        const neededYears = new Set();
+        for (let y=startDate.getFullYear(); y<=endDate.getFullYear(); y++) neededYears.add(y);
+
+        async function loadFile(prefix, year) {
+            const key = `${prefix}_${year}`;
+            if (rawDataCache[key] !== undefined) return rawDataCache[key];
+            const url = `${rawDataBase}/${key}.csv`;
+            try {
+                const data = await d3.csv(url);
+                rawDataCache[key] = data; return data;
+            } catch(e) {
+                console.warn(`Failed to load ${url}`);
+                rawDataCache[key] = []; return [];
             }
-            const xVals  = [...Array(12).keys()];
-            const xLabels = monthOrder.map(m => monthNames[m]);
-            const isCumulative = (currentMeasure === 'Rain');
-
-            // Historical range/median from first selected station
-            const primaryStation = currentStations[0];
-            const primaryData    = allData.filter(d => d.Measure === currentMeasure && d.Station === primaryStation);
-            const cycles     = [...new Set(primaryData.map(d => d.Cycle))].sort();
-            const currCycle  = cycles[cycles.length - 1];
-            const histCycles = cycles.slice(Math.max(0, cycles.length-11), cycles.length-1);
-
-            function getCycleVec(station, cycle) {
-                const cData = allData.filter(d => d.Measure === currentMeasure && d.Station === station && d.Cycle === cycle);
-                return monthOrder.map(m => { const r = cData.find(d=>d.Month===m); return r ? r.Value : null; });
-            }
-
-            const histVecs = histCycles.map(c => getCycleVec(primaryStation, c));
-            const medianLine=[], minLine=[], maxLine=[];
-
-            if (isCumulative) {
-                const histCum = histVecs.map(v => { let s=0; return v.map(x=>{ s+=(x===null?0:x); return s; }); });
-                for (let i=0;i<12;i++) {
-                    const vals = histCum.map(r=>r[i]);
-                    medianLine.push(d3.median(vals)); minLine.push(d3.min(vals)); maxLine.push(d3.max(vals));
-                }
-            } else {
-                for (let i=0;i<12;i++) {
-                    const vals = histVecs.map(r=>r[i]).filter(v=>v!==null);
-                    if (vals.length) { medianLine.push(d3.median(vals)); minLine.push(d3.min(vals)); maxLine.push(d3.max(vals)); }
-                    else { medianLine.push(null); minLine.push(null); maxLine.push(null); }
-                }
-            }
-
-            const traces = [];
-            traces.push({ x:xVals, y:maxLine, mode:'lines', line:{width:0}, showlegend:false, hoverinfo:'skip' });
-            traces.push({ x:xVals, y:minLine, mode:'lines', line:{width:0}, fill:'tonexty', fillcolor:'rgba(200,200,200,0.3)', name:'טווח 10 שנים' });
-            traces.push({ x:xVals, y:medianLine, mode:'lines', line:{color:'gray',dash:'dash'}, name:'חציון 10 שנים' });
-
-            const currMonthReal = NOW.getMonth()+1, currDayReal = NOW.getDate();
-            const daysInMonth   = new Date(NOW.getFullYear(), currMonthReal, 0).getDate();
-            const monthFraction = currDayReal / daysInMonth;
-
-            currentStations.forEach((station, si) => {
-                const stData   = allData.filter(d => d.Measure === currentMeasure && d.Station === station);
-                const stCycles = [...new Set(stData.map(d=>d.Cycle))].sort();
-                const stCycle  = stCycles[stCycles.length-1];
-                const currRaw  = stData.filter(d=>d.Cycle===stCycle)
-                    .sort((a,b)=>monthOrder.indexOf(a.Month)-monthOrder.indexOf(b.Month));
-
-                let currX=[], currY=[], currText=[];
-                if (isCumulative) {
-                    let sum=0;
-                    currRaw.forEach((d,idx)=>{
-                        const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
-                        sum += d.Value;
-                        let xVal=mIdx, hover=monthNames[d.Month];
-                        if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
-                        currX.push(xVal); currY.push(sum); currText.push(hover);
-                    });
-                } else {
-                    currRaw.forEach((d,idx)=>{
-                        const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
-                        let xVal=mIdx, hover=monthNames[d.Month];
-                        if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
-                        currX.push(xVal); currY.push(d.Value); currText.push(hover);
-                    });
-                }
-
-                const lbl = window.stationTranslations?.[station] || station;
-                traces.push({
-                    x:currX, y:currY, mode:'lines+markers',
-                    line:{ color:STATION_COLORS[si % STATION_COLORS.length], width:3 },
-                    name: lbl, text:currText,
-                    hovertemplate: '%{text}<br>%{y:.1f}<extra>'+lbl+'</extra>'
-                });
-            });
-
-            const measureTitle = currentMeasure==='Rain' ? 'גשם מצטבר' :
-                currentMeasure==='MinTemp' ? 'טמפרטורת מינימום' :
-                currentMeasure==='MaxTemp' ? 'טמפרטורת מקסימום' : 'טמפרטורה ממוצעת';
-
-            Plotly.newPlot('plot', traces, {
-                title: { text:`נתוני ${measureTitle}`, x:0.95, xanchor:'right' },
-                xaxis: { tickvals:xVals, ticktext:xLabels, title:'חודש' },
-                yaxis: { title: currentMeasure==='Rain' ? 'מ"מ' : '°C' },
-                hovermode: 'x unified',
-                dir: 'rtl'
-            }, { responsive:true });
-
-            // Click on monthly chart → show that month in hourly view
-            document.getElementById('plot').on('plotly_click', (data) => {
-                if (!data.points.length) return;
-                const xIdx = Math.round(data.points[0].x);
-                if (xIdx < 0 || xIdx >= monthOrder.length) return;
-                const clickedMonth = monthOrder[xIdx];
-                let yr = NOW.getFullYear();
-                // For Sep-Aug cycles, months >= Sep belong to previous calendar year if we're before Sep now
-                if ((currentMeasure==='Rain'||currentMeasure==='MinTemp') && clickedMonth>=9) {
-                    yr = (NOW.getMonth()+1) < 9 ? NOW.getFullYear()-1 : NOW.getFullYear();
-                } else if (clickedMonth > NOW.getMonth()+1) {
-                    yr = NOW.getFullYear()-1;
-                }
-                hourlyMode = 'month'; hourlyYear = yr; hourlyMonth = clickedMonth;
-                updateHourlyNav(); updateHourlyPlot();
-            });
         }
 
-        // ── Hourly Chart ─────────────────────────────────────────────────────────
-
-        async function updateHourlyPlot() {
-            if (!currentStations.length) return;
-
-            let filePrefix;
-            if      (currentMeasure==='Rain')     filePrefix='rain';
-            else if (currentMeasure==='MinTemp')  filePrefix='temp_min';
-            else if (currentMeasure==='MaxTemp')  filePrefix='temp_max';
-            else if (currentMeasure==='MeanTemp') filePrefix=null;
-            else return;
-
-            const [startDate, endDate] = getHourlyRange();
-            const parseTime = d3.timeParse("%Y-%m-%d %H:%M");
-
-            const neededYears = new Set();
-            for (let y=startDate.getFullYear(); y<=endDate.getFullYear(); y++) neededYears.add(y);
-
-            async function loadFile(prefix, year) {
-                const key = `${prefix}_${year}`;
-                if (rawDataCache[key] !== undefined) return rawDataCache[key];
-                const url = `${rawDataBase}/${key}.csv`;
-                try {
-                    const data = await d3.csv(url);
-                    rawDataCache[key] = data; return data;
-                } catch(e) {
-                    console.warn(`Failed to load ${url}`);
-                    rawDataCache[key] = []; return [];
-                }
-            }
-
-            if (currentMeasure === 'MeanTemp') {
-                const tasks = [];
-                neededYears.forEach(y => { tasks.push(loadFile('temp_min',y)); tasks.push(loadFile('temp_max',y)); });
-                await Promise.all(tasks);
-
-                const traces = currentStations.map((station, si) => {
-                    const dtMap = new Map();
-                    neededYears.forEach(y => {
-                        [['temp_min','min'],['temp_max','max']].forEach(([pfx,key]) => {
-                            (rawDataCache[`${pfx}_${y}`]||[]).forEach(d => {
-                                const v=d[station]; if(!v) return;
-                                const dt=parseTime(d.datetime);
-                                if(!dt||dt<startDate||dt>endDate) return;
-                                if(!dtMap.has(d.datetime)) dtMap.set(d.datetime,{dt,min:null,max:null});
-                                dtMap.get(d.datetime)[key]=+v;
-                            });
-                        });
-                    });
-                    const pts=[...dtMap.values()].filter(p=>p.min!==null&&p.max!==null).sort((a,b)=>a.dt-b.dt);
-                    const lbl = window.stationTranslations?.[station]||station;
-                    return { x:pts.map(p=>p.dt), y:pts.map(p=>(p.min+p.max)/2),
-                        type:'scatter', mode:'lines', line:{color:STATION_COLORS[si%STATION_COLORS.length]}, name:lbl };
-                });
-
-                Plotly.newPlot('hourlyPlot', traces, {
-                    title:{ text:'טמפרטורה ממוצעת (שעתי)', x:0.95, xanchor:'right' },
-                    yaxis:{ title:'°C' }, xaxis:{ title:'זמן' },
-                    shapes: getDayNightShapes(startDate, endDate),
-                    hovermode:'x unified', margin:{t:40,r:20,l:40,b:40}, dir:'rtl'
-                }, { responsive:true });
-                return;
-            }
-
-            await Promise.all([...neededYears].map(y => loadFile(filePrefix, y)));
-
-            let combined = [];
-            [...neededYears].sort().forEach(y => {
-                combined = combined.concat(rawDataCache[`${filePrefix}_${y}`] || []);
-            });
+        if (currentMeasure === 'MeanTemp') {
+            const tasks = [];
+            neededYears.forEach(y => { tasks.push(loadFile('temp_min',y)); tasks.push(loadFile('temp_max',y)); });
+            await Promise.all(tasks);
 
             const traces = currentStations.map((station, si) => {
-                const pts = combined.map(d => ({
-                    date: parseTime(d.datetime),
-                    val:  (d[station]!==undefined && d[station]!=='') ? +d[station] : null
-                })).filter(d => d.date && d.val!==null && !isNaN(d.val) && d.date>=startDate && d.date<=endDate);
-                pts.sort((a,b)=>a.date-b.date);
+                const dtMap = new Map();
+                neededYears.forEach(y => {
+                    [['temp_min','min'],['temp_max','max']].forEach(([pfx,key]) => {
+                        (rawDataCache[`${pfx}_${y}`]||[]).forEach(d => {
+                            const v=d[station]; if(!v) return;
+                            const dt=parseTime(d.datetime);
+                            if(!dt||dt<startDate||dt>endDate) return;
+                            if(!dtMap.has(d.datetime)) dtMap.set(d.datetime,{dt,min:null,max:null});
+                            dtMap.get(d.datetime)[key]=+v;
+                        });
+                    });
+                });
+                const pts=[...dtMap.values()].filter(p=>p.min!==null&&p.max!==null).sort((a,b)=>a.dt-b.dt);
                 const lbl = window.stationTranslations?.[station]||station;
-                const color = STATION_COLORS[si%STATION_COLORS.length];
-                return {
-                    x: pts.map(d=>d.date), y: pts.map(d=>d.val),
-                    type: currentMeasure==='Rain' ? 'bar' : 'scatter', mode:'lines',
-                    marker:{color}, line:{color}, name: lbl
-                };
+                return { x:pts.map(p=>p.dt), y:pts.map(p=>(p.min+p.max)/2),
+                    type:'scatter', mode:'lines', line:{color:STATION_COLORS[si%STATION_COLORS.length]}, name:lbl };
             });
 
             Plotly.newPlot('hourlyPlot', traces, {
-                title:{ text:'נתונים שעתיים', x:0.95, xanchor:'right' },
-                yaxis:{ title: currentMeasure==='Rain' ? 'מ"מ' : '°C' },
-                xaxis:{ title:'זמן' },
+                title:{ text:'טמפרטורה ממוצעת (שעתי)', x:0.95, xanchor:'right' },
+                yaxis:{ title:'°C' }, xaxis:{ title:'זמן' },
                 shapes: getDayNightShapes(startDate, endDate),
                 hovermode:'x unified',
-                margin:{ t:40,r:20,l:40,b:40 }, dir:'rtl'
+                paper_bgcolor:'white', plot_bgcolor:'#fafafa',
+                margin:{t:40,r:20,l:40,b:40}, dir:'rtl'
             }, { responsive:true });
+            return;
         }
 
-    </script>
+        await Promise.all([...neededYears].map(y => loadFile(filePrefix, y)));
+
+        let combined = [];
+        [...neededYears].sort().forEach(y => {
+            combined = combined.concat(rawDataCache[`${filePrefix}_${y}`] || []);
+        });
+
+        const traces = currentStations.map((station, si) => {
+            const pts = combined.map(d => ({
+                date: parseTime(d.datetime),
+                val:  (d[station]!==undefined && d[station]!=='') ? +d[station] : null
+            })).filter(d => d.date && d.val!==null && !isNaN(d.val) && d.date>=startDate && d.date<=endDate);
+            pts.sort((a,b)=>a.date-b.date);
+            const lbl = window.stationTranslations?.[station]||station;
+            const color = STATION_COLORS[si%STATION_COLORS.length];
+            return {
+                x: pts.map(d=>d.date), y: pts.map(d=>d.val),
+                type: currentMeasure==='Rain' ? 'bar' : 'scatter', mode:'lines',
+                marker:{color}, line:{color}, name: lbl,
+                _pointCount: pts.length
+            };
+        }).filter(t => {
+            if (t._pointCount === 0) {
+                console.warn(`[selected.html] no hourly ${currentMeasure} data for station "${t.name}" in range ${startDate.toISOString()} – ${endDate.toISOString()}; trace skipped to avoid Plotly NaN path error.`);
+                return false;
+            }
+            return true;
+        });
+
+        if (!traces.length) {
+            Plotly.newPlot('hourlyPlot', [], emptyLayout('אין נתונים שעתיים לתקופה זו'), { responsive:true });
+            return;
+        }
+
+        Plotly.newPlot('hourlyPlot', traces, {
+            title:{ text:'נתונים שעתיים', x:0.95, xanchor:'right' },
+            yaxis:{ title: currentMeasure==='Rain' ? 'מ"מ' : '°C' },
+            xaxis:{ title:'זמן' },
+            shapes: getDayNightShapes(startDate, endDate),
+            hovermode:'x unified',
+            paper_bgcolor:'white', plot_bgcolor:'#fafafa',
+            margin:{ t:40,r:20,l:40,b:40 }, dir:'rtl'
+        }, { responsive:true });
+    }
+
+</script>
 </body>
 
 </html>
