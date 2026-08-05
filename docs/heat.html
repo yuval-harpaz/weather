@@ -76,6 +76,13 @@
                 <img src="logo.jpg" alt="Icon" class="title-icon" style="height:1.2em;">
                 מדדי עומס חום
             </h1>
+            <div class="data-source">
+                <span>נתונים מתוך</span>
+                <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener">
+                    <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS" class="ims-logo">
+                </a>
+                <span style="margin-right: 10px; font-size: 0.8em; color: #888;">השמ"ט אינו נושא באחריות כלשהי למידע ואינו צד לפרסומו</span>
+            </div>
         </div>
     </header>
     <div class="controls">
@@ -137,18 +144,10 @@
     </div>
 </div>
 
-<div class="footer">
-    <span>נתונים מ</span>
-    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
-        style="text-decoration:none;color:inherit;display:flex;align-items:center;">
-        <img src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
-            style="height:16px;margin-right:5px;">
-    </a>
-</div>
-
 <script>
 const rawBase     = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
 const stationsUrl = `${rawBase}/ims_stations.csv`;
+const forecastUrl = 'https://forecastisr1w6h.yuvharpaz.workers.dev';
 
 // Years will be detected dynamically by probing for required files.
 const AVAILABLE_HEAT_YEARS = [];  // filled at startup by detectAvailableYears()
@@ -192,6 +191,18 @@ const MEASURE_COLORS = {
     HeatIndex:   '#d62728'  // red
 };
 
+// Marker shapes for the 1-week forecast overlay, keyed by measure. Temperature
+// and HeatIndex share a y-axis and are frequently numerically identical (heat
+// index collapses to temperature below ~27°C), so they get opposite triangles
+// to stay visually distinguishable even when the points coincide.
+const FORECAST_SHAPES = {
+    Temperature: 'triangle-up',
+    HeatIndex:   'triangle-down',
+    RH:          'square',
+    DewPoint:    'diamond',
+    FeelsLike:   'star'
+};
+
 let map;
 let stationMarkers   = {};
 let selectedStations = [];
@@ -200,6 +211,10 @@ let computedMonthly  = {};   // name -> { RH, DewPoint, HeatIndex } 12 monthly a
 let monthlySums      = {};   // name -> per-month raw accumulators (used for pace-aware WBGT)
 let rawRows          = [];   // loaded rows for current data year
 let completeStations = new Set(); // stations with valid Grad, TD, WS and RH data
+
+// 1-week (6-hourly) forecast, loaded once from forecastUrl.
+let forecastLocations   = []; // [{lat, lon, name, forecasts:[{dt,temp,rh,dew,feels}]}]
+let nearestForecastCache = {}; // station name -> forecastLocations entry (or null)
 
 let currentMeasure  = 'HeatIndex';
 const NOW           = new Date();
@@ -307,6 +322,160 @@ function computeMeasure(t, rh, ws, sol, measure) {
 // Measures shown together when exactly one station is selected.
 // Order controls legend order (top→bottom): Heat Index, Temp, WBGT, RH, Dew Point.
 const ALL_MEASURES = ['HeatIndex','Temperature','WBGT','RH','DewPoint'];
+
+// ---- 1-week forecast (6-hourly, ~80 cities) ----
+function loadForecast() {
+    return fetch(forecastUrl)
+        .then(r => r.text())
+        .then(xmlText => {
+            const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+            const getText = (el, tag) => {
+                const n = el.getElementsByTagName(tag)[0];
+                return n ? n.textContent : null;
+            };
+            const locEls = Array.from(doc.getElementsByTagName('Location'));
+            forecastLocations = locEls.map(loc => {
+                const meta = loc.getElementsByTagName('LocationMetaData')[0];
+                if (!meta) return null;
+                const lat = parseFloat(getText(meta,'DisplayLat'));
+                const lon = parseFloat(getText(meta,'DisplayLon'));
+                const name = getText(meta,'LocationNameEng');
+                const fEls = Array.from(loc.getElementsByTagName('Forecast'));
+                const forecasts = fEls.map(f => {
+                    const timeStr = getText(f,'ForecastTime');
+                    if (!timeStr) return null;
+                    const dt = new Date(timeStr.replace(' ','T')); // local time, matches d3.timeParse elsewhere
+                    return {
+                        dt,
+                        temp:  parseFloat(getText(f,'Temperature')),
+                        rh:    parseFloat(getText(f,'RelativeHumidity')),
+                        dew:   parseFloat(getText(f,'DewPointTemp')),
+                        feels: parseFloat(getText(f,'FeelsLike'))
+                    };
+                }).filter(f => f && !isNaN(f.dt.getTime()));
+                return {lat, lon, name, forecasts};
+            }).filter(l => l && !isNaN(l.lat) && !isNaN(l.lon));
+        })
+        .catch(err => {
+            console.error('forecast load failed:', err);
+            forecastLocations = [];
+        });
+}
+
+// Nearest forecast city to (lat,lon) by plain squared-degree distance
+// (Israel is small/mid-latitude enough that this ranks the same as haversine).
+function nearestForecastLocation(lat, lon) {
+    if (!forecastLocations.length) return null;
+    let best = null, bestD = Infinity;
+    forecastLocations.forEach(loc => {
+        const dLat = loc.lat - lat, dLon = loc.lon - lon;
+        const d = dLat*dLat + dLon*dLon;
+        if (d < bestD) { bestD = d; best = loc; }
+    });
+    return best;
+}
+
+function getForecastForStation(name) {
+    if (name in nearestForecastCache) return nearestForecastCache[name];
+    const coords = stationCoords[name];
+    const loc = coords ? nearestForecastLocation(coords.lat, coords.lon) : null;
+    nearestForecastCache[name] = loc;
+    return loc;
+}
+
+function forecastValue(f, measure) {
+    switch (measure) {
+        case 'Temperature': return f.temp;
+        case 'RH':          return f.rh;
+        case 'DewPoint':    return f.dew;
+        case 'HeatIndex':   return (isNaN(f.temp)||isNaN(f.rh)) ? null : heatIndex(f.temp, f.rh);
+        case 'FeelsLike':   return f.feels;
+    }
+    return null;
+}
+
+// Forecast marker traces for the single-station "all measures" hourly view:
+// one trace per measure (+ FeelsLike), same colors as the corresponding
+// lines, dual y-axis. Only FeelsLike gets a legend entry (it has no line
+// counterpart to explain the marker otherwise).
+function computeForecastTracesSingle(name, startDate, endDate) {
+    const loc = getForecastForStation(name);
+    if (!loc) return [];
+    const pts = loc.forecasts.filter(f => f.dt>=startDate && f.dt<=endDate);
+    if (!pts.length) return [];
+
+    const measures = [...ALL_MEASURES, 'FeelsLike'];
+    return measures.map(measure => {
+        const x=[], y=[];
+        pts.forEach(f => {
+            const v = forecastValue(f, measure);
+            if (v===null || isNaN(v)) return;
+            x.push(f.dt); y.push(v);
+        });
+        if (!x.length) return null;
+        const isFeels = measure === 'FeelsLike';
+        return {
+            x, y,
+            type:'scatter', mode:'markers',
+            marker:{
+                color: isFeels ? 'black' : MEASURE_COLORS[measure],
+                size:8, symbol:FORECAST_SHAPES[measure],
+                line:{color:'white',width:1}
+            },
+            yaxis: measure==='RH' ? 'y' : 'y2',
+            showlegend: isFeels, legendgroup: isFeels ? 'feelslike' : undefined,
+            hoverinfo:'x+y+name',
+            name: isFeels ? 'תחושה (תחזית)' : `תחזית - ${measureLabels[measure]}`
+        };
+    }).filter(t => t !== null);
+}
+
+// Forecast marker trace(s) for the multi-station hourly view: one marker
+// trace per station in the station's own line color (matching currentMeasure),
+// plus a black FeelsLike overlay when currentMeasure shares its °C scale
+// (skipped for RH, and for WBGT which the forecast feed can't provide).
+function computeForecastTracesForStation(name, measure, color, startDate, endDate, showFeelsLikeLegend) {
+    const traces = [];
+    if (measure === 'WBGT') return traces;
+    const loc = getForecastForStation(name);
+    if (!loc) return traces;
+    const pts = loc.forecasts.filter(f => f.dt>=startDate && f.dt<=endDate);
+    if (!pts.length) return traces;
+
+    const mainPts = { x:[], y:[] };
+    pts.forEach(f => {
+        const v = forecastValue(f, measure);
+        if (v===null || isNaN(v)) return;
+        mainPts.x.push(f.dt); mainPts.y.push(v);
+    });
+    if (mainPts.x.length) {
+        traces.push({
+            x:mainPts.x, y:mainPts.y,
+            type:'scatter', mode:'markers',
+            marker:{ color, size:8, symbol:FORECAST_SHAPES[measure], line:{color:'white',width:1} },
+            showlegend:false, hoverinfo:'x+y+name',
+            name:`תחזית - ${getHebrewName(name)}`
+        });
+    }
+
+    if (measure !== 'RH') {
+        const feelsPts = { x:[], y:[] };
+        pts.forEach(f => {
+            if (isNaN(f.feels)) return;
+            feelsPts.x.push(f.dt); feelsPts.y.push(f.feels);
+        });
+        if (feelsPts.x.length) {
+            traces.push({
+                x:feelsPts.x, y:feelsPts.y,
+                type:'scatter', mode:'markers',
+                marker:{ color:'black', size:8, symbol:FORECAST_SHAPES.FeelsLike, line:{color:'white',width:1} },
+                showlegend: showFeelsLikeLegend, legendgroup:'feelslike',
+                hoverinfo:'x+y+name', name:'תחושה (תחזית)'
+            });
+        }
+    }
+    return traces;
+}
 
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
@@ -572,6 +741,11 @@ $(document).ready(function () {
 
     initMap();
     setStatus('טוען נתונים...');
+
+    // Load the 1-week forecast in parallel; re-render the hourly chart once
+    // it's ready (independent of the main historical-data load, so it fills
+    // in whenever it arrives, even if it's slower or faster than the rest).
+    loadForecast().then(()=>{ updateHourlyPlot(); }).catch(()=>{});
 
     function populateYearSelector() {
         yearSel.innerHTML='';
@@ -898,8 +1072,16 @@ function updateHourlyPlot() {
         Plotly.newPlot('hourlyPlot',[],emptyLayout('נתונים שעתיים'),{responsive:true});
         return;
     }
-    const [startDate,endDate]=getHourlyRange();
+    let [startDate,endDate]=getHourlyRange();
     const GAP_MS = 3 * 3600 * 1000; // 3-hour gap threshold
+
+    // Extend the rolling "last 30 days" window forward to cover the 1-week
+    // forecast horizon, so forecast markers have room to render past "now".
+    if (hourlyMode==='last30') {
+        const forecastEnd = new Date(NOW);
+        forecastEnd.setDate(forecastEnd.getDate()+7);
+        if (forecastEnd > endDate) endDate = forecastEnd;
+    }
 
     if (selectedStations.length === 1) {
         // Single station: show ALL measures together, dual y-axis (RH % left, °C right).
@@ -920,16 +1102,19 @@ function updateHourlyPlot() {
             type:'scatter',mode:'lines',connectgaps:false,
             name:measureLabels[measure],
             yaxis: measure==='RH' ? 'y' : 'y2',
-            line:{color:MEASURE_COLORS[measure],width:1.5}
+            line:{color:MEASURE_COLORS[measure],width:1.5},
+            showlegend:false
         }));
         traces.push(...computeExtremaTraces(entries));
+        traces.push(...computeForecastTracesSingle(name, startDate, endDate));
         Plotly.newPlot('hourlyPlot',traces,{
             title:{text:`${getHebrewName(name)} - כל המדדים - שעתי`,x:0.95,xanchor:'right'},
             xaxis:{title:'זמן'},
             ...dualAxisLayout(),
             shapes:getDayNightShapes(startDate,endDate),
             hovermode:'x unified',
-            showlegend:false,
+            showlegend:true,
+            legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
             dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
             margin:{t:45,r:50,l:50,b:40}
         },{responsive:true});
@@ -952,10 +1137,12 @@ function updateHourlyPlot() {
             x:xArr, y:yArr,
             type:'scatter',mode:'lines',connectgaps:false,
             name:getHebrewName(name),
-            line:{color,width:1.5}
+            line:{color,width:1.5},
+            showlegend:false
         });
         const extremaTrace = computeExtremaTraceForStation(pts, currentMeasure, color, getHebrewName(name));
         if (extremaTrace) traces.push(extremaTrace);
+        traces.push(...computeForecastTracesForStation(name, currentMeasure, color, startDate, endDate, i===0));
     });
     Plotly.newPlot('hourlyPlot',traces,{
         title:{text:`${measureLabels[currentMeasure]} - שעתי`,x:0.95,xanchor:'right'},
@@ -963,7 +1150,8 @@ function updateHourlyPlot() {
         yaxis:{title:measureLabels[currentMeasure], range:yRange(currentMeasure)},
         shapes:getDayNightShapes(startDate,endDate),
         hovermode:'x unified',
-        showlegend:false,
+        showlegend:true,
+        legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
         dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
         margin:{t:45,r:15,l:50,b:40}
     },{responsive:true});
