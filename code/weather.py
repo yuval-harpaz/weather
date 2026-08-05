@@ -185,14 +185,17 @@ def update_regions(force=False):
     elif len(df_reg_new) > 0 or force:
         df_reg.to_csv('data/ims_regions.csv', index=False)
 
-def update_activity(new=False, ignore_old=True):
+def update_activity(new=False, ignore_old=True, station_ids=None):
     """
     Updates station activity data with earliest and latest observation times.
     
     Inputs:
         new (bool): If True, creates new activity DataFrame; if False, updates existing
                    data/ims_activity.csv. Default is False.
-        ignore_old (bool): If True, ignores stations that where last active 2 years ago
+        ignore_old (bool): If True, ignores stations that were last active 2 years ago.
+                           Ignored when station_ids is provided.
+        station_ids (list of int, optional): If provided, only update (or append) these
+                   specific station IDs. Missing stations are appended to the CSV.
     
     Outputs:
         None (saves updated data to data/ims_activity.csv)
@@ -205,13 +208,27 @@ def update_activity(new=False, ignore_old=True):
         df_activity['name'] = df_sta['name']
     else:
         df_activity = pd.read_csv('data/ims_activity.csv')
-    if ignore_old:
+
+    if station_ids is not None:
+        # Append any stations that are missing from the activity CSV
+        for sid in station_ids:
+            if sid not in df_activity['stationId'].values:
+                sta_row = df_sta[df_sta['stationId'] == sid]
+                if len(sta_row) == 0:
+                    print(f'Warning: stationId {sid} not found in ims_stations.csv, skipping.')
+                    continue
+                new_row = {'stationId': sid, 'name': sta_row['name'].values[0], 'earliest': '', 'latest': ''}
+                df_activity = pd.concat([df_activity, pd.DataFrame([new_row])], ignore_index=True)
+                print(f'Appended stationId {sid} to activity list.')
+        iactive = df_activity.index[df_activity['stationId'].isin(station_ids)].tolist()
+    elif ignore_old:
         current_year = datetime.now().year
         iactive = np.where(df_activity['latest'] > f'{current_year-2}')[0]
     else:
         iactive = range(len(df_sta))
+
     for ista in iactive:
-        stationid = df_sta['stationId'].values[ista]
+        stationid = df_activity.at[ista, 'stationId']
         # check earliest if not empty cell
         if type(df_activity.at[ista, 'earliest']) != str or len(df_activity.at[ista, 'earliest']) == 0:
             url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/1/earliest'
@@ -226,8 +243,8 @@ def update_activity(new=False, ignore_old=True):
                     # df_activity.at[ista, 'earliest'] = ''
                     time.sleep(0.3)
         url = f'https://api.ims.gov.il/v1/envista/stations/{stationid}/data/1/latest'
-        #check latest for 2025 active stations
-        if str(df_activity.at[ista, 'latest']) > '2025-01-01T00:00:00':
+        # always fetch latest when targeting specific stations, otherwise only for recently active ones
+        if station_ids is not None or str(df_activity.at[ista, 'latest']) > '2025-01-01T00:00:00':
             fail = False
             for itry in range(40):
                 response = requests.request("GET", url, headers=headers)
@@ -243,9 +260,10 @@ def update_activity(new=False, ignore_old=True):
                     time.sleep(0.1)
             if fail:
                 print(f'failed to get latest for station {stationid}')
-        msg = f'checking activity for station {ista+1}/{len(df_sta)}'
+        msg = f'checking activity for station {ista+1}/{len(iactive)}'
         print(f'\r{msg:<80}', end='', flush=True)
     print()  # Final newline after loop completes
+    df_activity = df_activity.sort_values('stationId').reset_index(drop=True)
     df_activity.to_csv('data/ims_activity.csv', index=False)
    
 def query_rain(station='HAFEZ HAYYIM', from_date='2025-10-07', to_date='2025-10-10', monitor='Rain'):
@@ -496,16 +514,18 @@ def query_temp(station='HAFEZ HAYYIM', from_date='2025-10-07', to_date='2025-10-
     for itry in range(10):
         try:
             response = requests.request("GET", url, headers=headers)
-        except:
-            print(f'failed to get data from {url}')
+        except Exception:
+            time.sleep(0.2)
             continue
         txt = response.text.encode('utf8')
         if len(txt) == 0 or 'error.png' in str(txt):
             time.sleep(0.1)
         else:
-            if monitor.encode() in txt:
+            try:
                 data = json.loads(txt)
                 data = data['data']
+                break
+            except (json.JSONDecodeError, KeyError):
                 break
     return data
 
@@ -531,24 +551,24 @@ def temp_1h(monitor='TDmin', stations=None, from_date='2025-01-01', to_date='202
     if from_date[5:] == '01-01' and to_date[5:] == '12-31':
         yearly = True
         year = from_date[:4]
-        if type(save_csv) == bool:
+        if isinstance(save_csv, bool):
             if save_csv:
                 opcsv = f'data/{monitor_prefix}_{year}.csv'
             else:
                 opcsv = ''
-        elif type(save_csv) == str:
+        elif isinstance(save_csv, str):
             opcsv = save_csv
         else:
             opcsv = ''
     else:
         yearly = False
         year = None
-        if type(save_csv) == bool:
+        if isinstance(save_csv, bool):
             if save_csv:
                 opcsv = f'data/{monitor_prefix}_{from_date}_to_{to_date}.csv'
             else:
                 opcsv = ''
-        elif type(save_csv) == str:
+        elif isinstance(save_csv, str):
             opcsv = save_csv
         else:
             opcsv = ''

@@ -3,11 +3,14 @@ import pandas as pd
 import sys
 from datetime import datetime
 sys.path.append(os.environ['HOME']+'/weather/code')
+if os.path.exists('/home/yuval'):
+    os.chdir('/home/yuval/weather')
 from weather import rain_1h, update_stations, update_activity, round_data
 import numpy as np
 update_stations()
 # update_activity()
 #get current year
+
 current_year = datetime.now().year
 y = str(current_year)
 m = str(datetime.now().month).zfill(2)
@@ -22,7 +25,7 @@ else:
     latest = df_act['latest'].max()[:10]
     not_in_act_list = [sta for sta in df_sta['stationId'].tolist() if sta not in df_act['stationId'].tolist()]
     if len(not_in_act_list) > 0:
-        raise ValueError(f'Stations {not_in_act_list} are not in activity list. Please check ims_activity.csv')
+        print(f'Warning: Stations {not_in_act_list} are not in activity list (may be discontinued). Skipping.')
     still_active = df_act[df_act['latest'] >= latest]['stationId'].tolist()
     for ista in range(len(still_active)):
         idsta = still_active[ista]
