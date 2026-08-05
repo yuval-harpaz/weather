@@ -86,6 +86,7 @@
                 <option value="DewPoint">טמפ' נקודת הטל (°C)</option>
                 <option value="HeatIndex" selected>מדד חום (Heat Index °C)</option>
                 <option value="WBGT">WBGT משוקלל (°C)</option>
+                <option value="Temperature">טמפרטורה (°C)</option>
             </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;">
@@ -239,6 +240,10 @@ const measureInfo = {
     WBGT: {
         wiki: 'https://en.wikipedia.org/wiki/Wet-bulb_globe_temperature',
         desc: 'WBGT = 0.7·Twb + 0.2·Tg + 0.1·T  |  Tg = T + (solar/1000)·10/(1+0.8·(ws+pace))  |  pace (min/km) → m/s added to ambient WS'
+    },
+    Temperature: {
+        wiki: 'https://en.wikipedia.org/wiki/Temperature',
+        desc: 'Temperature – direct measurement (°C)'
     },
 };
 const monthNames   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
