@@ -364,19 +364,19 @@ function getDaySunWindow(date) {
 //     closest to that hour and use it for ALL measures (same x for all).
 //   - Otherwise (auto mode): for each day, restrict to daytime (sunrise→sunset)
 //     and find the extremum per measure — minimum for RH, maximum for others.
-function computeExtremaTraces(entries) {
-    if (!extremaOn) return [];
-    const pts = entries.filter(e => e !== null);
-    if (!pts.length) return [];
+// Groups points by local day and, for a single measure, picks either the
+// point closest to extremaHour (if set) or the daytime extremum (auto mode).
+// Returns {x:[], y:[]}. Shared by the single-station (per-measure) and
+// multi-station (per-station) extrema overlays.
+function computeExtremaPointsForMeasure(pts, measure) {
+    const out = { x: [], y: [] };
+    if (!pts.length) return out;
 
     const byDay = {};
     pts.forEach(p => {
         const key = localDayKey(p.dt);
         (byDay[key] = byDay[key] || []).push(p);
     });
-
-    const perMeasure = {};
-    ALL_MEASURES.forEach(m => perMeasure[m] = { x: [], y: [] });
 
     Object.values(byDay).forEach(dayPts => {
         if (extremaHour !== null) {
@@ -388,37 +388,61 @@ function computeExtremaTraces(entries) {
                 if (diff < bestDiff) { bestDiff = diff; best = p; }
             });
             if (!best) return;
-            ALL_MEASURES.forEach(measure => {
-                const val = computeMeasure(best.t, best.rh, best.ws, best.sol, measure);
-                if (val === null || isNaN(val)) return;
-                perMeasure[measure].x.push(best.dt);
-                perMeasure[measure].y.push(val);
-            });
+            const val = computeMeasure(best.t, best.rh, best.ws, best.sol, measure);
+            if (val === null || isNaN(val)) return;
+            out.x.push(best.dt);
+            out.y.push(val);
         } else {
             const { sunrise, sunset } = getDaySunWindow(dayPts[0].dt);
             const dayWindowPts = dayPts.filter(p => p.dt >= sunrise && p.dt < sunset);
             if (!dayWindowPts.length) return;
-            ALL_MEASURES.forEach(measure => {
-                let best = null, bestVal = measure === 'RH' ? Infinity : -Infinity;
-                dayWindowPts.forEach(p => {
-                    const val = computeMeasure(p.t, p.rh, p.ws, p.sol, measure);
-                    if (val === null || isNaN(val)) return;
-                    if (measure === 'RH' ? val < bestVal : val > bestVal) { bestVal = val; best = p; }
-                });
-                if (!best) return;
-                perMeasure[measure].x.push(best.dt);
-                perMeasure[measure].y.push(bestVal);
+            let best = null, bestVal = measure === 'RH' ? Infinity : -Infinity;
+            dayWindowPts.forEach(p => {
+                const val = computeMeasure(p.t, p.rh, p.ws, p.sol, measure);
+                if (val === null || isNaN(val)) return;
+                if (measure === 'RH' ? val < bestVal : val > bestVal) { bestVal = val; best = p; }
             });
+            if (!best) return;
+            out.x.push(best.dt);
+            out.y.push(bestVal);
         }
     });
 
-    return ALL_MEASURES.map(measure => ({
-        x: perMeasure[measure].x, y: perMeasure[measure].y,
+    return out;
+}
+
+// Marker traces for the daily-extrema overlay in single-station mode
+// (one trace per measure, dual y-axis). `entries` is the gap-aware point
+// list used to build the line traces (nulls mark gaps).
+function computeExtremaTraces(entries) {
+    if (!extremaOn) return [];
+    const pts = entries.filter(e => e !== null);
+    if (!pts.length) return [];
+
+    return ALL_MEASURES.map(measure => {
+        const { x, y } = computeExtremaPointsForMeasure(pts, measure);
+        return {
+            x, y,
+            type: 'scatter', mode: 'markers',
+            marker: { color: MEASURE_COLORS[measure], size: 9, line: { color: 'white', width: 1 } },
+            yaxis: measure === 'RH' ? 'y' : 'y2',
+            showlegend: false, hoverinfo: 'x+y', name: measureLabels[measure]
+        };
+    }).filter(t => t.x.length > 0);
+}
+
+// Marker trace for the daily-extrema overlay in multi-station mode
+// (one trace per station, single measure, single y-axis, matching line color).
+function computeExtremaTraceForStation(pts, measure, color, label) {
+    if (!extremaOn) return null;
+    const { x, y } = computeExtremaPointsForMeasure(pts, measure);
+    if (!x.length) return null;
+    return {
+        x, y,
         type: 'scatter', mode: 'markers',
-        marker: { color: MEASURE_COLORS[measure], size: 9, line: { color: 'white', width: 1 } },
-        yaxis: measure === 'RH' ? 'y' : 'y2',
-        showlegend: false, hoverinfo: 'x+y', name: measureLabels[measure]
-    })).filter(t => t.x.length > 0);
+        marker: { color, size: 9, symbol: 'diamond', line: { color: 'white', width: 1 } },
+        showlegend: false, hoverinfo: 'x+y', name: label
+    };
 }
 
 // ---- hourly range ----
@@ -912,22 +936,26 @@ function updateHourlyPlot() {
         return;
     }
 
-    const traces=selectedStations.map((name,i)=>{
+    const traces=[];
+    selectedStations.forEach((name,i)=>{
         const pts=rawRows
             .filter(r=>r.st===name && r.dt>=startDate && r.dt<=endDate)
             .sort((a,b)=>a.dt-b.dt);
+        const color = COLORS[i%COLORS.length];
         const xArr=[], yArr=[];
         pts.forEach((p,idx)=>{
             if(idx>0 && (p.dt - pts[idx-1].dt) > GAP_MS){ xArr.push(null); yArr.push(null); }
             xArr.push(p.dt);
             yArr.push(computeMeasure(p.t,p.rh,p.ws,p.sol,currentMeasure));
         });
-        return {
+        traces.push({
             x:xArr, y:yArr,
             type:'scatter',mode:'lines',connectgaps:false,
             name:getHebrewName(name),
-            line:{color:COLORS[i%COLORS.length],width:1.5}
-        };
+            line:{color,width:1.5}
+        });
+        const extremaTrace = computeExtremaTraceForStation(pts, currentMeasure, color, getHebrewName(name));
+        if (extremaTrace) traces.push(extremaTrace);
     });
     Plotly.newPlot('hourlyPlot',traces,{
         title:{text:`${measureLabels[currentMeasure]} - שעתי`,x:0.95,xanchor:'right'},
