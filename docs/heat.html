@@ -136,9 +136,10 @@
         <div id="monthlyPlot" class="chart-box"></div>
         <div class="hourly-nav">
             <button class="nav-btn" id="btnPrevMonth">&#x2190; חודש קודם</button>
-            <span id="hourlyPeriodLabel">30 ימים אחרונים</span>
             <button class="nav-btn" id="btnNextMonth">חודש הבא &#x2192;</button>
+            <span id="hourlyPeriodLabel">30 ימים אחרונים</span>
             <button class="nav-btn active" id="btnLast30">30 ימים אחרונים</button>
+            <button class="nav-btn" id="btnForecast">תחזית</button>
         </div>
         <div id="hourlyPlot"  class="chart-box"></div>
     </div>
@@ -199,9 +200,18 @@ const FORECAST_SHAPES = {
     Temperature: 'triangle-up',
     HeatIndex:   'triangle-down',
     RH:          'square',
-    DewPoint:    'diamond',
-    FeelsLike:   'star'
+    DewPoint:    'diamond'
 };
+
+// hex "#rrggbb" -> "rgba(r,g,b,alpha)", used to draw the forecast connector
+// lines in the same color as their series but semi-transparent.
+function hexToRgba(hex, alpha) {
+    const h = hex.replace('#','');
+    const r = parseInt(h.substring(0,2),16);
+    const g = parseInt(h.substring(2,4),16);
+    const b = parseInt(h.substring(4,6),16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
 
 let map;
 let stationMarkers   = {};
@@ -213,7 +223,7 @@ let rawRows          = [];   // loaded rows for current data year
 let completeStations = new Set(); // stations with valid Grad, TD, WS and RH data
 
 // 1-week (6-hourly) forecast, loaded once from forecastUrl.
-let forecastLocations   = []; // [{lat, lon, name, forecasts:[{dt,temp,rh,dew,feels}]}]
+let forecastLocations   = []; // [{lat, lon, name, forecasts:[{dt,temp,rh,dew}]}]
 let nearestForecastCache = {}; // station name -> forecastLocations entry (or null)
 
 let currentMeasure  = 'HeatIndex';
@@ -349,8 +359,7 @@ function loadForecast() {
                         dt,
                         temp:  parseFloat(getText(f,'Temperature')),
                         rh:    parseFloat(getText(f,'RelativeHumidity')),
-                        dew:   parseFloat(getText(f,'DewPointTemp')),
-                        feels: parseFloat(getText(f,'FeelsLike'))
+                        dew:   parseFloat(getText(f,'DewPointTemp'))
                     };
                 }).filter(f => f && !isNaN(f.dt.getTime()));
                 return {lat, lon, name, forecasts};
@@ -389,92 +398,74 @@ function forecastValue(f, measure) {
         case 'RH':          return f.rh;
         case 'DewPoint':    return f.dew;
         case 'HeatIndex':   return (isNaN(f.temp)||isNaN(f.rh)) ? null : heatIndex(f.temp, f.rh);
-        case 'FeelsLike':   return f.feels;
     }
     return null;
 }
 
-// Forecast marker traces for the single-station "all measures" hourly view:
-// one trace per measure (+ FeelsLike), same colors as the corresponding
-// lines, dual y-axis. Only FeelsLike gets a legend entry (it has no line
-// counterpart to explain the marker otherwise).
+// Draws a marker trace plus a matching semi-transparent connector line
+// (same color as the marker, drawn underneath) for one forecast series.
+function forecastLineAndMarkerTraces(x, y, color, shape, name, yaxis) {
+    if (!x.length) return [];
+    const idx = x.map((_,i)=>i).sort((a,b)=>x[a]-x[b]);
+    const xs = idx.map(i=>x[i]), ys = idx.map(i=>y[i]);
+    return [
+        {
+            x:xs, y:ys,
+            type:'scatter', mode:'lines',
+            line:{color:hexToRgba(color,0.35), width:2},
+            yaxis, showlegend:false, hoverinfo:'skip'
+        },
+        {
+            x:xs, y:ys,
+            type:'scatter', mode:'markers',
+            marker:{ color, size:8, symbol:shape, line:{color:'white',width:1} },
+            yaxis, showlegend:false, hoverinfo:'x+y+name', name
+        }
+    ];
+}
+
+// Forecast traces for the single-station "all measures" hourly view:
+// one marker+connector-line pair per measure, same colors as the
+// corresponding lines, dual y-axis.
 function computeForecastTracesSingle(name, startDate, endDate) {
     const loc = getForecastForStation(name);
     if (!loc) return [];
     const pts = loc.forecasts.filter(f => f.dt>=startDate && f.dt<=endDate);
     if (!pts.length) return [];
 
-    const measures = [...ALL_MEASURES, 'FeelsLike'];
-    return measures.map(measure => {
+    const traces = [];
+    ALL_MEASURES.forEach(measure => {
         const x=[], y=[];
         pts.forEach(f => {
             const v = forecastValue(f, measure);
             if (v===null || isNaN(v)) return;
             x.push(f.dt); y.push(v);
         });
-        if (!x.length) return null;
-        const isFeels = measure === 'FeelsLike';
-        return {
-            x, y,
-            type:'scatter', mode:'markers',
-            marker:{
-                color: isFeels ? 'black' : MEASURE_COLORS[measure],
-                size:8, symbol:FORECAST_SHAPES[measure],
-                line:{color:'white',width:1}
-            },
-            yaxis: measure==='RH' ? 'y' : 'y2',
-            showlegend: isFeels, legendgroup: isFeels ? 'feelslike' : undefined,
-            hoverinfo:'x+y+name',
-            name: isFeels ? 'תחושה (תחזית)' : `תחזית - ${measureLabels[measure]}`
-        };
-    }).filter(t => t !== null);
+        traces.push(...forecastLineAndMarkerTraces(
+            x, y, MEASURE_COLORS[measure], FORECAST_SHAPES[measure],
+            `${measureLabels[measure]}`, measure==='RH' ? 'y' : 'y2'
+        ));
+    });
+    return traces;
 }
 
-// Forecast marker trace(s) for the multi-station hourly view: one marker
-// trace per station in the station's own line color (matching currentMeasure),
-// plus a black FeelsLike overlay when currentMeasure shares its °C scale
-// (skipped for RH, and for WBGT which the forecast feed can't provide).
-function computeForecastTracesForStation(name, measure, color, startDate, endDate, showFeelsLikeLegend) {
-    const traces = [];
-    if (measure === 'WBGT') return traces;
+// Forecast trace(s) for the multi-station hourly view: one marker+connector
+// pair per station in the station's own line color (matching currentMeasure).
+// Skipped for WBGT, which the forecast feed can't provide.
+function computeForecastTracesForStation(name, measure, color, startDate, endDate) {
+    if (measure === 'WBGT') return [];
     const loc = getForecastForStation(name);
-    if (!loc) return traces;
+    if (!loc) return [];
     const pts = loc.forecasts.filter(f => f.dt>=startDate && f.dt<=endDate);
-    if (!pts.length) return traces;
+    if (!pts.length) return [];
 
-    const mainPts = { x:[], y:[] };
+    const x=[], y=[];
     pts.forEach(f => {
         const v = forecastValue(f, measure);
         if (v===null || isNaN(v)) return;
-        mainPts.x.push(f.dt); mainPts.y.push(v);
+        x.push(f.dt); y.push(v);
     });
-    if (mainPts.x.length) {
-        traces.push({
-            x:mainPts.x, y:mainPts.y,
-            type:'scatter', mode:'markers',
-            marker:{ color, size:8, symbol:FORECAST_SHAPES[measure], line:{color:'white',width:1} },
-            showlegend:false, hoverinfo:'x+y+name',
-            name:`תחזית - ${getHebrewName(name)}`
-        });
-    }
-
-    if (measure !== 'RH') {
-        const feelsPts = { x:[], y:[] };
-        pts.forEach(f => {
-            if (isNaN(f.feels)) return;
-            feelsPts.x.push(f.dt); feelsPts.y.push(f.feels);
-        });
-        if (feelsPts.x.length) {
-            traces.push({
-                x:feelsPts.x, y:feelsPts.y,
-                type:'scatter', mode:'markers',
-                marker:{ color:'black', size:8, symbol:FORECAST_SHAPES.FeelsLike, line:{color:'white',width:1} },
-                showlegend: showFeelsLikeLegend, legendgroup:'feelslike',
-                hoverinfo:'x+y+name', name:'תחושה (תחזית)'
-            });
-        }
-    }
-    return traces;
+    return forecastLineAndMarkerTraces(x, y, color, FORECAST_SHAPES[measure], `${measureLabels[measure]}`, 'y');
 }
 
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
@@ -621,6 +612,14 @@ function getHourlyRange() {
         start.setDate(start.getDate()-30);
         return [start,end];
     }
+    if (hourlyMode==='forecast') {
+        // Narrow window: a couple of days of recent history so the forecast
+        // connects visually with the observed data, plus the ~1-week horizon.
+        const start=new Date(NOW), end=new Date(NOW);
+        start.setDate(start.getDate()-2);
+        end.setDate(end.getDate()+7);
+        return [start,end];
+    }
     return [
         new Date(hourlyYear,hourlyMonth-1,1,0,0,0),
         new Date(hourlyYear,hourlyMonth,0,23,59,59)
@@ -630,10 +629,15 @@ function getHourlyRange() {
 function updateHourlyNav() {
     const label=document.getElementById('hourlyPeriodLabel');
     const btn30=document.getElementById('btnLast30');
+    const btnFc=document.getElementById('btnForecast');
+    btn30.classList.remove('active');
+    btnFc.classList.remove('active');
     if (hourlyMode==='last30') {
         label.textContent='30 ימים אחרונים'; btn30.classList.add('active');
+    } else if (hourlyMode==='forecast') {
+        label.textContent='תחזית - ימים קרובים'; btnFc.classList.add('active');
     } else {
-        label.textContent=`${monthNamesHe[hourlyMonth-1]} ${hourlyYear}`; btn30.classList.remove('active');
+        label.textContent=`${monthNamesHe[hourlyMonth-1]} ${hourlyYear}`;
     }
 }
 
@@ -849,7 +853,7 @@ $(document).ready(function () {
     yearSel.addEventListener('change',function(){
         currentDataYear=+this.value;
         hourlyYear=currentDataYear;
-        if(hourlyMode==='last30'){hourlyMode='month'; hourlyMonth=NOW.getMonth()+1;}
+        if(hourlyMode==='last30' || hourlyMode==='forecast'){hourlyMode='month'; hourlyMonth=NOW.getMonth()+1;}
         updateHourlyNav();
         loadYearData(currentDataYear).then(()=>{
             setStatus('לחץ על תחנות במפה לבחירה');
@@ -861,14 +865,17 @@ $(document).ready(function () {
     document.getElementById('btnLast30').addEventListener('click',()=>{
         hourlyMode='last30'; hourlyYear=currentDataYear; updateHourlyNav(); updateHourlyPlot();
     });
+    document.getElementById('btnForecast').addEventListener('click',()=>{
+        hourlyMode='forecast'; hourlyYear=currentDataYear; updateHourlyNav(); updateHourlyPlot();
+    });
     document.getElementById('btnPrevMonth').addEventListener('click',()=>{
-        if(hourlyMode==='last30'){hourlyYear=currentDataYear; hourlyMonth=NOW.getMonth()+1;}
+        if(hourlyMode==='last30' || hourlyMode==='forecast'){hourlyYear=currentDataYear; hourlyMonth=NOW.getMonth()+1;}
         hourlyMode='month'; hourlyMonth--;
         if(hourlyMonth<1){hourlyMonth=12; hourlyYear--;}
         updateHourlyNav(); updateHourlyPlot();
     });
     document.getElementById('btnNextMonth').addEventListener('click',()=>{
-        if(hourlyMode==='last30') return;
+        if(hourlyMode==='last30' || hourlyMode==='forecast') return;
         hourlyMonth++;
         if(hourlyMonth>12){hourlyMonth=1; hourlyYear++;}
         updateHourlyNav(); updateHourlyPlot();
@@ -1113,8 +1120,7 @@ function updateHourlyPlot() {
             ...dualAxisLayout(),
             shapes:getDayNightShapes(startDate,endDate),
             hovermode:'x unified',
-            showlegend:true,
-            legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
+            showlegend:false,
             dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
             margin:{t:45,r:50,l:50,b:40}
         },{responsive:true});
@@ -1142,7 +1148,7 @@ function updateHourlyPlot() {
         });
         const extremaTrace = computeExtremaTraceForStation(pts, currentMeasure, color, getHebrewName(name));
         if (extremaTrace) traces.push(extremaTrace);
-        traces.push(...computeForecastTracesForStation(name, currentMeasure, color, startDate, endDate, i===0));
+        traces.push(...computeForecastTracesForStation(name, currentMeasure, color, startDate, endDate));
     });
     Plotly.newPlot('hourlyPlot',traces,{
         title:{text:`${measureLabels[currentMeasure]} - שעתי`,x:0.95,xanchor:'right'},
@@ -1150,8 +1156,7 @@ function updateHourlyPlot() {
         yaxis:{title:measureLabels[currentMeasure], range:yRange(currentMeasure)},
         shapes:getDayNightShapes(startDate,endDate),
         hovermode:'x unified',
-        showlegend:true,
-        legend:{orientation:'v',x:0,y:1,xanchor:'left',yanchor:'top'},
+        showlegend:false,
         dir:'rtl',paper_bgcolor:'white',plot_bgcolor:'#fafafa',
         margin:{t:45,r:15,l:50,b:40}
     },{responsive:true});
