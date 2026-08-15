@@ -1,0 +1,48 @@
+name: Heat Data Update
+
+on:
+  schedule:
+    # Runs at 03:00 UTC = 6:00 AM Israel time (summer, UTC+3) / 5:00 AM (winter, UTC+2)
+    # Sits between the temperature update (01:00 UTC) and the rain update (05:00 UTC)
+    - cron: '0 3,13 * * *'
+  workflow_dispatch:  # Allows manual triggering from the Actions tab
+
+jobs:
+  update-heat-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run heat monitor update
+        env:
+          IMS_API_TOKEN: ${{ secrets.IMS_API_TOKEN }}
+        run: |
+          python code/monitor_update.py
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "auto update heat data"
+            git pull --no-rebase
+            git push
+          else
+            echo "no changes to commit"
+          fi
