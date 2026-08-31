@@ -9,7 +9,16 @@
     <link rel="stylesheet" href="style.css" />
     <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        html, body { width:100%; height:100%; }
         body { font-family: 'Assistant', sans-serif; margin: 0; padding: 0; }
+        /* Keep the map usable even when this HTML is opened without the repo's style.css. */
+        #map { height:100vh; width:100%; }
+        #floating-title {
+            position:absolute; top:10px; left:50%; transform:translateX(-50%);
+            background:rgba(255,255,255,0.95); border-radius:12px;
+            box-shadow:0 4px 15px rgba(0,0,0,0.15); z-index:1000;
+            max-width:90%; display:flex; text-align:center;
+        }
         .obs-tooltip {
             background: rgba(255,255,255,0.97) !important;
             border: none !important;
@@ -46,6 +55,30 @@
             color:#374151; font-family:'Assistant',sans-serif; transition:background 0.15s; white-space:nowrap;
         }
         #lang-btn:hover { background:#dbeafe; border-color:#2563eb; }
+        .scale-row {
+            display:flex; align-items:center; justify-content:center; gap:6px;
+            flex-wrap:wrap; width:100%; direction:ltr;
+        }
+        #scale-label { font-size:0.85em; font-weight:600; color:#374151; }
+        .scale-modes { display:flex; gap:3px; }
+        .scale-btn {
+            background:#f0f4f8; border:1.5px solid #d1d5db; border-radius:7px;
+            padding:2px 8px; font-size:0.80em; font-weight:700; cursor:pointer;
+            color:#374151; font-family:'Assistant',sans-serif; transition:background 0.15s;
+            white-space:nowrap;
+        }
+        .scale-btn:hover { background:#dbeafe; border-color:#2563eb; }
+        .scale-btn.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+        .scale-custom { display:none; align-items:center; gap:4px; }
+        .scale-custom.visible { display:flex; }
+        .scale-input {
+            width:58px; padding:2px 5px; border:1.5px solid #d1d5db; border-radius:6px;
+            background:#fff; color:#111827; font-family:'Assistant',sans-serif;
+            font-size:0.80em; text-align:center;
+        }
+        .scale-input:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.12); }
+        .scale-input.invalid { border-color:#dc2626; background:#fef2f2; }
+        #scale-unit { font-size:0.78em; font-weight:600; color:#475569; white-space:nowrap; }
         .colorbar-control {
             background:rgba(255,255,255,0.95); padding:10px 8px; border-radius:10px;
             box-shadow:0 4px 15px rgba(0,0,0,0.15); display:flex; gap:8px;
@@ -71,6 +104,8 @@
             #floating-title { width:96%; max-width:none; }
             #floating-title h1 { font-size:1em !important; }
             #measure-select { max-width:170px; }
+            .scale-btn { padding:2px 6px; }
+            .scale-input { width:52px; }
         }
     </style>
 </head>
@@ -98,6 +133,22 @@
     <div class="measure-row">
         <label id="measure-label" for="measure-select" style="font-size:0.85em;font-weight:600;color:#374151;">Measure:</label>
         <select id="measure-select" onchange="onMeasureChange()"></select>
+    </div>
+    <div class="scale-row">
+        <span id="scale-label">Scale:</span>
+        <div class="scale-modes">
+            <button class="scale-btn active" id="scale-set" onclick="setScaleMode('set')">Set</button>
+            <button class="scale-btn" id="scale-minmax" onclick="setScaleMode('minmax')">Min–Max</button>
+            <button class="scale-btn" id="scale-custom" onclick="setScaleMode('custom')">Custom</button>
+        </div>
+        <div id="custom-scale-fields" class="scale-custom">
+            <input id="scale-min" class="scale-input" type="number" step="any" placeholder="Min"
+                   aria-label="Custom scale minimum" onchange="applyCustomScale()" onkeydown="handleScaleKey(event)">
+            <span>&ndash;</span>
+            <input id="scale-max" class="scale-input" type="number" step="any" placeholder="Max"
+                   aria-label="Custom scale maximum" onchange="applyCustomScale()" onkeydown="handleScaleKey(event)">
+            <span id="scale-unit"></span>
+        </div>
     </div>
     <div style="display:flex;flex-direction:row;justify-content:center;gap:18px;align-items:center;width:100%;">
         <a href="index.html" class="home-btn" style="margin:0;">
@@ -133,6 +184,10 @@ let colorbarCtrl = null;
 let availableShorts = new Set();
 let autoLatest = true;
 let xmlTitle = 'Israeli Surface Stations Hourly Observations';
+let colorScaleMode = 'set';
+let customScaleRanges = {};
+const WIND_MEASURES = ['FF','FFX','FM','FM1','FX1'];
+const RAIN_MEASURES = ['R01','R06','R12','R24'];
 const heParamNames = {
     TT:'טמפרטורת אוויר', TD:'טמפרטורת נקודת הטל', TWE:'טמפרטורה רטובה',
     RH:'לחות יחסית', DD:'כיוון הרוח', FF:'מהירות הרוח',
@@ -147,7 +202,8 @@ const heParamNames = {
 };
 const heUI = {
     measure:'פרמטר:', home:'דף הבית', sourceLabel:'נתונים מ',
-    title:'תצפיות שעתיות של תחנות פני קרקע בישראל'
+    title:'תצפיות שעתיות של תחנות פני קרקע בישראל',
+    scale:'טווח:', setScale:'קבוע', minmax:'מינ׳–מקס׳', custom:'מותאם'
 };
 function jetColor(ratio) {
     const r0 = Math.max(0, Math.min(1, ratio));
@@ -175,28 +231,67 @@ function getValsAtTime(pshort, tIdx) {
 function getTimeVals(pshort) {
     return getValsAtTime(pshort, timeIndex);
 }
-function valueColor(pshort, rawVal, pinfo) {
-    if (pshort === 'RH') return jetColor(1 - rawVal / 100);
-    if (pshort === 'VV') return jetColor(Math.min(rawVal, 50000) / 50000);
-    if (['R01','R06','R12','R24'].includes(pshort)) {
-        const mx = {R01:200,R06:500,R12:1000,R24:2000}[pshort];
-        const t = Math.min(rawVal, mx) / mx;
-        return 'rgb('+Math.round(180*(1-t))+','+Math.round(220*(1-t))+',255)';
-    }
-    if (['FF','FFX','FM','FM1','FX1'].includes(pshort)) {
-        const kmh = (rawVal / 10) * 3.6;
-        return jetColor(Math.min(kmh, 70) / 70);
-    }
-    const range = fixedRanges[pshort];
-    if (range) return jetColor((rawVal - range[0]) / (range[1] - range[0]));
+function getMinMaxRangeRaw(pshort) {
     const vals = getTimeVals(pshort);
-    if (vals.length < 2) return jetColor(0.5);
-    const mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
-    return mn === mx ? jetColor(0.5) : jetColor((rawVal - mn) / (mx - mn));
+    if (!vals.length) return null;
+    return [Math.min.apply(null, vals), Math.max.apply(null, vals)];
+}
+function getSetRangeRaw(pshort) {
+    if (pshort === 'RH') return [0, 100];
+    if (pshort === 'VV') return [0, 50000];
+    if (RAIN_MEASURES.includes(pshort)) {
+        return [0, {R01:200,R06:500,R12:1000,R24:2000}[pshort]];
+    }
+    if (WIND_MEASURES.includes(pshort)) {
+        // Preserve the existing 0–70 km/h wind color scale.
+        return [0, (70 / 3.6) * 10];
+    }
+    if (fixedRanges[pshort]) return fixedRanges[pshort].slice();
+    // Parameters without a predefined range already used current-time min/max.
+    return getMinMaxRangeRaw(pshort);
+}
+function getActiveRangeRaw(pshort) {
+    if (colorScaleMode === 'minmax') return getMinMaxRangeRaw(pshort);
+    if (colorScaleMode === 'custom' && customScaleRanges[pshort]) return customScaleRanges[pshort];
+    return getSetRangeRaw(pshort);
+}
+function rawToDisplay(pshort, rawVal, pinfo) {
+    if (WIND_MEASURES.includes(pshort)) return (rawVal / 10) * 3.6;
+    if (pshort === 'VV') return rawVal / 1000;
+    return rawVal / pinfo.scale;
+}
+function displayToRaw(pshort, displayVal, pinfo) {
+    if (WIND_MEASURES.includes(pshort)) return (displayVal / 3.6) * 10;
+    if (pshort === 'VV') return displayVal * 1000;
+    return displayVal * pinfo.scale;
+}
+function getScaleUnit(pshort, pinfo) {
+    if (WIND_MEASURES.includes(pshort)) return 'km/h';
+    if (pshort === 'VV') return 'km';
+    if (RAIN_MEASURES.includes(pshort)) return 'mm';
+    if (['GRD','GRH'].includes(pshort)) return 'W/m²';
+    if (pinfo.units === '%') return '%';
+    if (pinfo.units.indexOf('C') >= 0) return '°C';
+    if (pinfo.units.indexOf('hPa') >= 0) return 'hPa';
+    if (pinfo.units === 'm') return 'm';
+    if (pinfo.units === 'Minutes') return 'min';
+    return pinfo.units.replace(/^Tenths\s+/, '');
+}
+function valueColor(pshort, rawVal, pinfo) {
+    const range = getActiveRangeRaw(pshort);
+    if (!range) return jetColor(0.5);
+    const mn = range[0], mx = range[1];
+    let ratio = (mn === mx) ? 0.5 : (rawVal - mn) / (mx - mn);
+    ratio = Math.max(0, Math.min(1, ratio));
+    if (pshort === 'RH') return jetColor(1 - ratio);
+    if (RAIN_MEASURES.includes(pshort)) {
+        return 'rgb('+Math.round(180*(1-ratio))+','+Math.round(220*(1-ratio))+',255)';
+    }
+    return jetColor(ratio);
 }
 function fmtVal(pshort, rawVal, pinfo) {
     const v = rawVal / pinfo.scale;
-    if (['FF','FFX','FM','FM1','FX1'].includes(pshort)) return (v * 3.6).toFixed(1) + ' km/h';
+    if (WIND_MEASURES.includes(pshort)) return (v * 3.6).toFixed(1) + ' km/h';
     if (pshort === 'VV')                    return (rawVal / 1000).toFixed(1) + ' km';
     if (['GRD','GRH'].includes(pshort))     return v.toFixed(0) + ' W/m\u00b2';
     if (pinfo.units === '%')                return v.toFixed(0) + '%';
@@ -206,6 +301,66 @@ function fmtVal(pshort, rawVal, pinfo) {
     if (pinfo.units === 'm')                return v.toFixed(0) + ' m';
     if (pinfo.units === 'Minutes')          return v.toFixed(0) + ' min';
     return v.toFixed(1) + (pinfo.units ? ' ' + pinfo.units : '');
+}
+function ensureCustomScale() {
+    if (customScaleRanges[currentMeasure]) return;
+    const range = getSetRangeRaw(currentMeasure) || getMinMaxRangeRaw(currentMeasure);
+    if (range) customScaleRanges[currentMeasure] = range.slice();
+}
+function setScaleMode(mode) {
+    colorScaleMode = mode;
+    if (mode === 'custom') ensureCustomScale();
+    updateScaleControls();
+    renderMarkers();
+}
+function formatInputValue(value) {
+    if (!Number.isFinite(value)) return '';
+    return String(parseFloat(value.toFixed(3)));
+}
+function updateScaleControls() {
+    ['set','minmax','custom'].forEach(function(mode) {
+        const btn = document.getElementById('scale-' + mode);
+        if (btn) btn.classList.toggle('active', colorScaleMode === mode);
+    });
+    const fields = document.getElementById('custom-scale-fields');
+    if (!fields) return;
+    fields.classList.toggle('visible', colorScaleMode === 'custom');
+    if (colorScaleMode !== 'custom') return;
+    ensureCustomScale();
+    const pinfo = params.find(function(p) { return p.short === currentMeasure; });
+    const range = customScaleRanges[currentMeasure];
+    if (!pinfo || !range) return;
+    const minInput = document.getElementById('scale-min');
+    const maxInput = document.getElementById('scale-max');
+    minInput.value = formatInputValue(rawToDisplay(currentMeasure, range[0], pinfo));
+    maxInput.value = formatInputValue(rawToDisplay(currentMeasure, range[1], pinfo));
+    minInput.classList.remove('invalid');
+    maxInput.classList.remove('invalid');
+    document.getElementById('scale-unit').textContent = getScaleUnit(currentMeasure, pinfo);
+}
+function applyCustomScale() {
+    const minInput = document.getElementById('scale-min');
+    const maxInput = document.getElementById('scale-max');
+    const mn = parseFloat(minInput.value);
+    const mx = parseFloat(maxInput.value);
+    const valid = Number.isFinite(mn) && Number.isFinite(mx) && mn < mx;
+    minInput.classList.toggle('invalid', !valid);
+    maxInput.classList.toggle('invalid', !valid);
+    if (!valid) return;
+    const pinfo = params.find(function(p) { return p.short === currentMeasure; });
+    if (!pinfo) return;
+    customScaleRanges[currentMeasure] = [
+        displayToRaw(currentMeasure, mn, pinfo),
+        displayToRaw(currentMeasure, mx, pinfo)
+    ];
+    renderMarkers();
+}
+function handleScaleKey(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        applyCustomScale();
+        event.target.blur();
+    }
 }
 function parseXML(xmlText) {
     const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
@@ -260,7 +415,7 @@ function buildDropdown() {
         const opt = document.createElement('option');
         opt.value = p.short;
         opt.textContent = p.short + ' \u2013 ' + (lang === 'he' ? (heParamNames[p.short] || p.full) : p.full);
-        if (['FF','FFX','FM','FM1','FX1'].includes(p.short)) opt.textContent += (lang === 'he' ? ' (חצים)' : ' (arrows)');
+        if (WIND_MEASURES.includes(p.short)) opt.textContent += (lang === 'he' ? ' (חצים)' : ' (arrows)');
         sel.appendChild(opt);
     });
     sel.value = (sel.querySelector('option[value="'+prev+'"]') ? prev : (sel.options[0]||{}).value) || prev;
@@ -283,7 +438,7 @@ function renderMarkers() {
     document.getElementById('btn-latest').classList.toggle('active', autoLatest);
     const stations = data[tk];
     if (!stations) return;
-    const isWind = (['FF','FFX','FM','FM1','FX1'].includes(currentMeasure));
+    const isWind = WIND_MEASURES.includes(currentMeasure);
     Object.values(stations).forEach(function(stn) {
         const rawVal = stn.values[currentMeasure];
         if (rawVal === undefined || isNaN(rawVal)) return;
@@ -318,6 +473,28 @@ function renderMarkers() {
     });
     renderColorbar(pinfo);
 }
+function formatScaleNumber(value, span) {
+    const absSpan = Math.abs(span);
+    let decimals = 0;
+    if (absSpan < 1) decimals = 2;
+    else if (absSpan < 10) decimals = 1;
+    const rounded = parseFloat(value.toFixed(decimals));
+    return Object.is(rounded, -0) ? '0' : String(rounded);
+}
+function makeScaleLabels(minVal, maxVal) {
+    if (!Number.isFinite(minVal) || !Number.isFinite(maxVal)) return [];
+    const span = maxVal - minVal;
+    if (span === 0) {
+        const same = formatScaleNumber(minVal, 0);
+        return [same, same];
+    }
+    const labels = [];
+    const intervals = 6;
+    for (let i = intervals; i >= 0; i--) {
+        labels.push(formatScaleNumber(minVal + span * i / intervals, span));
+    }
+    return labels;
+}
 function renderColorbar(pinfo) {
     colorbarCtrl = L.control({ position:'bottomleft' });
     colorbarCtrl.onAdd = function() {
@@ -325,69 +502,32 @@ function renderColorbar(pinfo) {
         const sh = currentMeasure;
         const tickPx = 22;
         let gradient = 'linear-gradient(to top,rgb(0,0,255),rgb(0,255,255),rgb(0,255,0),rgb(255,255,0),rgb(255,0,0))';
-        let labels = [];
-        let unitHdr = '';
         if (sh === 'RH') {
             gradient = 'linear-gradient(to top,rgb(255,0,0),rgb(255,255,0),rgb(0,255,0),rgb(0,255,255),rgb(0,0,255))';
-            for (var v=100; v>=0; v-=10) labels.push(v+'%');
-        } else if (['FF','FFX','FM'].includes(sh)) {
-            for (var v=70; v>=0; v-=10) labels.push(v+'');
-            unitHdr = 'km/h';
-        } else if (['R01','R06','R12','R24'].includes(sh)) {
+        } else if (RAIN_MEASURES.includes(sh)) {
             gradient = 'linear-gradient(to top,rgb(180,220,255),rgb(0,100,255))';
-            const mxRaw = {R01:200,R06:500,R12:1000,R24:2000}[sh];
-            const mxMm  = mxRaw / 10;
-            const step  = mxMm <= 20 ? 2 : mxMm <= 50 ? 5 : mxMm <= 100 ? 10 : 20;
-            for (var v=mxMm; v>=0; v-=step) labels.push(v.toFixed(step<1?1:0)+'');
-            unitHdr = 'mm';
-        } else if (['TT','TD','TWE','TN','TX','TN1','TX1','TG','TW'].includes(sh)) {
-            for (var v=45; v>=-5; v-=5) labels.push(v+'\u00b0C');
-        } else if (['GRD','GRH'].includes(sh)) {
-            const mx = sh === 'GRD' ? 60000 : 4000;
-            const step = sh === 'GRD' ? 10000 : 500;
-            for (var v=mx; v>=0; v-=step) labels.push(v+'');
-            unitHdr = 'W/m\u00b2';
-        } else if (sh === 'VV') {
-            // horizontal visibility 0–50 km
-            for (var v=50; v>=0; v-=5) labels.push(v+'');
-            unitHdr = 'km';
-        } else if (['PO','PP'].includes(sh)) {
-            for (var v=1100; v>=850; v-=25) labels.push(v+'');
-            unitHdr = 'hPa';
-        } else {
-            const vals = getTimeVals(sh);
-            if (vals.length < 2) { div.innerHTML=''; return div; }
-            const mn = Math.min.apply(null,vals), mx = Math.max.apply(null,vals);
-            const range = mx - mn;
-            // choose step so we get at most ~8 ticks
-            const rawStep = range / 7;
-            const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-            const step = Math.ceil(rawStep / magnitude) * magnitude;
-            const lo = Math.ceil(mn/step)*step, hi = Math.floor(mx/step)*step;
-            for (var v=hi; v>=lo-0.001; v-=step) labels.push(parseFloat(v.toFixed(4))+'');
-            unitHdr = pinfo.units.replace('Tenths ','');
         }
-        const barH = (labels.length - 1) * tickPx;
+        const range = getActiveRangeRaw(sh);
+        if (!range) { div.innerHTML=''; return div; }
+        const mn = rawToDisplay(sh, range[0], pinfo);
+        const mx = rawToDisplay(sh, range[1], pinfo);
+        const labels = makeScaleLabels(mn, mx);
+        const unitHdr = getScaleUnit(sh, pinfo);
+        const barH = Math.max(44, (labels.length - 1) * tickPx);
         const labelsHtml = labels.map(function(l){return '<span>'+l+'</span>';}).join('');
-        if (unitHdr) {
-            div.innerHTML =
-                '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">' +
-                '<div style="font-size:9px;font-weight:700;color:#334155;text-align:right;padding-bottom:2px;">'+unitHdr+'</div>' +
-                '<div style="display:flex;gap:8px;">' +
-                '<div class="colorbar-labels" style="height:'+barH+'px;">'+labelsHtml+'</div>' +
-                '<div class="colorbar-gradient" style="background:'+gradient+';height:'+barH+'px;"></div>' +
-                '</div></div>';
-        } else {
-            div.innerHTML =
-                '<div class="colorbar-labels" style="height:'+barH+'px;">'+labelsHtml+'</div>' +
-                '<div class="colorbar-gradient" style="background:'+gradient+';height:'+barH+'px;"></div>';
-        }
+        div.innerHTML =
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">' +
+            (unitHdr ? '<div style="font-size:9px;font-weight:700;color:#334155;text-align:right;padding-bottom:2px;">'+unitHdr+'</div>' : '') +
+            '<div style="display:flex;gap:8px;">' +
+            '<div class="colorbar-labels" style="height:'+barH+'px;">'+labelsHtml+'</div>' +
+            '<div class="colorbar-gradient" style="background:'+gradient+';height:'+barH+'px;"></div>' +
+            '</div></div>';
         return div;
     };
     colorbarCtrl.addTo(map);
 }
 function utcToIsrael(dtStr) {
-    // dtStr: "2026-07-30 05:00"  — treat as UTC, add 3h for IDT
+    // dtStr: "2026-07-30 05:00" — treat as UTC, add 3h for IDT
     var parts = dtStr.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
     if (!parts) return dtStr;
     var d = new Date(Date.UTC(+parts[1],+parts[2]-1,+parts[3],+parts[4],+parts[5]));
@@ -427,6 +567,8 @@ function onMeasureChange() {
         // current step has no data; jump to latest for this measure but keep manual mode
         timeIndex = latestIndexFor(currentMeasure);
     }
+    if (colorScaleMode === 'custom') ensureCustomScale();
+    updateScaleControls();
     renderMarkers();
 }
 function toggleLang() {
@@ -439,14 +581,30 @@ function toggleLang() {
         document.getElementById('measure-label').textContent = heUI.measure;
         document.getElementById('home-label').textContent = heUI.home;
         document.getElementById('source-label').textContent = heUI.sourceLabel;
+        document.getElementById('scale-label').textContent = heUI.scale;
+        document.getElementById('scale-set').textContent = heUI.setScale;
+        document.getElementById('scale-minmax').textContent = heUI.minmax;
+        document.getElementById('scale-custom').textContent = heUI.custom;
+        document.getElementById('scale-min').placeholder = 'מינ׳';
+        document.getElementById('scale-max').placeholder = 'מקס׳';
     } else {
         document.getElementById('title-text').textContent = xmlTitle;
         document.getElementById('measure-label').textContent = 'Measure:';
         document.getElementById('home-label').textContent = 'Home';
         document.getElementById('source-label').textContent = 'Data from';
+        document.getElementById('scale-label').textContent = 'Scale:';
+        document.getElementById('scale-set').textContent = 'Set';
+        document.getElementById('scale-minmax').textContent = 'Min–Max';
+        document.getElementById('scale-custom').textContent = 'Custom';
+        document.getElementById('scale-min').placeholder = 'Min';
+        document.getElementById('scale-max').placeholder = 'Max';
     }
     buildDropdown();
+    updateScaleControls();
 }
+window.addEventListener('resize', function(){ map.invalidateSize(); });
+window.addEventListener('load', function(){ setTimeout(function(){ map.invalidateSize(); }, 0); });
+
 fetch('https://ims-observ.yuvharpaz.workers.dev/')
     .then(function(r){ return r.text(); })
     .then(function(xmlText){
@@ -455,8 +613,11 @@ fetch('https://ims-observ.yuvharpaz.workers.dev/')
         // start in latest mode — jump to latest time for default measure
         timeIndex = latestIndexFor(currentMeasure);
         setLatestMode(true);
+        updateScaleControls();
         renderMarkers();
         document.getElementById('loading').style.display = 'none';
+        // Leaflet can be initialized before all surrounding layout settles; force a size refresh.
+        setTimeout(function(){ map.invalidateSize(); }, 0);
     })
     .catch(function(err){
         document.getElementById('loading').innerHTML =
