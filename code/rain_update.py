@@ -67,24 +67,52 @@ print('saving rain update')
 df_rain.to_csv(opcsv, index=False)
 print('rounding rain data')
 round_data(opcsv)
-current_year = datetime.now().year
-winters = pd.read_csv('data/sum_rain_sep_to_aug.csv')
-for year in [current_year-1, current_year]:
-    df = pd.read_csv(f'data/rain_{year}.csv')
-    # half2: Jan 1 to Sept 1 of current year
-    df2 = df[df['datetime'] < f'{year}-09-01']
-    # half2 = np.nansum(df[station][df['datetime'] < f'{year}-09-01'])
-    
-    if year == current_year-1:
-        df_prev = df
-        continue
-    # half1: Sept 1 of previous year to Jan 1 of current year
-    df1 = df_prev[df_prev['datetime'] >= f'{year-1}-09-01']
-    df_combined = pd.concat([df1, df2])
+def update_winter(winters, winter_start):
+    """Write the Sept-to-Aug totals of one winter into the winters table.
+
+    Adds the row when the winter is not in the table yet, which is what happens
+    every September when a new season opens.
+    """
+    winter = f'{winter_start}-{winter_start + 1}'
+    match = winters.index[winters['winter'] == winter]
+    if len(match):
+        row = match[0]
+    else:
+        print(f'adding row for winter {winter}')
+        row = len(winters)
+        winters.at[row, 'winter'] = winter
+
+    parts = []
+    for year, start, stop in ((winter_start, f'{winter_start}-09-01', None),
+                              (winter_start + 1, None, f'{winter_start + 1}-09-01')):
+        path = f'data/rain_{year}.csv'
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path)
+        if start is not None:
+            df = df[df['datetime'] >= start]
+        if stop is not None:
+            df = df[df['datetime'] < stop]
+        parts.append(df)
+    if not parts:
+        return winters
+
+    df_combined = pd.concat(parts)
     for station in df_combined.columns[1:]:
-        total = np.nansum(df_combined[station])
-        winters.at[len(winters)-1, station] = total
-    df_prev = df
+        values = df_combined[station].dropna()
+        if len(values):  # leave blank rather than 0 when the station recorded nothing
+            winters.at[row, station] = float(values.sum())
+    return winters
+
+
+now = datetime.now()
+# The winter that is running now, Sept to Aug
+current_winter_start = now.year if now.month >= 9 else now.year - 1
+
+winters = pd.read_csv('data/sum_rain_sep_to_aug.csv')
+# The previous winter too, so its last days are not lost when the season rolls over
+for winter_start in (current_winter_start - 1, current_winter_start):
+    winters = update_winter(winters, winter_start)
 winters.to_csv('data/sum_rain_sep_to_aug.csv', index=False)
 round_data('data/sum_rain_sep_to_aug.csv')
 '''TODO: 

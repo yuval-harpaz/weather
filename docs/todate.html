@@ -110,6 +110,11 @@
 </head>
 
 <body>
+  <div id="no-data-notice" style="display: none; position: fixed; top: 45%; left: 50%;
+    transform: translate(-50%, -50%); z-index: 1200; background: rgba(255, 255, 255, 0.95);
+    padding: 14px 22px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    direction: rtl; font-size: 1.05em; text-align: center;"></div>
+
   <div id="loading-overlay" class="loading-overlay">
     <div class="spinner"></div>
     <div class="loading-text">טוען נתונים...</div>
@@ -291,6 +296,10 @@
       return marker;
     }
 
+    // Fixed reference decade: winters 2015-2016 through 2024-2025
+    const HIST_FIRST_START = 2015;
+    const HIST_LAST_START = 2024;
+
     // Load all rain data files
     async function loadAllRainData() {
       // Calculate current winter and required years dynamically
@@ -306,17 +315,30 @@
         currentWinterStartYear = currentYear - 1;
       }
 
-      // Need data from 11 years back to cover 10 previous winters + current winter
-      const startYear = currentWinterStartYear - 10;
-      const endYear = currentWinterStartYear + 1;
+      // The years the fixed reference decade needs, plus the current winter's own two.
+      // Listing them instead of spanning a range keeps the download from growing by a
+      // file every year as the current winter moves away from the fixed decade.
+      const years = new Set();
+      for (let start = HIST_FIRST_START; start <= HIST_LAST_START; start++) {
+        years.add(start);
+        years.add(start + 1);
+      }
+      years.add(currentWinterStartYear);
+      years.add(currentWinterStartYear + 1);
       const allData = [];
 
       console.log('Loading rain data...');
 
-      for (let year = startYear; year <= endYear; year++) {
+      for (const year of [...years].sort((a, b) => a - b)) {
         try {
           const url = `https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/rain_${year}.csv`;
           const response = await fetch(url);
+          if (!response.ok) {
+            // The file for a year that has not started yet is simply absent; fetch
+            // does not reject on 404, so its error page would be parsed as data.
+            console.log(`No rain file for ${year} (${response.status})`);
+            continue;
+          }
           const csvText = await response.text();
           const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
           allData.push(...parsed.data);
@@ -403,14 +425,15 @@
 
       const currentWinter = `${currentWinterStartYear}-${currentWinterStartYear + 1}`;
 
-      // Generate array of 10 previous winters
+      // The median is FIXED to this reference decade - the one used when the page was
+      // first computed - so the baseline does not drift from year to year.
+      // Change these two constants to re-base it (see HIST_FIRST_START in loadAllRainData).
       const requiredWinters = [];
-      for (let i = 10; i >= 1; i--) {
-        const winterStart = currentWinterStartYear - i;
-        requiredWinters.push(`${winterStart}-${winterStart + 1}`);
+      for (let start = HIST_FIRST_START; start <= HIST_LAST_START; start++) {
+        requiredWinters.push(`${start}-${start + 1}`);
       }
 
-      const medianYearRange = `${currentWinterStartYear - 10}-${currentWinterStartYear}`;
+      const medianYearRange = `${HIST_FIRST_START}-${HIST_LAST_START + 1}`;
 
       let validStations = 0;
 
@@ -462,6 +485,18 @@
       console.log(`Current winter: ${currentWinter}`);
       console.log(`Median year range: ${medianYearRange}`);
       console.log(`Comparing from Sep 1 to: ${latestDatetime.toISOString().split('T')[0]}`);
+
+      // Right after Sept 1 the window is a few days long and the 10 year median is
+      // zero almost everywhere, so nothing can be compared yet. Say that rather than
+      // leaving an empty map behind.
+      if (validStations === 0) {
+        const notice = document.getElementById('no-data-notice');
+        if (notice) {
+          notice.textContent =
+            `חורף ${currentWinter} רק התחיל - אין עדיין גשם להשוואה מול 10 השנים הקודמות`;
+          notice.style.display = 'block';
+        }
+      }
 
       // Hide loading overlay
       const loadingOverlay = document.getElementById('loading-overlay');

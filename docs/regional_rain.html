@@ -26,6 +26,41 @@
       height: 100vh;
     }
 
+    .winter-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0 0 0;
+      direction: rtl;
+      font-size: 0.9em;
+    }
+
+    .winter-nav button {
+      font-family: inherit;
+      font-size: 0.95em;
+      padding: 4px 12px;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      background: #f7f7f7;
+      cursor: pointer;
+    }
+
+    .winter-nav button:hover:not(:disabled) {
+      background: #e8f6fa;
+      border-color: #00b8d4;
+    }
+
+    .winter-nav button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    #prevLabel {
+      min-width: 90px;
+      color: #0090a8;
+      font-weight: bold;
+    }
+
     .footer {
       position: fixed;
       bottom: 10px;
@@ -61,6 +96,12 @@
   </div>
 </header>
 
+<div class="winter-nav">
+  <button id="prevBtn" title="הוסף חורף קודם">חורף קודם ◀</button>
+  <button id="nextBtn" title="חזור קדימה" disabled>▶ חורף הבא</button>
+  <span id="prevLabel"></span>
+</div>
+
 <div id="plot"></div>
 
 <div class="data-source" id="ims-attribution" style="position: fixed; top: 52%; flex-direction: column; align-items: flex-start; background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
@@ -82,6 +123,15 @@
     5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug'
   };
 
+  // '2016-2017' -> '09/2016-08/2017' (the winter runs Sep..Aug)
+  function fmtWinter(winter) {
+    const [from, to] = String(winter).split('-');
+    if (!to) return String(winter);
+    const start = String(monthOrder[0]).padStart(2, '0');
+    const end = String(monthOrder[monthOrder.length - 1]).padStart(2, '0');
+    return `${start}/${from}-${end}/${to}`;
+  }
+
   async function loadAndPlot() {
     try {
       // Determine CSV path - if local or on server, usually relative to this file
@@ -102,8 +152,18 @@
       // 2. Identify Winters
       const winters = [...new Set(data.map(d => d.Winter))].sort();
       const currentWinter = winters[winters.length - 1];
-      // Last 10 winters before current
-      const histWinters = winters.slice(Math.max(0, winters.length - 11), winters.length - 1);
+
+      // The gray band / median line are FIXED to this reference decade - the one used
+      // when the chart was first computed - so they do not drift from year to year.
+      // Change these two constants to re-base the reference decade.
+      const HIST_FIRST = '2015-2016';
+      const HIST_LAST = '2024-2025';
+      const histWinters = winters.slice(winters.indexOf(HIST_FIRST), winters.indexOf(HIST_LAST) + 1);
+      const histCount = histWinters.length;
+      // The decade as one continuous span: the first winter's Sept to the last winter's Aug
+      const histFrom = fmtWinter(HIST_FIRST).split('-')[0];
+      const histTo = fmtWinter(HIST_LAST).split('-')[1];
+      const histLabel = `עשר שנים: ${histFrom} עד ${histTo}`;
 
       // 3. Current Date Info for plot adjustment
       const now = new Date();
@@ -121,7 +181,7 @@
       const traces = [];
       const layout = {
         title: {
-          text: `כמות גשם מצטברת לפי חודש ואיזור: חורף ${currentWinter} לעומת 10 שנים קודמות`,
+          text: `כמות גשם מצטברת לפי חודש ואיזור: חורף ${fmtWinter(currentWinter)} לעומת ${histLabel}`,
           x: 0.95, // Right aligned roughly
           xanchor: 'right'
         },
@@ -173,6 +233,9 @@
         }
         return result;
       }
+
+      // Trace indices of the cyan "previous winter" line, one per region
+      const prevTraceIdx = [];
 
       regions.forEach((region, i) => {
         const row = Math.floor(i / cols) + 1;
@@ -257,7 +320,7 @@
         traces.push({
           x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
           y: minLine,
-          name: 'טווח 10 שנים',
+          name: `טווח ${histCount} שנים`,
           mode: 'lines',
           line: { width: 0 },
           fill: 'tonexty',
@@ -271,7 +334,7 @@
         traces.push({
           x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
           y: medLine,
-          name: 'חציון 10 שנים',
+          name: `חציון ${histCount} שנים`,
           mode: 'lines',
           line: { color: 'gray', dash: 'dash' },
           showlegend: i === 0,
@@ -285,10 +348,26 @@
           y: currY,
           text: currText,
           hovertemplate: '%{text}<br>%{y:.1f} mm<extra></extra>',
-          name: currentWinter,
+          name: fmtWinter(currentWinter),
           mode: 'lines',
           line: { color: 'blue', width: 3 },
           showlegend: i === 0,
+          xaxis: xaxisKey,
+          yaxis: yaxisKey
+        });
+
+        // Previous winter (cyan) - hidden until the "חורף קודם" button is pressed
+        prevTraceIdx.push(traces.length);
+        traces.push({
+          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+          y: new Array(12).fill(null),
+          text: monthOrder.map(m => monthNames[m]),
+          hovertemplate: '%{text}<br>%{y:.1f} mm<extra></extra>',
+          name: '',
+          mode: 'lines',
+          line: { color: '#00b8d4', width: 2 },
+          visible: false,
+          showlegend: false,
           xaxis: xaxisKey,
           yaxis: yaxisKey
         });
@@ -379,6 +458,48 @@
       layout.updatemenus[0].buttons[1].args = [autoscale];
 
 
+      // ---- "previous winter" navigation -------------------------------------
+      // offset 0 = nothing extra shown; 1 = the winter before the current one, etc.
+      let prevOffset = 0;
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const prevLabel = document.getElementById('prevLabel');
+
+      function renderPrevWinter() {
+        const shown = prevOffset > 0 ? winters[winters.length - 1 - prevOffset] : null;
+
+        if (!shown) {
+          Plotly.restyle('plot', {
+            visible: false,
+            showlegend: false,
+            name: '',
+            y: prevTraceIdx.map(() => new Array(12).fill(null))
+          }, prevTraceIdx);
+        } else {
+          const ys = regions.map(region => {
+            let sum = 0;
+            return getWinterData(region, shown).map(v => sum += v);
+          });
+          Plotly.restyle('plot', {
+            visible: true,
+            showlegend: prevTraceIdx.map((_, k) => k === 0),
+            name: fmtWinter(shown),
+            y: ys
+          }, prevTraceIdx);
+        }
+
+        prevLabel.textContent = shown ? fmtWinter(shown) : '';
+        prevBtn.disabled = prevOffset >= winters.length - 1;
+        nextBtn.disabled = prevOffset === 0;
+      }
+
+      prevBtn.addEventListener('click', () => {
+        if (prevOffset < winters.length - 1) { prevOffset++; renderPrevWinter(); }
+      });
+      nextBtn.addEventListener('click', () => {
+        if (prevOffset > 0) { prevOffset--; renderPrevWinter(); }
+      });
+
       const config = { responsive: true };
       Plotly.newPlot('plot', traces, layout, config).then(() => {
         const plotEl = document.getElementById('plot');
@@ -389,6 +510,7 @@
         const imsEl = document.getElementById('ims-attribution');
         imsEl.style.left = (plotRect.left + buttonLeftSVG) + 'px';
         imsEl.style.right = 'auto';
+        renderPrevWinter();
       });
 
     } catch (error) {

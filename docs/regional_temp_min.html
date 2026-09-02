@@ -26,6 +26,41 @@
             height: 100vh;
         }
 
+        .winter-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0 0 0;
+            direction: rtl;
+            font-size: 0.9em;
+        }
+
+        .winter-nav button {
+            font-family: inherit;
+            font-size: 0.95em;
+            padding: 4px 12px;
+            border: 1px solid #bbb;
+            border-radius: 5px;
+            background: #f7f7f7;
+            cursor: pointer;
+        }
+
+        .winter-nav button:hover:not(:disabled) {
+            background: #e8f6fa;
+            border-color: #00b8d4;
+        }
+
+        .winter-nav button:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        #prevLabel {
+            min-width: 130px;
+            color: #0090a8;
+            font-weight: bold;
+        }
+
         .footer {
             position: fixed;
             bottom: 10px;
@@ -70,6 +105,12 @@
     </div>
 </header>
 
+<div class="winter-nav">
+    <button id="prevBtn" title="הוסף מחזור קודם">חורף קודם ◀</button>
+    <button id="nextBtn" title="חזור קדימה" disabled>▶ חורף הבא</button>
+    <span id="prevLabel"></span>
+</div>
+
 <div id="plot"></div>
 
 <div class="data-source" id="ims-attribution" style="position: fixed; top: 52%; flex-direction: column; align-items: flex-start; background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
@@ -92,6 +133,15 @@
         5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug'
     };
 
+    // '2016-2017' -> 'MM/2016-MM/2017' using the cycle's own first/last month
+    function fmtCycle(cycle) {
+        const [from, to] = String(cycle).split('-');
+        if (!to) return String(cycle);
+        const start = String(monthOrder[0]).padStart(2, '0');
+        const end = String(monthOrder[monthOrder.length - 1]).padStart(2, '0');
+        return `${start}/${from}-${end}/${to}`;
+    }
+
     async function loadAndPlot() {
         try {
             const csvPath = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/regional_temp_min_per_month.csv';
@@ -109,8 +159,14 @@
             // 2. Identify Cycles
             const cycles = [...new Set(data.map(d => d.Cycle))].sort();
             const currentCycle = cycles[cycles.length - 1];
-            // Last 10 cycles before current
-            const histCycles = cycles.slice(Math.max(0, cycles.length - 11), cycles.length - 1);
+            // The gray band / median line are FIXED to this reference decade - the one
+            // used when the chart was first computed - so they do not drift year to year.
+            // Change these two constants to re-base the reference decade.
+            const HIST_FIRST = '2015-2016';
+            const HIST_LAST = '2024-2025';
+            const histCycles = cycles.slice(cycles.indexOf(HIST_FIRST), cycles.indexOf(HIST_LAST) + 1);
+            const histCount = histCycles.length;
+            const histLabel = `${histCount} שנים, ${fmtCycle(HIST_FIRST)} עד ${fmtCycle(HIST_LAST)}`;
 
             // 3. Current Date Info
             const now = new Date();
@@ -127,7 +183,7 @@
             const layout = {
                 annotations: [],
                 title: {
-                    text: `טמפרטורת מינימום לפי חודש ואיזור: חורף ${currentCycle} לעומת 10 שנים קודמות`,
+                    text: `טמפרטורת מינימום לפי חודש ואיזור: חורף ${fmtCycle(currentCycle)} לעומת ${histLabel}`,
                     x: 0.95,
                     xanchor: 'right'
                 },
@@ -176,6 +232,9 @@
                 }
                 return result;
             }
+
+            // Trace indices of the cyan "previous cycle" line, one per region
+            const prevTraceIdx = [];
 
             regions.forEach((region, i) => {
                 const xaxisKey = `x${i + 1}`;
@@ -247,7 +306,7 @@
                 traces.push({
                     x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
                     y: minLine,
-                    name: 'טווח 10 שנים',
+                    name: `טווח ${histCount} שנים`,
                     mode: 'lines',
                     line: { width: 0 },
                     fill: 'tonexty',
@@ -261,7 +320,7 @@
                 traces.push({
                     x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
                     y: medLine,
-                    name: 'חציון 10 שנים',
+                    name: `חציון ${histCount} שנים`,
                     mode: 'lines',
                     line: { color: 'gray', dash: 'dash' },
                     showlegend: i === 0,
@@ -275,10 +334,26 @@
                     y: currY,
                     text: currText,
                     hovertemplate: '%{text}<br>%{y:.1f} °C<extra></extra>',
-                    name: currentCycle,
+                    name: fmtCycle(currentCycle),
                     mode: 'lines',
                     line: { color: 'blue', width: 3 },
                     showlegend: i === 0,
+                    xaxis: xaxisKey,
+                    yaxis: yaxisKey
+                });
+
+                // Previous cycle (cyan) - hidden until the "חורף קודם" button is pressed
+                prevTraceIdx.push(traces.length);
+                traces.push({
+                    x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                    y: new Array(12).fill(null),
+                    text: monthOrder.map(m => monthNames[m]),
+                    hovertemplate: '%{text}<br>%{y:.1f} °C<extra></extra>',
+                    name: '',
+                    mode: 'lines',
+                    line: { color: '#00b8d4', width: 2 },
+                    visible: false,
+                    showlegend: false,
                     xaxis: xaxisKey,
                     yaxis: yaxisKey
                 });
@@ -337,6 +412,102 @@
             layout.updatemenus[0].buttons[1].args = [autoFunc];
 
 
+            // ---- "previous cycle" navigation ----------------------------------------
+
+
+            // offset 0 = nothing extra shown; 1 = the cycle before the current one, etc.
+
+
+            let prevOffset = 0;
+
+
+            const prevBtn = document.getElementById('prevBtn');
+
+
+            const nextBtn = document.getElementById('nextBtn');
+
+
+            const prevLabel = document.getElementById('prevLabel');
+
+
+
+            function renderPrevCycle() {
+
+
+                const shown = prevOffset > 0 ? cycles[cycles.length - 1 - prevOffset] : null;
+
+
+                if (!shown) {
+
+
+                    Plotly.restyle('plot', {
+
+
+                        visible: false, showlegend: false, name: '',
+
+
+                        y: prevTraceIdx.map(() => new Array(12).fill(null))
+
+
+                    }, prevTraceIdx);
+
+
+                } else {
+
+
+                    Plotly.restyle('plot', {
+
+
+                        visible: true,
+
+
+                        showlegend: prevTraceIdx.map((_, k) => k === 0),
+
+
+                        name: fmtCycle(shown),
+
+
+                        y: regions.map(region => getCycleData(region, shown))
+
+
+                    }, prevTraceIdx);
+
+
+                }
+
+
+                prevLabel.textContent = shown ? fmtCycle(shown) : '';
+
+
+                prevBtn.disabled = prevOffset >= cycles.length - 1;
+
+
+                nextBtn.disabled = prevOffset === 0;
+
+
+            }
+
+
+
+            prevBtn.addEventListener('click', () => {
+
+
+                if (prevOffset < cycles.length - 1) { prevOffset++; renderPrevCycle(); }
+
+
+            });
+
+
+            nextBtn.addEventListener('click', () => {
+
+
+                if (prevOffset > 0) { prevOffset--; renderPrevCycle(); }
+
+
+            });
+
+
+
             const config = { responsive: true };
             Plotly.newPlot('plot', traces, layout, config).then(() => {
                 const plotEl = document.getElementById('plot');
@@ -347,6 +518,7 @@
                 const imsEl = document.getElementById('ims-attribution');
                 imsEl.style.left = (plotRect.left + buttonLeftSVG) + 'px';
                 imsEl.style.right = 'auto';
+            renderPrevCycle();
             });
 
         } catch (error) {

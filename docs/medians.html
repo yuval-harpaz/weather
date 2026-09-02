@@ -123,7 +123,7 @@
     </a>
     <h1 style="margin: 0;">
       <img src="logo.jpg" alt="Icon" class="title-icon">
-      גשם מצטבר בחורף הנוכחי בהשוואה לחציון של 10 שנים
+      <span id="title-text">גשם מצטבר בחורף הנוכחי בהשוואה לחציון של 10 שנים</span>
     </h1>
     <div class="data-source" style="margin-top: 0;">
       <span>נתונים מ</span>
@@ -312,24 +312,59 @@
         currentWinterStartYear = currentYear - 1;
       }
 
-      const currentWinter = `${currentWinterStartYear}-${currentWinterStartYear + 1}`;
+      let currentWinter = `${currentWinterStartYear}-${currentWinterStartYear + 1}`;
 
-      // Find current winter row index
-      const currentWinterIndex = wintersData.findIndex(row => row.winter === currentWinter);
-      if (currentWinterIndex === -1) {
-        console.error(`Current winter ${currentWinter} not found in data`);
-        return;
+      const hideLoading = () => {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.classList.add('hidden');
+      };
+
+      // A season that has only just opened carries no rain yet, and until the first
+      // rains reach the summary file it has no row there at all. Fall back to the
+      // newest winter that does hold rain - it is named in the title and in every
+      // popup, so what is on show stays clear.
+      const hasRain = row => Object.keys(row).some(
+        key => key !== 'winter' && parseFloat(row[key]) > 0);
+
+      let currentWinterIndex = wintersData.findIndex(row => row.winter === currentWinter);
+      if (currentWinterIndex === -1 || !hasRain(wintersData[currentWinterIndex])) {
+        const latestWithRain = wintersData.map(hasRain).lastIndexOf(true);
+        if (latestWithRain === -1) {
+          console.error('No winter in the data holds any rain');
+          hideLoading();
+          return;
+        }
+        console.warn(`No rain recorded yet for winter ${currentWinter}, showing ${wintersData[latestWithRain].winter} instead`);
+        currentWinterIndex = latestWithRain;
+        currentWinter = wintersData[currentWinterIndex].winter;
       }
 
-      // Get 10 previous winters (indices before current)
-      const startIndex = Math.max(0, currentWinterIndex - 10);
-      const previousWinters = wintersData.slice(startIndex, currentWinterIndex);
+      // The median is FIXED to this reference decade - the one used when the page was
+      // first computed - so the baseline does not drift from year to year.
+      // Change these two constants to re-base it.
+      const HIST_FIRST = '2015-2016';
+      const HIST_LAST = '2024-2025';
 
+      const histFrom = wintersData.findIndex(row => row.winter === HIST_FIRST);
+      const histTo = wintersData.findIndex(row => row.winter === HIST_LAST);
+      const previousWinters = (histFrom === -1 || histTo === -1)
+        ? wintersData.slice(Math.max(0, currentWinterIndex - 10), currentWinterIndex)
+        : wintersData.slice(histFrom, histTo + 1);
+
+      if (histFrom === -1 || histTo === -1) {
+        console.warn(`Reference decade ${HIST_FIRST}..${HIST_LAST} not in data, falling back to the 10 winters before ${currentWinter}`);
+      }
       if (previousWinters.length < 10) {
         console.warn(`Only ${previousWinters.length} previous winters available (need 10)`);
       }
 
-      const medianYearRange = `${previousWinters[0]?.winter?.split('-')[0] || ''}-${currentWinterStartYear}`;
+      const medianYearRange = `${previousWinters[0]?.winter?.split('-')[0] || ''}-${previousWinters[previousWinters.length - 1]?.winter?.split('-')[1] || ''}`;
+
+      const titleText = document.getElementById('title-text');
+      if (titleText) {
+        titleText.innerHTML =
+          `גשם מצטבר בחורף <bdi style="white-space: nowrap;">${currentWinter}</bdi> בהשוואה לחציון של 10 שנים`;
+      }
 
       let validStations = 0;
 
@@ -382,10 +417,7 @@
       console.log(`Median year range: ${medianYearRange}`);
 
       // Hide loading overlay
-      const loadingOverlay = document.getElementById('loading-overlay');
-      if (loadingOverlay) {
-        loadingOverlay.classList.add('hidden');
-      }
+      hideLoading();
 
       // Add legend
       const legend = L.control({ position: 'topright' });

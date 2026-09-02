@@ -26,6 +26,41 @@
             height: 100vh;
         }
 
+        .winter-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0 0 0;
+            direction: rtl;
+            font-size: 0.9em;
+        }
+
+        .winter-nav button {
+            font-family: inherit;
+            font-size: 0.95em;
+            padding: 4px 12px;
+            border: 1px solid #bbb;
+            border-radius: 5px;
+            background: #f7f7f7;
+            cursor: pointer;
+        }
+
+        .winter-nav button:hover:not(:disabled) {
+            background: #e8f6fa;
+            border-color: #00b8d4;
+        }
+
+        .winter-nav button:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        #prevLabel {
+            min-width: 60px;
+            color: #0090a8;
+            font-weight: bold;
+        }
+
         .footer {
             position: fixed;
             bottom: 10px;
@@ -70,6 +105,12 @@
     </div>
 </header>
 
+<div class="winter-nav">
+    <button id="prevBtn" title="הוסף שנה קודמת">שנה קודמת ◀</button>
+    <button id="nextBtn" title="חזור קדימה" disabled>▶ שנה הבאה</button>
+    <span id="prevLabel"></span>
+</div>
+
 <div id="plot"></div>
 
 <div class="data-source" id="ims-attribution" style="position: fixed; top: 52%; flex-direction: column; align-items: flex-start; background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
@@ -93,6 +134,14 @@
     let chartData = null;
     let cycles, currentCycle, histCycles;
     let currMonth, currDay, monthFraction;
+
+    // Fixed reference decade for the gray band / median line (calendar years here).
+    const HIST_FIRST = '2015';
+    const HIST_LAST = '2024';
+    let histLabel = '';
+
+    // offset 0 = nothing extra shown; 1 = the year before the current one, etc.
+    let prevOffset = 0;
 
     // ── Helpers ────────────────────────────────────────────────────────────────
     function getCycleData(region, cycle) {
@@ -135,7 +184,7 @@
 
         const layout = {
             annotations: [],
-            title: { text: `טמפרטורה ממוצעת לפי חודש ואיזור: שנה ${currentCycle} לעומת 10 שנים קודמות`, x: 0.95, xanchor: 'right' },
+            title: { text: `טמפרטורה ממוצעת לפי חודש ואיזור: שנה ${currentCycle} לעומת ${histLabel}`, x: 0.95, xanchor: 'right' },
             grid: { rows, columns: cols, pattern: 'independent' },
             height: 300 * rows,
             showlegend: true,
@@ -162,9 +211,9 @@
             }
             const xs = [0,1,2,3,4,5,6,7,8,9,10,11];
             traces.push({ x:xs, y:maxL, mode:'lines', line:{width:0}, showlegend:false, hoverinfo:'skip', xaxis:xK, yaxis:yK });
-            traces.push({ x:xs, y:minL, name:'טווח 10 שנים', mode:'lines', line:{width:0},
+            traces.push({ x:xs, y:minL, name:`טווח ${histCycles.length} שנים`, mode:'lines', line:{width:0},
                 fill:'tonexty', fillcolor:'rgba(200,200,200,0.3)', showlegend:i===0, xaxis:xK, yaxis:yK });
-            traces.push({ x:xs, y:medL, name:'חציון 10 שנים', mode:'lines',
+            traces.push({ x:xs, y:medL, name:`חציון ${histCycles.length} שנים`, mode:'lines',
                 line:{color:'gray',dash:'dash'}, showlegend:i===0, xaxis:xK, yaxis:yK });
 
             const currRaw = chartData.filter(d=>d.Region===region && d.Cycle===currentCycle)
@@ -181,6 +230,16 @@
                 cX[cX.length-1] = cX[cX.length-1] - 1 + monthFraction;
             traces.push({ x:cX, y:cY, text:cT, hovertemplate:'%{text}<br>%{y:.1f} °C<extra></extra>',
                 name:currentCycle, mode:'lines', line:{color:'blue',width:3}, showlegend:i===0, xaxis:xK, yaxis:yK });
+
+            // Previous year (cyan), shown once "שנה קודמת" has been pressed
+            if (prevOffset > 0) {
+                const shown = cycles[cycles.length - 1 - prevOffset];
+                traces.push({ x:xs, y:getCycleData(region, shown),
+                    text:monthOrder.map(m=>monthNames[m]),
+                    hovertemplate:'%{text}<br>%{y:.1f} °C<extra></extra>',
+                    name:shown, mode:'lines', line:{color:'#00b8d4',width:2},
+                    showlegend:i===0, xaxis:xK, yaxis:yK });
+            }
 
             const xAx = `xaxis${i===0?'':i+1}`, yAx = `yaxis${i===0?'':i+1}`;
             layout[xAx] = { tickvals:xs, ticktext:monthOrder.map(m=>monthNames[m]) };
@@ -362,12 +421,34 @@
 
             cycles       = [...new Set(chartData.map(d => d.Cycle))].sort();
             currentCycle = cycles[cycles.length - 1];
-            histCycles   = cycles.slice(Math.max(0, cycles.length - 11), cycles.length - 1);
+            // The gray band / median line are FIXED to this reference decade - the one
+            // used when the chart was first computed - so they do not drift year to year.
+            // Change these two constants to re-base the reference decade.
+            histCycles   = cycles.slice(cycles.indexOf(HIST_FIRST), cycles.indexOf(HIST_LAST) + 1);
+            histLabel    = `${histCycles.length} שנים, ${HIST_FIRST} עד ${HIST_LAST}`;
 
             const now  = new Date();
             currMonth    = now.getMonth() + 1;
             currDay      = now.getDate();
             monthFraction = currDay / new Date(now.getFullYear(), currMonth, 0).getDate();
+
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const prevLabel = document.getElementById('prevLabel');
+            function refreshNav() {
+                prevLabel.textContent = prevOffset > 0 ? cycles[cycles.length - 1 - prevOffset] : '';
+                prevBtn.disabled = prevOffset >= cycles.length - 1;
+                nextBtn.disabled = prevOffset === 0;
+            }
+            // Both buttons redraw the line chart (and so leave the polar view, which
+            // already shows every year).
+            prevBtn.addEventListener('click', () => {
+                if (prevOffset < cycles.length - 1) { prevOffset++; refreshNav(); plotLine(); }
+            });
+            nextBtn.addEventListener('click', () => {
+                if (prevOffset > 0) { prevOffset--; refreshNav(); plotLine(); }
+            });
+            refreshNav();
 
             plotLine();
         } catch (error) {
