@@ -91,7 +91,7 @@ def load_temp_year(year):
     return _temp_cache[year]
 
 
-def reporting_stations(year, month):
+def reporting_stations(year, month, lookback=3):
     """Stations known to be alive in a given month.
 
     The rain files hold rain events only - they never store a zero - so a station
@@ -101,8 +101,18 @@ def reporting_stations(year, month):
     df_temp = load_temp_year(year)
     if df_temp is not None:
         df_month = df_temp[df_temp['datetime'].dt.month == month]
-        return {col for col in df_month.columns
-                if col != 'datetime' and df_month[col].notna().sum() >= MIN_TEMP_READINGS}
+        counts = df_month[[c for c in df_month.columns if c != 'datetime']].notna().sum()
+        if len(counts) and counts.max() > 0:
+            # A month still in progress is only a few days long, so the absolute count
+            # would find nobody. Fall back to half of the best covered station.
+            threshold = min(MIN_TEMP_READINGS, max(1, int(counts.max()) // 2))
+            return set(counts.index[counts >= threshold])
+        if lookback > 0:
+            # The temperature collector can trail the rain collector by a day or two at
+            # the turn of a month. Until it catches up, take the stations that were
+            # reporting in the month before - they have not gone anywhere since.
+            prev_year, prev_month = (year, month - 1) if month > 1 else (year - 1, 12)
+            return reporting_stations(prev_year, prev_month, lookback - 1)
     tag = f'{year}-{month:02d}'
     return {name for name, (first, last) in activity_window.items() if first <= tag <= last}
 
