@@ -1,0 +1,58 @@
+{
+  "El_Arish_EG": {
+    "shore_azimuth_deg": 74.8,
+    "isobath_azimuth_deg": 81.8,
+    "model_depth_m": 34.5,
+    "distance_to_shore_km": 11.9,
+    "fit_radius_km": 30.0,
+    "n_vertices": 7
+  },
+  "Rafah_Gaza": {
+    "shore_azimuth_deg": 44.7,
+    "isobath_azimuth_deg": 55.2,
+    "model_depth_m": 37.3,
+    "distance_to_shore_km": 9.1,
+    "fit_radius_km": 20.0,
+    "n_vertices": 7
+  },
+  "Gaza_City": {
+    "shore_azimuth_deg": 39.1,
+    "isobath_azimuth_deg": 40.8,
+    "model_depth_m": 45.1,
+    "distance_to_shore_km": 7.6,
+    "fit_radius_km": 20.0,
+    "n_vertices": 8
+  },
+  "Ashkelon_IL": {
+    "shore_azimuth_deg": 31.1,
+    "isobath_azimuth_deg": 31.3,
+    "model_depth_m": 32.3,
+    "distance_to_shore_km": 4.1,
+    "fit_radius_km": 20.0,
+    "n_vertices": 7
+  },
+  "Ashdod_IL": {
+    "shore_azimuth_deg": 24.9,
+    "isobath_azimuth_deg": 30.4,
+    "model_depth_m": 33.3,
+    "distance_to_shore_km": 3.7,
+    "fit_radius_km": 20.0,
+    "n_vertices": 5
+  },
+  "Tel_Aviv_IL": {
+    "shore_azimuth_deg": 18.2,
+    "isobath_azimuth_deg": 15.6,
+    "model_depth_m": 39.8,
+    "distance_to_shore_km": 6.0,
+    "fit_radius_km": 20.0,
+    "n_vertices": 7
+  },
+  "Hadera_IL": {
+    "shore_azimuth_deg": 11.4,
+    "isobath_azimuth_deg": 16.8,
+    "model_depth_m": 40.9,
+    "distance_to_shore_km": 3.0,
+    "fit_radius_km": 20.0,
+    "n_vertices": 6
+  }
+}

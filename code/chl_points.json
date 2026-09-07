@@ -1,0 +1,178 @@
+{
+  "El_Arish_EG": {
+    "lat": 31.1969,
+    "lon": 33.8267,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 346.2,
+    "osm_shore_azimuth_deg": 77.1,
+    "ne_shore_azimuth_deg": 74.1,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 14.2,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.269,
+      "lon": 33.825,
+      "distance_to_shore_km": 12.0
+    }
+  },
+  "Rafah_Gaza": {
+    "lat": 31.3661,
+    "lon": 34.2096,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 315.8,
+    "osm_shore_azimuth_deg": 45.3,
+    "ne_shore_azimuth_deg": 43.5,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 20.4,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.391,
+      "lon": 34.16,
+      "distance_to_shore_km": 9.3
+    }
+  },
+  "Gaza_City": {
+    "lat": 31.5314,
+    "lon": 34.3851,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 308.6,
+    "osm_shore_azimuth_deg": 37.4,
+    "ne_shore_azimuth_deg": 39.2,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 26.8,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.55,
+      "lon": 34.35,
+      "distance_to_shore_km": 7.9
+    }
+  },
+  "Ashkelon_IL": {
+    "lat": 31.7019,
+    "lon": 34.5197,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 302.4,
+    "osm_shore_azimuth_deg": 32.7,
+    "ne_shore_azimuth_deg": 31.1,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 32.3,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.68,
+      "lon": 34.5,
+      "distance_to_shore_km": 4.5
+    }
+  },
+  "Ashdod_IL": {
+    "lat": 31.8629,
+    "lon": 34.6001,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 298.5,
+    "osm_shore_azimuth_deg": 20.6,
+    "ne_shore_azimuth_deg": 24.8,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 39.1,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.83,
+      "lon": 34.6,
+      "distance_to_shore_km": 3.4
+    }
+  },
+  "Tel_Aviv_IL": {
+    "lat": 32.1016,
+    "lon": 34.7273,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 292.7,
+    "osm_shore_azimuth_deg": 19.5,
+    "ne_shore_azimuth_deg": 18.2,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 39.8,
+    "converged": true,
+    "moved_from": {
+      "lat": 32.1,
+      "lon": 34.7,
+      "distance_to_shore_km": 6.4
+    }
+  },
+  "Hadera_IL": {
+    "lat": 32.4765,
+    "lon": 34.8389,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 280.8,
+    "osm_shore_azimuth_deg": 10.2,
+    "ne_shore_azimuth_deg": 11.0,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 40.9,
+    "converged": true,
+    "moved_from": {
+      "lat": 32.47,
+      "lon": 34.85,
+      "distance_to_shore_km": 2.9
+    }
+  },
+  "Rosetta_mouth": {
+    "lat": 31.5169,
+    "lon": 30.3867,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 0.0,
+    "osm_shore_azimuth_deg": 91.4,
+    "ne_shore_azimuth_deg": 97.0,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 6.7,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.55,
+      "lon": 30.4,
+      "distance_to_shore_km": 7.8
+    }
+  },
+  "Damietta_mouth": {
+    "lat": 31.559,
+    "lon": 31.8514,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 0.0,
+    "osm_shore_azimuth_deg": 87.7,
+    "ne_shore_azimuth_deg": 30.3,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 10.1,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.6,
+      "lon": 31.85,
+      "distance_to_shore_km": 8.6
+    }
+  },
+  "Bardawil_off": {
+    "lat": 31.2643,
+    "lon": 33.1057,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 352.2,
+    "osm_shore_azimuth_deg": 81.6,
+    "ne_shore_azimuth_deg": 67.6,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 10.9,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.3,
+      "lon": 33.1,
+      "distance_to_shore_km": 8.0
+    }
+  },
+  "Open_sea_ref": {
+    "lat": 32.5,
+    "lon": 33.5,
+    "transect": false,
+    "distance_to_shore_km": 126.9
+  }
+}
