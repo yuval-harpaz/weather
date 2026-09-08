@@ -110,6 +110,11 @@ const SITES = ["Hadera_IL", "Tel_Aviv_IL", "Ashdod_IL", "Ashkelon_IL", "Gaza_Cit
                "Rafah_Gaza", "El_Arish_EG", "Bardawil_off", "Damietta_mouth"];
 const NCOLS = 3, NROWS = 3;
 const SMOOTH_DAYS = 7;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// month labels sit at the 15th, so they read as "this month" rather than
+// "everything from here on"
+const MONTH_MID = MONTHS.map((_, m) => `2020-${String(m + 1).padStart(2, "0")}-15`);
 const RAW = "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data";
 // GitHub Pages publishes the docs/ folder, so this page sits at the site root
 // and "../data" resolves outside it - always a 404. Served from a checkout it is
@@ -335,10 +340,15 @@ function draw() {
         hovertemplate: CURRENT + " %{y:.2f} (near real time)<extra></extra>",
         showlegend: i === 0, xaxis: xa, yaxis: ya});
 
-    layout["xaxis" + n] = {type: "date", dtick: "M1", tickformat: "%b",
+    // Label each month at its middle, with the gridlines still on the month
+    // boundaries: a "Sep" tick sitting on 1 Sep reads as if the month starts
+    // there, so a point mid-month looks like it belongs to the next one.
+    layout["xaxis" + n] = {type: "date",
+      tickvals: MONTH_MID, ticktext: MONTHS, ticks: "",
       hoverformat: v.raw ? "%d %b" : "%B",
       range: ["2020-01-01", "2020-12-31"], tickfont: {size: 9},
-      gridcolor: c.grid, linecolor: c.axis, tickangle: 0};
+      showgrid: false, linecolor: c.axis, tickangle: 0,
+      minor: {dtick: "M1", showgrid: true, gridcolor: c.grid, ticks: ""}};
     layout["yaxis" + n] = {type: scale, dtick: scale === "log" ? 1 : undefined,
       range: fixed ? yr : undefined, autorange: !fixed,
       tickfont: {size: 9.5}, gridcolor: c.grid, linecolor: c.axis,
