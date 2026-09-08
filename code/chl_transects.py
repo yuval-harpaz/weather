@@ -39,13 +39,23 @@ SITES = json.loads((HERE / "chl_points.json").read_text())
 SENSORS = {
     "olci300m": dict(
         dataset="cmems_obs-oc_med_bgc-plankton_my_l3-olci-300m_P1D",
-        variables=["CHL"], res_km=0.30, label="Sentinel-3 OLCI 300 m"),
+        variables=["CHL"], res_km=0.30, label="Sentinel-3 OLCI 300 m",
+        stream="my"),
     "multi1km": dict(
         dataset="cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D",
-        variables=["CHL"], res_km=1.00, label="multi-sensor 1 km"),
+        variables=["CHL"], res_km=1.00, label="multi-sensor 1 km", stream="my"),
+    # Same product, near-real-time stream: about a week fresher than the
+    # reprocessed one but only a ~13 day rolling window, so it can fill the tail
+    # and nothing more. Measured against MY over their overlap the two agree to
+    # better than 0.5%, which is why the rows can share one file.
+    "nrt1km": dict(
+        dataset="cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D",
+        variables=["CHL"], res_km=1.00, label="multi-sensor 1 km (NRT)",
+        stream="nrt", fills="multi1km"),
     "hr100m": dict(
         dataset="cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m",
-        variables=["CHL", "TUR"], res_km=0.10, label="Sentinel-2 mosaic 100 m"),
+        variables=["CHL", "TUR"], res_km=0.10, label="Sentinel-2 mosaic 100 m",
+        stream="nrt"),
 }
 # Yearly chunks: the per-request overhead dominates, so one request per site
 # per year is far cheaper than twelve monthly ones for the same pixels.
@@ -106,25 +116,21 @@ def period_range(period, last_day):
 
 
 def fetch(cfg, box, start, end):
+    # These daily fields are stamped at 00:00, so asking for T23:59:59 overshoots
+    # the last available stamp by a day and earns a warning per site per run.
+    # T00:00:00 still includes that day.
     ds = cm.open_dataset(
         dataset_id=cfg["dataset"], variables=cfg["variables"],
         minimum_longitude=box[0], maximum_longitude=box[1],
         minimum_latitude=box[2], maximum_latitude=box[3],
-        start_datetime=f"{start}T00:00:00", end_datetime=f"{end}T23:59:59",
+        start_datetime=f"{start}T00:00:00", end_datetime=f"{end}T00:00:00",
     )
     return ds.load()
 
 
-def run(sensor, period):
+def collect(sensor, start, end, quiet=False):
+    """Sample every site between two dates. Returns (summary, profiles, timings)."""
     cfg = SENSORS[sensor]
-    last_day = record_end(sensor)
-    start, end = period_range(period, last_day)
-    if start > last_day:
-        print(f"\n=== {sensor} · {period}: starts after the record ends, skipped")
-        return None
-    tag = str(period).replace("-", "")
-    print(f"\n=== {sensor} · {period} ({start} -> {end}) · {cfg['label']}")
-
     t_down = t_agg = 0.0
     summary, profiles = [], []
 
@@ -173,6 +179,7 @@ def run(sensor, period):
                 valid = np.isfinite(sea)
                 summary.append(dict(
                     date=t.date(), site=name, variable=var, sensor=sensor,
+                    stream=cfg.get("stream", "my"),
                     at_station=row[k_station] if has_transect else row[0],
                     # p80, not the maximum: a single land-adjacent pixel can read
                     # 100+ mg/m3 next to a neighbour at 12, and the max reports
@@ -192,9 +199,24 @@ def run(sensor, period):
                         distance_km=np.round(dist, 3), value=row, is_sea=is_sea)))
         t_agg += time.perf_counter() - t0
         ds.close()
-        print(f"  {name:<16} {len(times):3d} days · box "
-              f"{box[1] - box[0]:.2f}x{box[3] - box[2]:.2f} deg")
+        if not quiet:
+            print(f"  {name:<16} {len(times):3d} days · box "
+                  f"{box[1] - box[0]:.2f}x{box[3] - box[2]:.2f} deg")
 
+    return summary, profiles, (t_down, t_agg)
+
+
+def run(sensor, period):
+    cfg = SENSORS[sensor]
+    last_day = record_end(sensor)
+    start, end = period_range(period, last_day)
+    if start > last_day:
+        print(f"\n=== {sensor} · {period}: starts after the record ends, skipped")
+        return None
+    tag = str(period).replace("-", "")
+    print(f"\n=== {sensor} · {period} ({start} -> {end}) · {cfg['label']}")
+
+    summary, profiles, (t_down, t_agg) = collect(sensor, start, end)
     if not summary:
         print("  nothing collected")
         return None
@@ -209,7 +231,7 @@ def run(sensor, period):
     out_csv = DATA / f"chl_transect_{sensor}_{tag}.csv"
     measures = ["at_station", "transect_p80", "transect_mean", "transect_max"]
     slim = df.loc[~df[measures].isna().all(axis=1),
-                  ["date", "site", "variable"] + measures + ["valid_frac"]]
+                  ["date", "site", "variable", "stream"] + measures + ["valid_frac"]]
     slim.to_csv(out_csv, index=False, float_format="%.4g")
 
     out_pq = None

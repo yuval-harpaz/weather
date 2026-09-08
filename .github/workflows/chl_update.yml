@@ -2,9 +2,9 @@ name: Chlorophyll Data Update
 
 on:
   schedule:
-    # Mondays 04:00 UTC. The reprocessed ocean-colour stream advances in batches
-    # and runs about a week behind, so there is nothing to gain from daily runs.
-    - cron: '0 4 * * 1'
+    # Daily 04:00 UTC. The near-real-time stream lags by one day, so there is
+    # something new most mornings; the reprocessed stream catches up behind it.
+    - cron: '0 4 * * *'
   workflow_dispatch:  # Allows manual triggering from the Actions tab
 
 jobs:
