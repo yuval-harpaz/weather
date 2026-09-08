@@ -155,7 +155,11 @@ async function loadAll() {
       out.push({
         site: r.site, year: year, month: dt.getUTCMonth() + 1,
         stream: r.stream || "my",
-        doy: Math.floor((dt - Date.UTC(year, 0, 1)) / 86400000) + 1,
+        // Slot on a common calendar by month and day, not by day-number: the
+        // years being overlaid are a mix of leap and common, so day-of-year
+        // would put 30 Aug 2026 on 29 Aug of a leap-year axis.
+        doy: Math.floor((Date.UTC(2020, dt.getUTCMonth(), dt.getUTCDate())
+                         - Date.UTC(2020, 0, 1)) / 86400000) + 1,
         at_station: num(r.at_station), transect_p80: num(r.transect_p80),
         transect_mean: num(r.transect_mean), transect_max: num(r.transect_max),
       });
@@ -288,6 +292,11 @@ function draw() {
     font: {family: 'system-ui, -apple-system, "Segoe UI", sans-serif', size: 12,
            color: c.ink2},
     hovermode: "x unified",
+    // A year on ~400 px is about one pixel per day, so Plotly's default 20 px
+    // reach lets the unified tooltip report points up to three weeks from the
+    // cursor - the last September dot showed up under a 19 Sep label. Tighten
+    // it for the daily view; monthly points are a month apart and need slack.
+    hoverdistance: agg === "raw" ? 2 : 20,
     hoverlabel: {bgcolor: c.surface, bordercolor: c.axis, font: {color: c.ink}},
     legend: {orientation: "v", x: 0, y: 1, xanchor: "left", yanchor: "top",
              bgcolor: c.surface, bordercolor: c.grid, borderwidth: 1,
