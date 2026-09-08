@@ -152,6 +152,23 @@
       "distance_to_shore_km": 8.6
     }
   },
+  "Port_Said_EG": {
+    "lat": 31.303,
+    "lon": 32.3462,
+    "transect": true,
+    "distance_to_shore_km": 4.0,
+    "offshore_azimuth_deg": 38.7,
+    "osm_shore_azimuth_deg": 126.4,
+    "ne_shore_azimuth_deg": 127.8,
+    "osm_fit_radius_km": 5.0,
+    "model_depth_m": 10.0,
+    "converged": true,
+    "moved_from": {
+      "lat": 31.32,
+      "lon": 32.32,
+      "distance_to_shore_km": 5.0
+    }
+  },
   "Bardawil_off": {
     "lat": 31.2643,
     "lon": 33.1057,

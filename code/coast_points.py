@@ -48,6 +48,7 @@ SHORE_AZIMUTH_DEG = {
 EXTRA_POINTS = {
     "Rosetta_mouth":  (31.55, 30.40),   # ~9 km off the Rosetta mouth, 13 m
     "Damietta_mouth": (31.60, 31.85),   # ~9 km off the Damietta mouth, 15 m
+    "Port_Said_EG":   (31.32, 32.32),   # Suez Canal mouth, seeded ~7 km offshore
     "Bardawil_off":   (31.30, 33.10),
     "Open_sea_ref":   (32.50, 33.50),   # no shore-normal; sampled as a point
 }

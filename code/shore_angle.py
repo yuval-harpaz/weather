@@ -271,9 +271,14 @@ def offshore_site_exact(lat, lon, distance_km, segs, tol=0.01, max_iter=25):
 
 
 TANGENT_FIT_KM = 5.0
+# Where 5 km of coast is not representative, fit over more of it.
+MANUAL_FIT_KM = {}
 # Where geometry and the plume disagree, the plume wins - at a river mouth the
 # shore-normal is not the direction the water actually goes.
 MANUAL_OFFSHORE_AZ = {
+    # Fitting 20 km of coast at Port Said gives 48.7; nudged 10 deg anticlockwise
+    # to line the transect up with the plume leaving the canal mouth.
+    "Port_Said_EG":   38.7,
     "Rosetta_mouth":  0.0,      # due north, straight across the green band
     "Damietta_mouth": 0.0,      # the 5 km fit says 344; the plume runs north
     "Bardawil_off":   352.2,    # nearest-point normal; the 5 km fit swings it
@@ -450,8 +455,9 @@ def main():
             print(f"{name:<16}{lat:9.3f}{lon:9.3f}{was:10.1f}{'-':>12}{'-':>8}"
                   f"{'-':>7}{'-':>9}   point only")
             continue
-        la, lo, off_az, ok = offshore_site_tangent(lat, lon, CHL_OFFSHORE_KM,
-                                                   segs, name=name)
+        la, lo, off_az, ok = offshore_site_tangent(
+            lat, lon, CHL_OFFSHORE_KM, segs, name=name,
+            fit_km=MANUAL_FIT_KM.get(name, TANGENT_FIT_KM))
         got, _ = nearest_shore_osm(la, lo, segs)
         osm_az, rad = osm_shore_azimuth(la, lo, segs)
         r = describe_point(la, lo, upcoast_reference(name, names) if name in POINTS

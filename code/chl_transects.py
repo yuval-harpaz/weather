@@ -65,6 +65,9 @@ TRANSECT_KM = 20.0
 STEP_KM = 0.1
 KM_PER_DEG = 111.19
 MARGIN_DEG = 0.05
+# A transect that has lost more than half its sea pixels is not reported: a p80
+# over two surviving pixels is a different statistic from one over eighty.
+MIN_VALID = 0.50
 # Fallback only. The real end of each record is read from the catalogue at run
 # time - hardcoding it would quietly freeze an automated updater the moment the
 # reprocessed stream moved on.
@@ -128,13 +131,15 @@ def fetch(cfg, box, start, end):
     return ds.load()
 
 
-def collect(sensor, start, end, quiet=False):
-    """Sample every site between two dates. Returns (summary, profiles, timings)."""
+def collect(sensor, start, end, quiet=False, sites=None):
+    """Sample sites between two dates. Returns (summary, profiles, timings)."""
     cfg = SENSORS[sensor]
     t_down = t_agg = 0.0
     summary, profiles = [], []
 
     for name, site in SITES.items():
+        if sites is not None and name not in sites:
+            continue
         has_transect = bool(site.get("transect"))
         if has_transect:
             la, lo, dist = transect_latlon(site)
@@ -177,6 +182,8 @@ def collect(sensor, start, end, quiet=False):
             for t, row in zip(times, series):
                 sea = row[is_sea] if n_sea else row
                 valid = np.isfinite(sea)
+                enough = valid.any() and (not has_transect
+                                          or valid.mean() >= MIN_VALID)
                 summary.append(dict(
                     date=t.date(), site=name, variable=var, sensor=sensor,
                     stream=cfg.get("stream", "my"),
@@ -184,10 +191,10 @@ def collect(sensor, start, end, quiet=False):
                     # p80, not the maximum: a single land-adjacent pixel can read
                     # 100+ mg/m3 next to a neighbour at 12, and the max reports
                     # that pixel. p80 lands offshore of the contaminated strip.
-                    transect_p80=(np.nanpercentile(sea, 80) if valid.any()
+                    transect_p80=(np.nanpercentile(sea, 80) if enough
                                   else np.nan),
-                    transect_mean=np.nanmean(sea) if valid.any() else np.nan,
-                    transect_max=np.nanmax(sea) if valid.any() else np.nan,
+                    transect_mean=np.nanmean(sea) if enough else np.nan,
+                    transect_max=np.nanmax(sea) if enough else np.nan,
                     n_valid=int(valid.sum()), n_sea=n_sea,
                     valid_frac=round(float(valid.mean()), 4) if n_sea else np.nan,
                     n_pixels=len(uniq),
