@@ -86,11 +86,15 @@
   <p class="note credit">
     Generated using
     <a href="https://marine.copernicus.eu" target="_blank" rel="noopener">E.U.
-    Copernicus Marine Service</a> information —
+    Copernicus Marine Service</a> information, produced by CNR, Italy —
     <a href="https://doi.org/10.48670/moi-00299" target="_blank" rel="noopener">Mediterranean
-    Sea Bio-Geo-Chemical L3 daily satellite observations</a>
-    (<span class="mono">OCEANCOLOUR_MED_BGC_L3_MY_009_143</span>, doi:10.48670/moi-00299),
-    produced by CNR, Italy.
+    Sea Bio-Geo-Chemical L3 daily satellite observations, reprocessed</a>
+    (<span class="mono">OCEANCOLOUR_MED_BGC_L3_MY_009_143</span>, doi:10.48670/moi-00299)
+    for the archive, and
+    <a href="https://doi.org/10.48670/moi-00297" target="_blank" rel="noopener">the
+    near real time stream</a>
+    (<span class="mono">OCEANCOLOUR_MED_BGC_L3_NRT_009_141</span>, doi:10.48670/moi-00297)
+    for the most recent days, shown as dots in the raw view.
     Site positions and shore-normals derived from coastline data
     &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
@@ -117,14 +121,14 @@ const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
   band:"rgba(150,150,150,0.24)", median:"#898781", current:"#0ca30c", prev:"#00b8d4"};
 
 let measure = "transect_p80", agg = "max", scale = "log", fixed = true, prevYear = "";
-let ROWS = [], YEARS = [], CURRENT = null, BASELINE = [];
+let ROWS = [], YEARS = [], CURRENT = null, BASELINE = [], SOURCE = null;
 
 // ---------------------------------------------------------------- loading
 async function loadYear(year) {
   for (const base of BASES) {
     try {
       const rows = await d3.csv(`${base}/chl_transect_${SENSOR}_${year}.csv`);
-      if (rows && rows.length) return rows;
+      if (rows && rows.length) { SOURCE = SOURCE || base; return rows; }
     } catch (e) { /* try the next base */ }
   }
   return null;
@@ -144,6 +148,7 @@ async function loadAll() {
       const dt = new Date(r.date + "T00:00:00Z");
       out.push({
         site: r.site, year: year, month: dt.getUTCMonth() + 1,
+        stream: r.stream || "my",
         doy: Math.floor((dt - Date.UTC(year, 0, 1)) / 86400000) + 1,
         at_station: num(r.at_station), transect_p80: num(r.transect_p80),
         transect_mean: num(r.transect_mean), transect_max: num(r.transect_max),
@@ -164,12 +169,13 @@ const median = a => { const s = a.filter(v => v !== null).sort((x, y) => x - y);
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
-function dailyByYear(site) {
+function dailyByYear(site, streamOnly) {
   // {year: Float array indexed 1..366}
   const out = {};
   for (const y of YEARS) out[y] = new Array(367).fill(null);
   for (const r of ROWS) {
     if (r.site !== site) continue;
+    if (streamOnly && r.stream !== streamOnly) continue;
     const v = r[measure];
     if (v !== null) out[r.year][r.doy] = v;
   }
@@ -218,26 +224,30 @@ const monthDate = m => new Date(Date.UTC(2020, m - 1, 15));
 function viewFor(site) {
   if (agg === "raw") {
     const byYear = dailyByYear(site);
+    const byYearMy = dailyByYear(site, "my");
+    const byYearNrt = dailyByYear(site, "nrt");
     // The band is the spread of the raw daily values across the baseline years,
     // with no smoothing. Building it from smoothed year-curves made it an
     // envelope of medians, which a spiky daily line escapes routinely - 15% of
     // baseline days fell outside their own band. Raw against raw contains every
     // baseline year by construction, and with 11 years there is no day without
     // data, so it does not go blocky either.
-    const x = [], lo = [], hi = [], medRaw = [], cur = [], prv = [];
+    const x = [], lo = [], hi = [], medRaw = [], cur = [], nrt = [], prv = [];
     for (let doy = 1; doy <= 366; doy++) {
       const col = BASELINE.map(y => byYear[y][doy]).filter(v => v !== null);
       x.push(doyDate(doy));
       lo.push(col.length ? Math.min(...col) : null);
       hi.push(col.length ? Math.max(...col) : null);
       medRaw.push(col.length ? median(col) : null);
-      cur.push(byYear[CURRENT] ? byYear[CURRENT][doy] : null);
+      // reprocessed days form the line, near-real-time days are drawn as dots
+      cur.push(byYearMy[CURRENT] ? byYearMy[CURRENT][doy] : null);
+      nrt.push(byYearNrt[CURRENT] ? byYearNrt[CURRENT][doy] : null);
       prv.push(prevYear && byYear[prevYear] ? byYear[prevYear][doy] : null);
     }
     // Only the central line is smoothed - it is a tendency, not an envelope,
     // so nothing has to stay inside it.
     const med = smoothArray(medRaw);
-    return {x, lo, hi, med, cur, prv, raw: true};
+    return {x, lo, hi, med, cur, nrt, prv, raw: true};
   }
   const byYear = monthlyByYear(site, agg);
   const x = [], lo = [], hi = [], med = [], cur = [], prv = [];
@@ -304,6 +314,11 @@ function draw() {
       line: {color: c.current, width: v.raw ? 1.8 : 3}, marker: {size: 6},
       connectgaps: v.raw, hovertemplate: CURRENT + " %{y:.2f}<extra></extra>",
       showlegend: i === 0, xaxis: xa, yaxis: ya});
+    if (v.raw && v.nrt && v.nrt.some(z => z !== null))
+      traces.push({x: v.x, y: v.nrt, name: CURRENT + " near real time",
+        mode: "markers", marker: {size: 5, color: c.current},
+        hovertemplate: CURRENT + " %{y:.2f} (near real time)<extra></extra>",
+        showlegend: i === 0, xaxis: xa, yaxis: ya});
 
     layout["xaxis" + n] = {type: "date", dtick: "M1", tickformat: "%b",
       hoverformat: v.raw ? "%d %b" : "%B",
@@ -321,10 +336,17 @@ function draw() {
   });
 
   Plotly.react("chart", traces, layout, {displayModeBar: false, responsive: true});
+  const nrtDays = new Set(ROWS.filter(r => r.stream === "nrt").map(r => r.doy));
+  const latest = ROWS.reduce((a, r) => r.year === CURRENT && r.doy > a ? r.doy : a, 0);
+  const latestDate = doyDate(latest).toISOString().slice(0, 10).replace("2020", CURRENT);
+  const where = SOURCE && SOURCE.startsWith("http") ? "the committed copy on GitHub"
+                                                    : "the local data folder";
   document.getElementById("foot").textContent =
-    `Multi-sensor 1 km, mg m⁻³. Baseline ${span}, current year ${CURRENT}. ` +
-    `Data read live from data/chl_transect_${SENSOR}_<year>.csv — re-run the ` +
-    `download and this page updates with no change here.`;
+    `Multi-sensor 1 km, mg m⁻³. Baseline ${span}, current year ${CURRENT}, ` +
+    `latest day ${latestDate}` +
+    (nrtDays.size ? `, of which ${nrtDays.size} near-real-time (dots in the raw view)`
+                  : ", no near-real-time days present") +
+    `. Loaded from ${where}.`;
 }
 
 // ---------------------------------------------------------------- controls
