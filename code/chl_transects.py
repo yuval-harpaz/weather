@@ -23,6 +23,8 @@ import sys
 import time
 import calendar
 
+import datetime as dt
+
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -53,8 +55,33 @@ TRANSECT_KM = 20.0
 STEP_KM = 0.1
 KM_PER_DEG = 111.19
 MARGIN_DEG = 0.05
-# The reprocessed streams stop here; asking beyond it only earns a warning.
+# Fallback only. The real end of each record is read from the catalogue at run
+# time - hardcoding it would quietly freeze an automated updater the moment the
+# reprocessed stream moved on.
 MY_LAST_DAY = "2026-08-29"
+_END_CACHE = {}
+
+
+def record_end(sensor):
+    """Last day actually available for this dataset, from the CMEMS catalogue."""
+    if sensor in _END_CACHE:
+        return _END_CACHE[sensor]
+    end = MY_LAST_DAY
+    try:
+        cat = cm.describe(dataset_id=SENSORS[sensor]["dataset"],
+                          disable_progress_bar=True)
+        ds = cat.products[0].datasets[0]
+        svc = [sv for v in ds.versions for pt in v.parts for sv in pt.services
+               if "arco-time" in str(sv.service_name)][0]
+        co = [c for c in svc.variables[0].coordinates
+              if c.coordinate_id == "time"][0]
+        end = dt.datetime.fromtimestamp(co.maximum_value / 1000,
+                                        dt.UTC).strftime("%Y-%m-%d")
+    except Exception as exc:
+        print(f"  (could not read the record end: {type(exc).__name__}; "
+              f"falling back to {end})")
+    _END_CACHE[sensor] = end
+    return end
 
 
 def transect_latlon(site):
@@ -66,7 +93,7 @@ def transect_latlon(site):
     return la, lo, d + CHL_OFFSHORE_KM
 
 
-def period_range(period):
+def period_range(period, last_day):
     """(start, end) for a year 'YYYY' or a month 'YYYY-MM', clipped to the record."""
     if "-" in str(period):
         y, m = (int(v) for v in str(period).split("-"))
@@ -75,7 +102,7 @@ def period_range(period):
     else:
         y = int(period)
         first, last = f"{y}-01-01", f"{y}-12-31"
-    return first, min(last, MY_LAST_DAY)
+    return first, min(last, last_day)
 
 
 def fetch(cfg, box, start, end):
@@ -90,8 +117,9 @@ def fetch(cfg, box, start, end):
 
 def run(sensor, period):
     cfg = SENSORS[sensor]
-    start, end = period_range(period)
-    if start > MY_LAST_DAY:
+    last_day = record_end(sensor)
+    start, end = period_range(period, last_day)
+    if start > last_day:
         print(f"\n=== {sensor} · {period}: starts after the record ends, skipped")
         return None
     tag = str(period).replace("-", "")

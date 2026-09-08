@@ -40,6 +40,10 @@
   .card { background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:8px 4px 4px; min-height:200px; }
   .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; }
+  .credit { font-size:12px; line-height:1.6; max-width:900px; }
+  .credit a { color:var(--ink2); }
+  .credit a:hover { color:var(--ink); }
+  .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; }
   .status { color:var(--muted); padding:24px 12px; }
 </style>
 </head>
@@ -79,6 +83,18 @@
   </div>
   <div class="card"><div id="chart"><div class="status" id="status">loading…</div></div></div>
   <p class="note" id="foot"></p>
+  <p class="note credit">
+    Generated using
+    <a href="https://marine.copernicus.eu" target="_blank" rel="noopener">E.U.
+    Copernicus Marine Service</a> information —
+    <a href="https://doi.org/10.48670/moi-00299" target="_blank" rel="noopener">Mediterranean
+    Sea Bio-Geo-Chemical L3 daily satellite observations</a>
+    (<span class="mono">OCEANCOLOUR_MED_BGC_L3_MY_009_143</span>, doi:10.48670/moi-00299),
+    produced by CNR, Italy.
+    Site positions and shore-normals derived from coastline data
+    &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank"
+    rel="noopener">OpenStreetMap contributors</a> (ODbL).
+  </p>
 </div>
 
 <script>
@@ -160,17 +176,17 @@ function dailyByYear(site) {
   return out;
 }
 
-function smoothYear(arr) {
-  const out = new Array(367).fill(null);
-  for (let doy = 1; doy <= 366; doy++) {
+function smoothArray(arr) {
+  // centred +/-SMOOTH_DAYS running median, wrapping across the year end
+  const n = arr.length;
+  return arr.map((_, i) => {
     const win = [];
     for (let k = -SMOOTH_DAYS; k <= SMOOTH_DAYS; k++) {
-      const d = ((doy + k - 1 + 366) % 366) + 1;
-      if (arr[d] !== null) win.push(arr[d]);
+      const v = arr[(i + k + n) % n];
+      if (v !== null && v !== undefined) win.push(v);
     }
-    out[doy] = win.length ? median(win) : null;
-  }
-  return out;
+    return win.length ? median(win) : null;
+  });
 }
 
 function monthlyByYear(site, how) {
@@ -202,17 +218,25 @@ const monthDate = m => new Date(Date.UTC(2020, m - 1, 15));
 function viewFor(site) {
   if (agg === "raw") {
     const byYear = dailyByYear(site);
-    const curves = BASELINE.map(y => smoothYear(byYear[y]));
-    const x = [], lo = [], hi = [], med = [], cur = [], prv = [];
+    // The band is the spread of the raw daily values across the baseline years,
+    // with no smoothing. Building it from smoothed year-curves made it an
+    // envelope of medians, which a spiky daily line escapes routinely - 15% of
+    // baseline days fell outside their own band. Raw against raw contains every
+    // baseline year by construction, and with 11 years there is no day without
+    // data, so it does not go blocky either.
+    const x = [], lo = [], hi = [], medRaw = [], cur = [], prv = [];
     for (let doy = 1; doy <= 366; doy++) {
-      const col = curves.map(c => c[doy]).filter(v => v !== null);
+      const col = BASELINE.map(y => byYear[y][doy]).filter(v => v !== null);
       x.push(doyDate(doy));
       lo.push(col.length ? Math.min(...col) : null);
       hi.push(col.length ? Math.max(...col) : null);
-      med.push(col.length ? median(col) : null);
+      medRaw.push(col.length ? median(col) : null);
       cur.push(byYear[CURRENT] ? byYear[CURRENT][doy] : null);
       prv.push(prevYear && byYear[prevYear] ? byYear[prevYear][doy] : null);
     }
+    // Only the central line is smoothed - it is a tendency, not an envelope,
+    // so nothing has to stay inside it.
+    const med = smoothArray(medRaw);
     return {x, lo, hi, med, cur, prv, raw: true};
   }
   const byYear = monthlyByYear(site, agg);
@@ -324,6 +348,7 @@ const isDark = () => stamped === null ? mq.matches : stamped;
       "in the repo or one directory up from this page";
     return;
   }
+  document.getElementById("status").remove();   // Plotly.react appends, it does not clear
   const sel = document.getElementById("prev");
   sel.innerHTML = '<option value="">off</option>' + BASELINE.slice().reverse()
     .map(y => `<option value="${y}"${String(y) === prevYear ? " selected" : ""}>${y}</option>`)
