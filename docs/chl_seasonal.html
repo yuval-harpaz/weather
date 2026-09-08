@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chlorophyll along the SE Mediterranean coast</title>
+<link rel="icon" href="logo.jpg">
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
@@ -109,9 +110,14 @@ const SITES = ["Hadera_IL", "Tel_Aviv_IL", "Ashdod_IL", "Ashkelon_IL", "Gaza_Cit
                "Rafah_Gaza", "El_Arish_EG", "Bardawil_off", "Damietta_mouth"];
 const NCOLS = 3, NROWS = 3;
 const SMOOTH_DAYS = 7;
-// Local checkout first, then the committed copy, so the page works either way.
-const BASES = ["../data",
-  "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data"];
+const RAW = "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data";
+// GitHub Pages publishes the docs/ folder, so this page sits at the site root
+// and "../data" resolves outside it - always a 404. Served from a checkout it is
+// the other way round. Ask the one that can work first, and keep the other as a
+// fallback rather than a guaranteed round of console errors.
+const LOCAL = location.protocol === "file:"
+  || ["localhost", "127.0.0.1", ""].includes(location.hostname);
+const BASES = LOCAL ? ["../data", RAW] : [RAW, "../data"];
 
 const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
   grid:"#e1e0d9", minorgrid:"#efeee9", axis:"#c3c2b7",
