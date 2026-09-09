@@ -7,6 +7,8 @@
 <link rel="icon" href="logo.jpg">
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script src="https://d3js.org/d3.v7.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root { color-scheme: light; }
   body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
@@ -46,14 +48,58 @@
   .credit a:hover { color:var(--ink); }
   .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; }
   .status { color:var(--muted); padding:24px 12px; }
+  #map { height:380px; border-radius:8px; }
+  #colorbar { display:inline-block; width:210px; height:12px; border-radius:3px;
+    border:1px solid var(--border); vertical-align:middle; }
+  .leaflet-container { background:var(--surface); font:inherit; }
+  input[type=number] { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:7px; padding:5px 8px; }
+  input[type=number]:disabled { opacity:0.45; }
+  input[type=date] { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:7px; padding:5px 9px; }
 </style>
 </head>
 <body class="viz-root">
 <div class="wrap">
   <h1>Chlorophyll along the SE Mediterranean coast</h1>
   <p class="sub">Sampled on a shore-normal transect at each site, from the shore out to
-     20 km. Grey band is the range across the baseline years, dashed grey their median,
-     green the current year. Northernmost site is top right, second northernmost top middle.</p>
+     20 km. Grey band is the range across the baseline years, green the current year.
+     Hover the band for its highest year. Northernmost site is top right.
+     Drag sideways to zoom all panels together; double-click to reset.</p>
+  <div class="bar" >
+    <span class="lbl">Map date</span>
+    <button id="dprev" title="previous day">&#9664;</button>
+    <input type="date" id="mapdate">
+    <button id="dnext" title="next day">&#9654;</button>
+    <button id="dlatest">Latest</button>
+    <span class="lbl" id="maphint">or click any point on a chart</span>
+    <span class="spacer"></span>
+    <span class="lbl">Colours</span>
+    <select id="cmap">
+      <option value="cmap:algae,logScale">algae, log</option>
+      <option value="cmap:algae">algae, linear</option>
+      <option value="cmap:viridis,logScale" selected>viridis, log</option>
+      <option value="cmap:viridis">viridis, linear</option>
+    </select>
+    <span class="grp">
+      <button class="cscale on" data-cscale="fixed">Fixed</button>
+      <button class="cscale" data-cscale="auto">Auto</button>
+    </span>
+    <input type="number" id="cmax" value="10" min="0.05" step="1" style="width:74px"
+           title="upper end of the colour scale, mg m⁻³">
+    <span class="lbl">Opacity</span>
+    <input type="range" id="opacity" min="20" max="100" value="85" style="width:110px">
+  </div>
+  <div class="bar" style="margin-top:-4px">
+    <span class="lbl" id="cbtitle"></span>
+    <span id="colorbar"></span>
+    <span class="lbl" id="cbticks"></span>
+  </div>
+  <div class="card"><div id="map"></div></div>
+  <p class="note" id="mapnote"></p>
+
   <div class="bar">
     <span class="lbl">Measure</span>
     <select id="measure">
@@ -84,6 +130,7 @@
   </div>
   <div class="card"><div id="chart"><div class="status" id="status">loading…</div></div></div>
   <p class="note" id="foot"></p>
+
   <p class="note credit">
     Generated using
     <a href="https://marine.copernicus.eu" target="_blank" rel="noopener">E.U.
@@ -99,6 +146,8 @@
     Site positions and shore-normals derived from coastline data
     &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
+    Map tiles powered by <a href="https://www.esri.com/" target="_blank"
+    rel="noopener">Esri</a>.
   </p>
 </div>
 
@@ -109,7 +158,7 @@ const FIRST_YEAR = 2015;
 // North to south along the coast, then west along Sinai and the delta.
 const SITES = ["Hadera_IL", "Tel_Aviv_IL", "Ashdod_IL", "Ashkelon_IL", "Gaza_City",
                "Rafah_Gaza", "El_Arish_EG", "Bardawil_off", "Port_Said_EG",
-               "Damietta_mouth"];
+               "Damietta_mouth", "Rosetta_mouth"];
 const NCOLS = 3, NROWS = 4;
 const SMOOTH_DAYS = 7;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -161,7 +210,7 @@ async function loadAll() {
       const dt = new Date(r.date + "T00:00:00Z");
       out.push({
         site: r.site, year: year, month: dt.getUTCMonth() + 1,
-        stream: r.stream || "my",
+        stream: r.stream || "my", date: r.date,
         // Slot on a common calendar by month and day, not by day-number: the
         // years being overlaid are a mix of leap and common, so day-of-year
         // would put 30 Aug 2026 on 29 Aug of a leap-year axis.
@@ -199,17 +248,14 @@ function dailyByYear(site, streamOnly) {
   return out;
 }
 
-function smoothArray(arr) {
-  // centred +/-SMOOTH_DAYS running median, wrapping across the year end
-  const n = arr.length;
-  return arr.map((_, i) => {
-    const win = [];
-    for (let k = -SMOOTH_DAYS; k <= SMOOTH_DAYS; k++) {
-      const v = arr[(i + k + n) % n];
-      if (v !== null && v !== undefined) win.push(v);
+// which baseline year set the top of the range, so the hover can name it
+function argmaxYear(pairs) {
+  let value = null, year = null;
+  for (const [y, v] of pairs)
+    if (v !== null && v !== undefined && (value === null || v > value)) {
+      value = v; year = y;
     }
-    return win.length ? median(win) : null;
-  });
+  return {value, year};
 }
 
 function monthlyByYear(site, how) {
@@ -249,35 +295,34 @@ function viewFor(site) {
     // baseline days fell outside their own band. Raw against raw contains every
     // baseline year by construction, and with 11 years there is no day without
     // data, so it does not go blocky either.
-    const x = [], lo = [], hi = [], medRaw = [], cur = [], nrt = [], prv = [];
+    const x = [], lo = [], hi = [], hiYear = [], cur = [], nrt = [], prv = [];
     for (let doy = 1; doy <= 366; doy++) {
       const col = BASELINE.map(y => byYear[y][doy]).filter(v => v !== null);
+      const top = argmaxYear(BASELINE.map(y => [y, byYear[y][doy]]));
       x.push(doyDate(doy));
       lo.push(col.length ? Math.min(...col) : null);
-      hi.push(col.length ? Math.max(...col) : null);
-      medRaw.push(col.length ? median(col) : null);
+      hi.push(top.value);
+      hiYear.push(top.year);
       // reprocessed days form the line, near-real-time days are drawn as dots
       cur.push(byYearMy[CURRENT] ? byYearMy[CURRENT][doy] : null);
       nrt.push(byYearNrt[CURRENT] ? byYearNrt[CURRENT][doy] : null);
       prv.push(prevYear && byYear[prevYear] ? byYear[prevYear][doy] : null);
     }
-    // Only the central line is smoothed - it is a tendency, not an envelope,
-    // so nothing has to stay inside it.
-    const med = smoothArray(medRaw);
-    return {x, lo, hi, med, cur, nrt, prv, raw: true};
+    return {x, lo, hi, hiYear, cur, nrt, prv, raw: true};
   }
   const byYear = monthlyByYear(site, agg);
-  const x = [], lo = [], hi = [], med = [], cur = [], prv = [];
+  const x = [], lo = [], hi = [], hiYear = [], cur = [], prv = [];
   for (let m = 1; m <= 12; m++) {
     const col = BASELINE.map(y => byYear[y][m]).filter(v => v !== null && v !== undefined);
+    const top = argmaxYear(BASELINE.map(y => [y, byYear[y][m]]));
     x.push(monthDate(m));
     lo.push(col.length ? Math.min(...col) : null);
-    hi.push(col.length ? Math.max(...col) : null);
-    med.push(col.length ? median(col) : null);
+    hi.push(top.value);
+    hiYear.push(top.year);
     cur.push(byYear[CURRENT] ? byYear[CURRENT][m] : null);
     prv.push(prevYear && byYear[prevYear] ? byYear[prevYear][m] : null);
   }
-  return {x, lo, hi, med, cur, prv, raw: false};
+  return {x, lo, hi, hiYear, cur, prv, raw: false};
 }
 
 // ---------------------------------------------------------------- drawing
@@ -286,8 +331,8 @@ function draw() {
   const views = SITES.map(viewFor);
   const all = [];
   for (const v of views)
-    for (const k of ["lo", "hi", "med", "cur"])
-      for (const val of v[k]) if (val !== null && val > 0) all.push(val);
+    for (const k of ["lo", "hi", "cur", "nrt", "prv"])
+      for (const val of (v[k] || [])) if (val !== null && val > 0) all.push(val);
   const vmax = all.length ? Math.max(...all) : 10;
   const yr = scale === "log" ? [-1, Math.log10(vmax) + 0.05] : [0, vmax * 1.05];
   const span = BASELINE.length ? `${BASELINE[0]}–${BASELINE[BASELINE.length - 1]}` : "";
@@ -305,42 +350,47 @@ function draw() {
     // it for the daily view; monthly points are a month apart and need slack.
     hoverdistance: agg === "raw" ? 2 : 20,
     hoverlabel: {bgcolor: c.surface, bordercolor: c.axis, font: {color: c.ink}},
-    legend: {orientation: "v", x: 0, y: 1, xanchor: "left", yanchor: "top",
-             bgcolor: c.surface, bordercolor: c.grid, borderwidth: 1,
-             font: {size: 10.5}},
-    annotations: [], showlegend: true, dragmode: "pan",
+    legend: {orientation: "v", x: 0.02, y: 0.99, xanchor: "left",
+             yanchor: "top", bgcolor: c.surface, bordercolor: c.grid,
+             borderwidth: 1, font: {size: 11}},
+    annotations: [], showlegend: true, dragmode: "zoom",
   };
 
+  // The legend lives in the top-left cell, so panels skip that slot: filling
+  // right to left, it is the third position.
+  const LEGEND_SLOT = NCOLS - 1;
   views.forEach((v, i) => {
-    // right to left, so index 0 is top right and index 1 top middle
-    const row = Math.floor(i / NCOLS), col = NCOLS - 1 - (i % NCOLS);
+    const slot = i >= LEGEND_SLOT ? i + 1 : i;
+    const row = Math.floor(slot / NCOLS), col = NCOLS - 1 - (slot % NCOLS);
     const n = row * NCOLS + col + 1, xa = "x" + n, ya = "y" + n;
 
-    traces.push({x: v.x, y: v.hi, mode: "lines", line: {width: 0},
-      showlegend: false, hoverinfo: "skip", xaxis: xa, yaxis: ya});
+    // legendgroup ties the same series across every panel, so a legend click
+    // hides it everywhere instead of only in the panel that owns the entry
+    traces.push({x: v.x, y: v.hi, name: span + " range", mode: "lines",
+      line: {width: 0}, legendgroup: "band", showlegend: false,
+      customdata: v.hiYear,
+      hovertemplate: "range max %{y:.2f} (%{customdata})<extra></extra>",
+      xaxis: xa, yaxis: ya});
     traces.push({x: v.x, y: v.lo, name: span + " range", mode: "lines",
       line: {width: 0}, fill: "tonexty", fillcolor: c.band,
-      showlegend: i === 0, hoverinfo: "skip", xaxis: xa, yaxis: ya});
-    traces.push({x: v.x, y: v.med, name: span + " median", mode: "lines",
-      line: {color: c.median, dash: "dash", width: 1.6},
-      hovertemplate: "median %{y:.2f}<extra></extra>",
-      showlegend: i === 0, xaxis: xa, yaxis: ya});
+      legendgroup: "band", showlegend: i === 0, hoverinfo: "skip",
+      xaxis: xa, yaxis: ya});
     if (prevYear)
       traces.push({x: v.x, y: v.prv, name: String(prevYear),
         mode: v.raw ? "lines" : "lines+markers",
         line: {color: c.prev, width: v.raw ? 1.4 : 2}, marker: {size: 5},
         connectgaps: v.raw, hovertemplate: prevYear + " %{y:.2f}<extra></extra>",
-        showlegend: i === 0, xaxis: xa, yaxis: ya});
+        legendgroup: "prev", showlegend: i === 0, xaxis: xa, yaxis: ya});
     traces.push({x: v.x, y: v.cur, name: String(CURRENT),
       mode: v.raw ? "lines" : "lines+markers",
       line: {color: c.current, width: v.raw ? 1.8 : 3}, marker: {size: 6},
       connectgaps: v.raw, hovertemplate: CURRENT + " %{y:.2f}<extra></extra>",
-      showlegend: i === 0, xaxis: xa, yaxis: ya});
+      legendgroup: "current", showlegend: i === 0, xaxis: xa, yaxis: ya});
     if (v.raw && v.nrt && v.nrt.some(z => z !== null))
       traces.push({x: v.x, y: v.nrt, name: CURRENT + " near real time",
         mode: "markers", marker: {size: 5, color: c.current},
         hovertemplate: CURRENT + " %{y:.2f} (near real time)<extra></extra>",
-        showlegend: i === 0, xaxis: xa, yaxis: ya});
+        legendgroup: "nrt", showlegend: i === 0, xaxis: xa, yaxis: ya});
 
     // Label each month at its middle, with the gridlines still on the month
     // boundaries: a "Sep" tick sitting on 1 Sep reads as if the month starts
@@ -350,10 +400,13 @@ function draw() {
       hoverformat: v.raw ? "%d %b" : "%B",
       range: ["2020-01-01", "2020-12-31"], tickfont: {size: 9},
       showgrid: false, linecolor: c.axis, tickangle: 0,
+      // every panel follows panel 1, so a zoom on one zooms them all
+      matches: n === 1 ? undefined : "x",
       minor: {dtick: "M1", showgrid: true, gridcolor: c.grid, ticks: ""}};
     layout["yaxis" + n] = {type: scale, dtick: scale === "log" ? 1 : undefined,
       range: fixed ? yr : undefined, autorange: !fixed,
       tickfont: {size: 9.5}, gridcolor: c.grid, linecolor: c.axis,
+      fixedrange: true,                       // horizontal zoom only
       minor: {showgrid: true, dtick: scale === "log" ? "D2" : undefined,
               gridcolor: c.minorgrid}};
     layout.annotations.push({text: "<b>" + SITES[i].replace(/_/g, " ") + "</b>",
@@ -363,6 +416,24 @@ function draw() {
   });
 
   Plotly.react("chart", traces, layout, {displayModeBar: false, responsive: true});
+  // A click that is not a drag still fires here, so this does not fight the
+  // zoom. The year comes from the trace: the current-year traces mean CURRENT,
+  // the comparison line means that year, and clicking the band jumps to
+  // whichever year set its maximum on that day.
+  const gd = document.getElementById("chart");
+  gd.removeAllListeners && gd.removeAllListeners("plotly_click");
+  gd.on("plotly_click", ev => {
+    const pt = ev.points && ev.points[0];
+    if (!pt || !map) return;
+    const name = pt.data.name || "";
+    let year = CURRENT;
+    if (name === String(prevYear)) year = +prevYear;
+    else if (/range/.test(name) && pt.customdata) year = +pt.customdata;
+    const d = new Date(pt.x);
+    setMapDate(`${year}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
+               + `-${String(d.getUTCDate()).padStart(2, "0")}`);
+    document.getElementById("map").scrollIntoView({behavior: "smooth", block: "center"});
+  });
   const nrtDays = new Set(ROWS.filter(r => r.stream === "nrt").map(r => r.doy));
   const latest = ROWS.reduce((a, r) => r.year === CURRENT && r.doy > a ? r.doy : a, 0);
   const latestDate = doyDate(latest).toISOString().slice(0, 10).replace("2020", CURRENT);
@@ -374,6 +445,218 @@ function draw() {
     (nrtDays.size ? `, of which ${nrtDays.size} near-real-time (dots in the raw view)`
                   : ", no near-real-time days present") +
     `. Loaded from ${where}.`;
+}
+
+
+// ---------------------------------------------------------------- map
+// CMEMS publishes these tiles publicly, CORS-open and CDN-cached, so the
+// browser can ask for them directly - no proxy and no credentials involved.
+const WMTS = "https://wmts.marine.copernicus.eu/teroWmts";
+const LAYER_MY = "OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+  + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/CHL";
+const LAYER_NRT = "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+  + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CHL";
+const POINTS_URL =
+  "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/code/chl_points.json";
+// Esri's grey canvas labels places in English, which OSM-derived basemaps do
+// not do in Egypt.
+const BASEMAP = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+  + (dark ? "World_Dark_Gray_Base" : "World_Light_Gray_Base") + "/MapServer/tile/{z}/{y}/{x}";
+const LABELS = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+  + (dark ? "World_Dark_Gray_Reference" : "World_Light_Gray_Reference")
+  + "/MapServer/tile/{z}/{y}/{x}";
+const KM_PER_DEG = 111.19, TRANSECT_KM = 20, OFFSHORE_KM = 4;
+
+let scaleMode = "fixed";
+let map = null, baseLayer = null, labelLayer = null, chlLayer = null;
+let siteLayer = null, mapDate = null, lastMy = null, SITEGEO = null;
+
+const iso = d => d.toISOString().slice(0, 10);
+
+function layerFor(dateStr) {
+  return (lastMy && dateStr > lastMy) ? LAYER_NRT : LAYER_MY;
+}
+
+function autoMax() {
+  // the largest value any transect saw that day, straight from the CSVs
+  let best = null;
+  for (const r of ROWS) {
+    if (r.date !== mapDate) continue;
+    const v = (r.transect_max !== null && r.transect_max !== undefined)
+              ? r.transect_max : r[measure];
+    if (v !== null && v !== undefined && (best === null || v > best)) best = v;
+  }
+  return best;
+}
+
+function styleString() {
+  const cmap = document.getElementById("cmap").value;
+  const mn = cmap.includes("logScale") ? 0.01 : 0;     // a log scale cannot start at 0
+  let mx;
+  if (scaleMode === "fixed") {
+    mx = +document.getElementById("cmax").value || 10;
+  } else {
+    mx = autoMax();
+    if (mx === null) return cmap;                      // no data that day
+    mx = Math.max(mn * 2, Math.round(mx * 10) / 10);
+    document.getElementById("cmax").value = mx;        // show what auto chose
+  }
+  return `${cmap},range:${mn}/${mx}`;
+}
+
+function chlUrl(dateStr) {
+  return `${WMTS}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
+    + `&LAYER=${encodeURIComponent(layerFor(dateStr))}`
+    + `&STYLE=${encodeURIComponent(styleString())}`
+    + `&TILEMATRIXSET=EPSG:3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`
+    + `&FORMAT=image/png&TIME=${dateStr}T00:00:00.000Z`;
+}
+
+async function drawColorbar() {
+  const style = styleString();
+  const url = `${WMTS}?SERVICE=WMTS&REQUEST=GetLegend`
+    + `&LAYER=${encodeURIComponent(layerFor(mapDate || latestDate()))}`
+    + `&STYLE=${encodeURIComponent(style)}&FORMAT=${encodeURIComponent("application/json")}`;
+  try {
+    const d = (await (await fetch(url)).json()).continuous;
+    const stops = d.cmap.colorMap.map(
+      (c, i) => `rgb(${c[0]},${c[1]},${c[2]}) ${(100 * i / 255).toFixed(1)}%`);
+    document.getElementById("colorbar").style.background =
+      `linear-gradient(to right, ${stops.join(",")})`;
+    document.getElementById("cbtitle").textContent = "Chlorophyll-a (mg m⁻³)";
+    // The scale is the server's and cannot be changed: it clamps, so every
+    // value above the top is drawn in the same colour.
+    document.getElementById("cbticks").textContent =
+      `${d.valueMin.toFixed(2)} to ${d.valueMax.toFixed(2)}`
+      + (d.logScale ? ", log" : ", linear")
+      + (d.clamp ? " — saturates above " + d.valueMax.toFixed(2) : "");
+  } catch (e) { /* leave the bar blank */ }
+}
+
+async function initMap() {
+  map = L.map("map", {zoomControl: true, attributionControl: true});
+  // Alexandria in the west to Sour in the north-east
+  map.fitBounds([[30.7, 29.6], [33.5, 35.5]]);
+  applyBasemap(isDark());
+
+  try {
+    SITEGEO = await (await fetch(POINTS_URL)).json();
+  } catch (e) { SITEGEO = null; }
+
+  // Centre on the midrange of the stations and go one level closer than the
+  // bounds fit, which otherwise leaves a lot of desert in view.
+  if (SITEGEO) {
+    const la = Object.values(SITEGEO).map(v => v.lat);
+    const lo = Object.values(SITEGEO).map(v => v.lon);
+    map.setView([(Math.min(...la) + Math.max(...la)) / 2,
+                 (Math.min(...lo) + Math.max(...lo)) / 2], map.getZoom() + 1);
+  }
+
+  lastMy = lastReprocessed();
+  document.getElementById("mapdate").onchange = e => setMapDate(e.target.value);
+  document.getElementById("dprev").onclick = () => stepDay(-1);
+  document.getElementById("dnext").onclick = () => stepDay(1);
+  document.getElementById("dlatest").onclick = () => setMapDate(latestDate());
+  document.getElementById("opacity").oninput = e => {
+    if (chlLayer) chlLayer.setOpacity(+e.target.value / 100);
+  };
+  const restyle = () => { setMapDate(mapDate); };
+  document.getElementById("cmap").onchange = restyle;
+  document.getElementById("cmax").onchange = restyle;
+  document.querySelectorAll("button.cscale").forEach(b => b.onclick = () => {
+    scaleMode = b.dataset.cscale;
+    document.querySelectorAll("button.cscale")
+      .forEach(o => o.classList.toggle("on", o === b));
+    document.getElementById("cmax").disabled = scaleMode !== "fixed";
+    restyle();
+  });
+  setMapDate(latestDate());
+}
+
+function applyBasemap(dark) {
+  if (baseLayer) map.removeLayer(baseLayer);
+  if (labelLayer) map.removeLayer(labelLayer);
+  baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12,
+    attribution: 'Powered by <a href="https://www.esri.com/" target="_blank" '
+      + 'rel="noopener">Esri</a> &middot; chlorophyll &copy; E.U. Copernicus Marine Service'
+  }).addTo(map);
+  labelLayer = L.tileLayer(LABELS(dark), {maxZoom: 12, pane: "shadowPane"}).addTo(map);
+}
+
+function latestDate() {
+  let best = null;
+  for (const r of ROWS) if (!best || r.date > best) best = r.date;
+  return best || iso(new Date());
+}
+
+function lastReprocessed() {
+  let best = null;
+  for (const r of ROWS)
+    if (r.stream === "my" && (!best || r.date > best)) best = r.date;
+  return best;
+}
+
+function stepDay(n) {
+  if (!mapDate) return;
+  const d = new Date(mapDate + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  setMapDate(iso(d));
+}
+
+function setMapDate(dateStr) {
+  if (!dateStr) return;
+  mapDate = dateStr;
+  document.getElementById("mapdate").value = dateStr;
+
+  const previous = chlLayer;
+  const next = L.tileLayer(chlUrl(dateStr), {
+    maxZoom: 12, opacity: +document.getElementById("opacity").value / 100
+  });
+  // keep the old tiles underneath until the new ones are painted, otherwise the
+  // map blinks empty on every date step
+  next.on("load", () => { if (previous && previous !== next) map.removeLayer(previous); });
+  next.addTo(map);
+  chlLayer = next;
+  setTimeout(() => { if (previous && previous !== chlLayer && map.hasLayer(previous))
+                       map.removeLayer(previous); }, 4000);
+
+  drawSites(dateStr);
+  drawColorbar();
+  const stream = layerFor(dateStr) === LAYER_NRT ? "near real time" : "reprocessed";
+  document.getElementById("mapnote").textContent =
+    `Chlorophyll-a for ${dateStr}, ${stream} stream, rendered by the Copernicus `
+    + `Marine WMTS. White is cloud or land. Markers are the sampling stations, `
+    + `lines their 0-20 km transects; hover a marker for that day's value.`;
+}
+
+function valueAt(site, dateStr) {
+  const hit = ROWS.find(r => r.site === site && r.date === dateStr);
+  return hit ? hit[measure] : null;
+}
+
+function drawSites(dateStr) {
+  if (siteLayer) map.removeLayer(siteLayer);
+  if (!SITEGEO) return;
+  const c = isDark() ? DARK : LIGHT;
+  siteLayer = L.layerGroup().addTo(map);
+  for (const [name, s] of Object.entries(SITEGEO)) {
+    if (!s.transect) continue;         // the open-sea control is not a map site
+    {
+      const az = s.offshore_azimuth_deg * Math.PI / 180;
+      const at = km => [s.lat + Math.cos(az) * km / KM_PER_DEG,
+                        s.lon + Math.sin(az) * km
+                                / (KM_PER_DEG * Math.cos(s.lat * Math.PI / 180))];
+      L.polyline([at(-OFFSHORE_KM), at(TRANSECT_KM - OFFSHORE_KM)],
+                 {color: "#ffffff", weight: 1.5, opacity: 0.9}).addTo(siteLayer);
+    }
+    const v = valueAt(name, dateStr);
+    L.circleMarker([s.lat, s.lon], {radius: 5, color: "#ffffff", weight: 2,
+      fill: false})
+      .bindTooltip(`<b>${name.replace(/_/g, " ")}</b><br>`
+        + (v === null || v === undefined ? "no value that day"
+           : `${v.toFixed(2)} mg m<sup>-3</sup>`), {direction: "top"})
+      .addTo(siteLayer);
+  }
 }
 
 // ---------------------------------------------------------------- controls
@@ -407,6 +690,7 @@ const isDark = () => stamped === null ? mq.matches : stamped;
   wire("agg", "agg", v => agg = v);
   wire("scl", "scl", v => scale = v);
   wire("pan", "pan", v => fixed = (v === "fixed"));
+  await initMap();
   document.getElementById("theme").onclick = () => { stamped = !isDark(); render(); };
   mq.addEventListener("change", () => { if (stamped === null) render(); });
   render();

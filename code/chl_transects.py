@@ -24,6 +24,7 @@ import time
 import calendar
 
 import datetime as dt
+import os
 
 import numpy as np
 import pandas as pd
@@ -97,6 +98,32 @@ def record_end(sensor):
     return end
 
 
+def credentials():
+    """Copernicus Marine credentials, from the environment or the stored file.
+
+    Passed explicitly to every request rather than left to the library's own
+    lookup: when neither source is present it prompts on stdin, which means a
+    script appears to hang and a CI job blocks until it times out.
+    """
+    user = os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME")
+    password = os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD")
+    if user and password:
+        return {"username": user, "password": password}
+    if (pathlib.Path.home() / ".copernicusmarine"
+            / ".copernicusmarine-credentials").exists():
+        return {}                       # the library will read the file itself
+    raise SystemExit(
+        "No Copernicus Marine credentials found.\n"
+        "  export COPERNICUSMARINE_SERVICE_USERNAME=...\n"
+        "  export COPERNICUSMARINE_SERVICE_PASSWORD=...\n"
+        "They are in ~/.profile, so a login shell (bash -l) picks them up; a "
+        "plain IDE terminal may not. Alternatively run `copernicusmarine login` "
+        "once to store them.")
+
+
+CREDS = credentials()
+
+
 def transect_latlon(site):
     """Points every STEP_KM from the shore anchor out to TRANSECT_KM."""
     az = np.radians(site["offshore_azimuth_deg"])
@@ -127,6 +154,7 @@ def fetch(cfg, box, start, end):
         minimum_longitude=box[0], maximum_longitude=box[1],
         minimum_latitude=box[2], maximum_latitude=box[3],
         start_datetime=f"{start}T00:00:00", end_datetime=f"{end}T00:00:00",
+        **CREDS,
     )
     return ds.load()
 

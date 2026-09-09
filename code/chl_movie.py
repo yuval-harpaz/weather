@@ -35,10 +35,9 @@ import matplotlib.patheffects as pe
 from matplotlib.colors import LogNorm
 
 from chl_transects import (SITES, SENSORS, record_end, transect_latlon,
-                           CHL_OFFSHORE_KM, TRANSECT_KM)
+                           CHL_OFFSHORE_KM, TRANSECT_KM, MIN_VALID, CREDS)
 
 MARGIN_DEG = 0.25
-MIN_VALID = 0.50        # a line with more than half its sea pixels missing is not reported
 VMIN, VMAX = 0.05, 50.0
 FPS = 1
 KM_PER_DEG = 111.19
@@ -84,7 +83,7 @@ def load_field(start, end, box):
             minimum_longitude=box[0], maximum_longitude=box[1],
             minimum_latitude=box[2], maximum_latitude=box[3],
             start_datetime=f"{start}T00:00:00",
-            end_datetime=f"{my_last}T00:00:00").load()["CHL"])
+            end_datetime=f"{my_last}T00:00:00", **CREDS).load()["CHL"])
 
     if end > my_end:
         nrt_first = (dt.date.fromisoformat(my_end) + dt.timedelta(days=1)).isoformat()
@@ -97,7 +96,7 @@ def load_field(start, end, box):
                 minimum_longitude=box[0], maximum_longitude=box[1],
                 minimum_latitude=box[2], maximum_latitude=box[3],
                 start_datetime=f"{nrt_start}T00:00:00",
-                end_datetime=f"{nrt_end}T00:00:00").load()["CHL"])
+                end_datetime=f"{nrt_end}T00:00:00", **CREDS).load()["CHL"])
 
     if not parts:
         raise SystemExit("nothing available for that range")
