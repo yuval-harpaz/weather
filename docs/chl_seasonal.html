@@ -49,8 +49,15 @@
   .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; }
   .status { color:var(--muted); padding:24px 12px; }
   #map { height:380px; border-radius:8px; }
-  #colorbar { display:inline-block; width:210px; height:12px; border-radius:3px;
-    border:1px solid var(--border); vertical-align:middle; }
+  .maplegend, .mapcbar { background:var(--surface); border:1px solid var(--border);
+    border-radius:7px; padding:6px 8px; font-size:11px; color:var(--ink2);
+    box-shadow:0 1px 4px rgba(0,0,0,.12); }
+  .maplegend .k { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+  .maplegend .k + .k { margin-top:3px; }
+  .mapcbar { text-align:center; }
+  .cbbar { width:13px; height:150px; margin:3px auto; border-radius:3px;
+    border:1px solid var(--border); }
+  .cbunit { font-size:10px; color:var(--muted); margin-top:2px; }
   .leaflet-container { background:var(--surface); font:inherit; }
   input[type=number] { font:inherit; font-size:12.5px; color:var(--ink2);
     background:var(--surface); border:1px solid var(--border);
@@ -64,10 +71,10 @@
 <body class="viz-root">
 <div class="wrap">
   <h1>Chlorophyll along the SE Mediterranean coast</h1>
-  <p class="sub">Sampled on a shore-normal transect at each site, from the shore out to
-     20 km. Grey band is the range across the baseline years, green the current year.
-     Hover the band for its highest year. Northernmost site is top right.
-     Drag sideways to zoom all panels together; double-click to reset.</p>
+  <p class="sub">Daily satellite chlorophyll-a along the SE Mediterranean coast, from the
+     Nile Delta to Haifa. The map shows the selected day's chlorophyll field, image
+     sampling points 4 km offshore, and the 20 km transects used for the time series.
+     Pick a date below, or click a chart point to jump to that day. White areas are clouds or land.</p>
   <div class="bar" >
     <span class="lbl">Map date</span>
     <button id="dprev" title="previous day">&#9664;</button>
@@ -92,26 +99,27 @@
     <span class="lbl">Opacity</span>
     <input type="range" id="opacity" min="20" max="100" value="85" style="width:110px">
   </div>
-  <div class="bar" style="margin-top:-4px">
-    <span class="lbl" id="cbtitle"></span>
-    <span id="colorbar"></span>
-    <span class="lbl" id="cbticks"></span>
-  </div>
   <div class="card"><div id="map"></div></div>
   <p class="note" id="mapnote"></p>
 
+  <p class="note" id="timeseries-note" style="margin-top:10px">
+    The time series below show chlorophyll at each coastal site using the selected measure.
+    The shaded band shows the range across the baseline years, while the current year and
+    an optional comparison year are shown as lines. Northernmost site is top right.
+    Drag sideways to zoom in; double-click to reset.
+  </p>
   <div class="bar">
     <span class="lbl">Measure</span>
     <select id="measure">
-      <option value="transect_p80" selected>Transect p80</option>
-      <option value="transect_mean">Transect mean</option>
-      <option value="transect_max">Transect max</option>
-      <option value="at_station">Value at the 4 km station</option>
+      <option value="transect_p80" selected>20km percentile 80</option>
+      <option value="transect_mean">20km mean</option>
+      <option value="transect_max">20km max</option>
+      <option value="at_station">4km off shore</option>
     </select>
     <span class="lbl" style="margin-left:14px">Aggregation</span>
     <span class="grp">
-      <button class="agg" data-agg="raw">Raw</button>
-      <button class="agg on" data-agg="max">Monthly max</button>
+      <button class="agg on" data-agg="raw">Raw</button>
+      <button class="agg" data-agg="max">Monthly max</button>
       <button class="agg" data-agg="mean">Monthly mean</button>
     </span>
     <span class="lbl" style="margin-left:14px">Scale</span>
@@ -132,22 +140,14 @@
   <p class="note" id="foot"></p>
 
   <p class="note credit">
-    Generated using
-    <a href="https://marine.copernicus.eu" target="_blank" rel="noopener">E.U.
-    Copernicus Marine Service</a> information, produced by CNR, Italy —
-    <a href="https://doi.org/10.48670/moi-00299" target="_blank" rel="noopener">Mediterranean
-    Sea Bio-Geo-Chemical L3 daily satellite observations, reprocessed</a>
-    (<span class="mono">OCEANCOLOUR_MED_BGC_L3_MY_009_143</span>, doi:10.48670/moi-00299)
-    for the archive, and
-    <a href="https://doi.org/10.48670/moi-00297" target="_blank" rel="noopener">the
-    near real time stream</a>
-    (<span class="mono">OCEANCOLOUR_MED_BGC_L3_NRT_009_141</span>, doi:10.48670/moi-00297)
-    for the most recent days, shown as dots in the raw view.
-    Site positions and shore-normals derived from coastline data
-    &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank"
-    rel="noopener">OpenStreetMap contributors</a> (ODbL).
+    Generated using E.U. Copernicus Marine Service Information &mdash;
+    chlorophyll &copy; <a href="https://data.marine.copernicus.eu/product/OCEANCOLOUR_MED_BGC_L3_MY_009_143/description"
+    target="_blank" rel="noopener">E.U. Copernicus</a>
+    (doi:10.48670/moi-00299 archive, doi:10.48670/moi-00297 near real time).
     Map tiles powered by <a href="https://www.esri.com/" target="_blank"
-    rel="noopener">Esri</a>.
+    rel="noopener">Esri</a>. Coastline &copy;
+    <a href="https://www.openstreetmap.org/copyright" target="_blank"
+    rel="noopener">OpenStreetMap contributors</a> (ODbL).
   </p>
 </div>
 
@@ -182,7 +182,7 @@ const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
   grid:"#2c2c2a", minorgrid:"#232322", axis:"#383835",
   band:"rgba(150,150,150,0.24)", median:"#898781", current:"#0ca30c", prev:"#00b8d4"};
 
-let measure = "transect_p80", agg = "max", scale = "log", fixed = true, prevYear = "";
+let measure = "transect_p80", agg = "raw", scale = "log", fixed = true, prevYear = "";
 let ROWS = [], YEARS = [], CURRENT = null, BASELINE = [], SOURCE = null;
 
 // ---------------------------------------------------------------- loading
@@ -468,6 +468,7 @@ const LABELS = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/C
 const KM_PER_DEG = 111.19, TRANSECT_KM = 20, OFFSHORE_KM = 4;
 
 let scaleMode = "fixed";
+let cbBar = null, cbMax = null, cbMin = null, cbNote = null;
 let map = null, baseLayer = null, labelLayer = null, chlLayer = null;
 let siteLayer = null, mapDate = null, lastMy = null, SITEGEO = null;
 
@@ -512,6 +513,35 @@ function chlUrl(dateStr) {
     + `&FORMAT=image/png&TIME=${dateStr}T00:00:00.000Z`;
 }
 
+async function addMapControls() {
+  const legend = L.control({position: "topleft"});
+  legend.onAdd = () => {
+    const d = L.DomUtil.create("div", "maplegend");
+    d.innerHTML =
+      '<span class="k"><svg width="16" height="12"><circle cx="8" cy="6" r="4.5" '
+      + 'fill="none" stroke="#111" stroke-width="2"/></svg>4km off shore</span>'
+      + '<span class="k"><svg width="16" height="12"><line x1="1" y1="6" x2="15" y2="6" '
+      + 'stroke="#111" stroke-width="2"/></svg>20km transect</span>';
+    L.DomEvent.disableClickPropagation(d);
+    return d;
+  };
+  legend.addTo(map);
+
+  const bar = L.control({position: "topright"});
+  bar.onAdd = () => {
+    const d = L.DomUtil.create("div", "mapcbar");
+    d.innerHTML = '<div class="cbmax"></div><div class="cbbar"></div>'
+      + '<div class="cbmin"></div><div class="cbunit">mg m&#8315;&#179;</div>';
+    L.DomEvent.disableClickPropagation(d);
+    cbBar = d.querySelector(".cbbar");
+    cbMax = d.querySelector(".cbmax");
+    cbMin = d.querySelector(".cbmin");
+    cbNote = d.querySelector(".cbunit");
+    return d;
+  };
+  bar.addTo(map);
+}
+
 async function drawColorbar() {
   const style = styleString();
   const url = `${WMTS}?SERVICE=WMTS&REQUEST=GetLegend`
@@ -519,17 +549,18 @@ async function drawColorbar() {
     + `&STYLE=${encodeURIComponent(style)}&FORMAT=${encodeURIComponent("application/json")}`;
   try {
     const d = (await (await fetch(url)).json()).continuous;
+    if (!cbBar) return;
     const stops = d.cmap.colorMap.map(
       (c, i) => `rgb(${c[0]},${c[1]},${c[2]}) ${(100 * i / 255).toFixed(1)}%`);
-    document.getElementById("colorbar").style.background =
-      `linear-gradient(to right, ${stops.join(",")})`;
-    document.getElementById("cbtitle").textContent = "Chlorophyll-a (mg m⁻³)";
-    // The scale is the server's and cannot be changed: it clamps, so every
-    // value above the top is drawn in the same colour.
-    document.getElementById("cbticks").textContent =
-      `${d.valueMin.toFixed(2)} to ${d.valueMax.toFixed(2)}`
+    cbBar.style.background = `linear-gradient(to top, ${stops.join(",")})`;
+    const fmt = v => v >= 10 ? v.toFixed(0) : v.toFixed(2);
+    cbMax.textContent = fmt(d.valueMax);
+    cbMin.textContent = fmt(d.valueMin);
+    // it clamps, so anything above the top is drawn in the same colour
+    cbNote.textContent = "mg m⁻³" + (d.logScale ? " log" : "");
+    cbBar.title = `${fmt(d.valueMin)} to ${fmt(d.valueMax)}`
       + (d.logScale ? ", log" : ", linear")
-      + (d.clamp ? " — saturates above " + d.valueMax.toFixed(2) : "");
+      + (d.clamp ? " — saturates above " + fmt(d.valueMax) : "");
   } catch (e) { /* leave the bar blank */ }
 }
 
@@ -538,6 +569,7 @@ async function initMap() {
   // Alexandria in the west to Sour in the north-east
   map.fitBounds([[30.7, 29.6], [33.5, 35.5]]);
   applyBasemap(isDark());
+  addMapControls();
 
   try {
     SITEGEO = await (await fetch(POINTS_URL)).json();
@@ -578,7 +610,8 @@ function applyBasemap(dark) {
   if (labelLayer) map.removeLayer(labelLayer);
   baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12,
     attribution: 'Powered by <a href="https://www.esri.com/" target="_blank" '
-      + 'rel="noopener">Esri</a> &middot; chlorophyll &copy; E.U. Copernicus Marine Service'
+      + 'rel="noopener">Esri</a> &middot; chlorophyll &copy; '
+      + '<a href="https://data.marine.copernicus.eu/product/OCEANCOLOUR_MED_BGC_L3_MY_009_143/description" target="_blank" rel="noopener">E.U. Copernicus</a>'
   }).addTo(map);
   labelLayer = L.tileLayer(LABELS(dark), {maxZoom: 12, pane: "shadowPane"}).addTo(map);
 }
@@ -650,7 +683,13 @@ function drawSites(dateStr) {
                  {color: "#ffffff", weight: 1.5, opacity: 0.9}).addTo(siteLayer);
     }
     const v = valueAt(name, dateStr);
-    L.circleMarker([s.lat, s.lon], {radius: 5, color: "#ffffff", weight: 2,
+    const station = (() => {
+      const az = s.offshore_azimuth_deg * Math.PI / 180;
+      return [s.lat + Math.cos(az) * OFFSHORE_KM / KM_PER_DEG,
+              s.lon + Math.sin(az) * OFFSHORE_KM
+                    / (KM_PER_DEG * Math.cos(s.lat * Math.PI / 180))];
+    })();
+    L.circleMarker(station, {radius: 5, color: "#ffffff", weight: 2,
       fill: false})
       .bindTooltip(`<b>${name.replace(/_/g, " ")}</b><br>`
         + (v === null || v === undefined ? "no value that day"
