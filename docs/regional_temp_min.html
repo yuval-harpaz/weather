@@ -282,7 +282,10 @@
                     currText.push(label);
                 });
 
-                if (currRaw.length > 0) {
+                // Pull a partial (ongoing) month back towards the previous month, but only
+                // when there IS a previous month - otherwise the single point lands before
+                // the first tick and falls off the left edge of the plot.
+                if (currX.length > 1) {
                     const lastRec = currRaw[currRaw.length - 1];
                     if (lastRec.Month === currMonth) {
                         currX[currX.length - 1] = currX[currX.length - 1] - 1 + monthFraction;
@@ -335,7 +338,9 @@
                     text: currText,
                     hovertemplate: '%{text}<br>%{y:.1f} °C<extra></extra>',
                     name: fmtCycle(currentCycle),
-                    mode: 'lines',
+                    // A one-month cycle (start of a new winter) has nothing to draw a line with
+                    mode: currY.length === 1 ? 'markers' : 'lines',
+                    marker: { color: 'blue', size: 8 },
                     line: { color: 'blue', width: 3 },
                     showlegend: i === 0,
                     xaxis: xaxisKey,
