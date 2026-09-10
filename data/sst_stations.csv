@@ -1,0 +1,15 @@
+station,lat,lon,order
+Nahariya_IL,33.005,35.047,0
+Haifa_IL,32.83,34.912,1
+Hadera_IL,32.4765,34.8389,2
+Tel_Aviv_IL,32.1016,34.7273,3
+Ashdod_IL,31.8629,34.6001,4
+Ashkelon_IL,31.7019,34.5197,5
+Gaza_City,31.5314,34.3851,6
+Rafah_Gaza,31.3661,34.2096,7
+El_Arish_EG,31.1969,33.8267,8
+Bardawil_off,31.2643,33.1057,9
+Port_Said_EG,31.303,32.3462,10
+Damietta_mouth,31.559,31.8514,11
+Rosetta_mouth,31.5169,30.3867,12
+Open_sea_ref,32.5,33.5,13
