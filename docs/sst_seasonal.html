@@ -10,18 +10,22 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  :root { color-scheme: light; }
-  body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
-    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .viz-root {
+  /* The variables have to be declared on :root, not on the wrapper. body reads
+     --page, and the wrapper is body's child - a custom property only inherits
+     downwards, so declaring it there leaves body's background unresolved and
+     the page stays white while the cards go dark. */
+  :root, .viz-root { color-scheme: light;
     --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e;
     --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10); }
+  body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
+    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])),
     :root:where(:not([data-theme="light"])) .viz-root { color-scheme: dark;
       --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
       --muted:#898781; --grid:#2c2c2a; --axis:#383835;
       --border:rgba(255,255,255,0.10); } }
-  :root[data-theme="dark"] .viz-root { color-scheme: dark;
+  :root[data-theme="dark"], :root[data-theme="dark"] .viz-root { color-scheme: dark;
     --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
     --muted:#898781; --grid:#2c2c2a; --axis:#383835;
     --border:rgba(255,255,255,0.10); }
@@ -76,8 +80,12 @@
     <span class="lbl">Opacity</span>
     <input type="range" id="opacity" min="0" max="100" value="80" style="width:110px">
     <span class="lbl" style="margin-left:14px">Colour range</span>
-    <input type="number" id="cmin" value="16" step="1" style="width:62px" title="low end, C">
-    <input type="number" id="cmax" value="32" step="1" style="width:62px" title="high end, C">
+    <input type="number" id="cmin" value="17" step="1" style="width:62px" title="low end, C">
+    <input type="number" id="cmax" value="31" step="1" style="width:62px" title="high end, C">
+    <button id="auto" title="fit the scale to the day being shown">Auto</button>
+    <span class="lbl" style="margin-left:14px">Day</span>
+    <span id="mapday" class="lbl" style="color:var(--ink)">&mdash;</span>
+    <button id="latest" title="back to the most recent day">Latest</button>
     <span class="spacer"></span>
     <button id="theme">Dark mode</button>
   </div>
@@ -127,10 +135,16 @@ const DEFAULT_STATION = "Tel_Aviv_IL";
 // uses - so the grey band here and an anomaly map elsewhere mean the same thing.
 const BASE_FIRST = 1991, BASE_LAST = 2020;
 const MONTHS = ["J","F","M","A","M","J","J","A","S","O","N","D"];
-// Ticks at mid-month, so a label reads as "this month" and not "everything from
-// here on". Day numbers are slotted on 2020, a leap year, so 29 Feb has a home.
-const MONTH_MID = MONTHS.map((_, m) =>
-  Math.floor((Date.UTC(2020, m, 15) - Date.UTC(2020, 0, 1)) / 86400000) + 1);
+// Every year is laid over one common calendar, 2020 - a leap year, so 29 Feb
+// has a home. Ticks sit at mid-month, so a label reads as "this month" rather
+// than "everything from here on".
+const MONTH_MID = MONTHS.map((_, m) => `2020-${String(m + 1).padStart(2, "0")}-15`);
+// Index i of every series is day number i, so the x array has to be indexed the
+// same way and start at a placeholder: pairing a 1-based day axis against a
+// 0-based value array puts every line one day late.
+const DOY = d3.range(0, 367);
+const XDATES = DOY.map(i => i === 0 ? null
+  : new Date(Date.UTC(2020, 0, 1) + (i - 1) * 86400000).toISOString().slice(0, 10));
 
 // Identity colours: current year against comparison year is the only pair a
 // reader must tell apart, and both modes pass lightness, chroma, CVD separation
@@ -139,11 +153,16 @@ const MONTH_MID = MONTHS.map((_, m) =>
 const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
   grid:"#e1e0d9", minorgrid:"#efeee9", axis:"#c3c2b7",
   cur:"#b2182b", prev:"#0b7fa3", band:"rgba(160,160,160,0.30)", med:"#898781",
-  ghost:"rgba(178,24,43,0.17)", rampLo:"#2166ac", rampHi:"#b2182b"};
+  ghost:"rgba(178,24,43,0.17)", rampLo:"#2166ac", rampHi:"#b2182b",
+  // Under the year ramp the two highlighted years cannot be coloured by their
+  // own age - the newest is red against a wall of red. Ink and green sit
+  // outside the ramp entirely, so they stay visible wherever they fall.
+  hiCur:"#0b0b0b", hiPrev:"#1b7f3b"};
 const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
   grid:"#2c2c2a", minorgrid:"#232322", axis:"#383835",
   cur:"#e05252", prev:"#12a3bf", band:"rgba(150,150,150,0.24)", med:"#898781",
-  ghost:"rgba(224,82,82,0.15)", rampLo:"#4a90d9", rampHi:"#e05252"};
+  ghost:"rgba(224,82,82,0.15)", rampLo:"#4a90d9", rampHi:"#e05252",
+  hiCur:"#ffffff", hiPrev:"#2eaa60"};
 
 // ?station=Haifa_IL&scheme=age&compare=2010 - so a particular view can be linked to
 const QS = new URLSearchParams(location.search);
@@ -302,7 +321,7 @@ function draw() {
   const years = Object.keys(byYear(map)).map(Number).sort((a, b) => a - b);
   const data = byYear(map);
   const current = years[years.length - 1];
-  const x = d3.range(1, 368);
+  const x = XDATES;
   const traces = [], annotations = [];
 
   const line = (y, color, width, name, show, dash) => ({
@@ -310,17 +329,20 @@ function draw() {
     line: {color, width, dash}, name: name || String(y), showlegend: !!show,
     hovertemplate: `${name || y}  %{y:.2f} °C<extra></extra>`,
   });
-  // Background years carry no hover: a crosshair over 45 identical lines is a
-  // wall of numbers, and the reader is being shown a shape, not a value.
+  // Background years carry no hover: a shared tooltip listing 45 near-identical
+  // numbers is unreadable, and the reader is being shown a shape, not a value.
+  // Plain SVG rather than WebGL - Brave and any browser with fingerprinting
+  // protection refuse a WebGL context outright, and measured on this data SVG
+  // is the faster of the two anyway (40-80 ms against 113 ms for 45 line traces).
   const ghost = (y, color, width) => ({
-    x, y: data[y], type: "scattergl", mode: "lines", connectgaps: true,
+    x, y: data[y], type: "scatter", mode: "lines", connectgaps: true,
     line: {color, width}, showlegend: false, hoverinfo: "skip",
   });
 
   if (scheme === "baseline") {
     const base = years.filter(y => y >= BASE_FIRST && y <= BASE_LAST);
     const lo = [], hi = [], med = [];
-    for (const d of x) {
+    for (const d of DOY) {
       const vals = base.map(y => data[y][d]).filter(v => v !== null).sort((a, b) => a - b);
       if (!vals.length) { lo.push(null); hi.push(null); med.push(null); continue; }
       lo.push(vals[0]); hi.push(vals[vals.length - 1]);
@@ -361,33 +383,31 @@ function draw() {
       name: `${years[0]}–${current - 1}`, hoverinfo: "skip"});
   }
 
-  const lo = years[0], span = Math.max(1, current - lo);
-  const tint = y => scheme === "age" ? ramp((y - lo) / span) : null;
+  // Under the year ramp the highlighted years step outside it: the newest year
+  // is by definition the reddest, which makes it invisible in a red crowd.
+  const curColor = scheme === "age" ? c.hiCur : c.cur;
+  const prevColor = scheme === "age" ? c.hiPrev : c.prev;
 
   if (prevYear && data[+prevYear]) {
-    // Under the year ramp the comparison year is coloured by its own age, which
-    // is right but leaves it indistinguishable from its neighbours in the crowd.
-    // The dash carries the identity the colour cannot.
-    traces.push(line(+prevYear, tint(+prevYear) || c.prev, 2.2, prevYear, true,
-                     scheme === "age" ? "dot" : undefined));
+    traces.push(line(+prevYear, prevColor, 2.2, prevYear, true));
   }
-  traces.push(line(current, tint(current) || c.cur, 3, String(current), true));
+  traces.push(line(current, curColor, 3, String(current), true));
 
   // Direct-label the end of the current year, the way the reference chart does:
   // the newest reading is the point of the whole picture.
   const lastD = data[current].reduce((k, v, d) => v === null ? k : d, null);
   if (lastD !== null) {
-    traces.push({x: [lastD], y: [data[current][lastD]], type: "scatter",
-      mode: "markers", marker: {color: tint(current) || c.cur, size: 9,
+    traces.push({x: [XDATES[lastD]], y: [data[current][lastD]], type: "scatter",
+      mode: "markers", marker: {color: curColor, size: 9,
         line: {color: c.surface, width: 2}},
       showlegend: false, hoverinfo: "skip"});
-    annotations.push({x: lastD, y: data[current][lastD],
+    annotations.push({x: XDATES[lastD], y: data[current][lastD],
       text: `<b>${data[current][lastD].toFixed(1)}°C</b>`, xanchor: "left",
       yanchor: "middle", xshift: 10, showarrow: false,
       // Under the year ramp the label lands in the middle of the crowd rather
       // than in clear air at the right-hand edge, so it carries its own surface.
       bgcolor: c.surface, borderpad: 3, opacity: 0.96,
-      font: {size: 13, color: tint(current) || c.cur}});
+      font: {size: 13, color: curColor}});
   }
 
   Plotly.react("chart", traces, {
@@ -395,15 +415,33 @@ function draw() {
     margin: {l: 52, r: scheme === "age" ? 96 : 74, t: 12, b: 40},
     paper_bgcolor: c.surface, plot_bgcolor: c.surface,
     font: {color: c.ink2, size: 12},
-    hovermode: "closest",
-    xaxis: {tickvals: MONTH_MID, ticktext: MONTHS, range: [1, 367],
-      gridcolor: c.grid, zeroline: false, linecolor: c.axis, tickfont: {size: 12}},
+    // One tooltip for the day, listing every trace that carries a value there -
+    // the background years opt out through hoverinfo, so what is left is the
+    // handful worth comparing: this year, the year being compared, the median.
+    hovermode: "x unified",
+    hoverlabel: {bgcolor: c.surface, bordercolor: c.axis,
+      font: {color: c.ink, size: 12}},
+    // A date axis rather than a day number, so the shared tooltip is headed
+    // "18 Jul" instead of "200". The year is suppressed - it is 2020 for every
+    // trace, which is the scaffolding, not information.
+    xaxis: {type: "date", tickvals: MONTH_MID, ticktext: MONTHS,
+      range: ["2020-01-01", "2020-12-31"], hoverformat: "%e %b",
+      gridcolor: c.grid, zeroline: false, linecolor: c.axis, tickfont: {size: 12},
+      showspikes: true, spikemode: "across", spikethickness: 1,
+      spikecolor: c.axis, spikedash: "solid"},
+    // Fixed, so switching station or scheme does not silently rescale the axis
+    // under the reader and make two stations look alike.
     yaxis: {title: {text: "°C", font: {size: 12}}, gridcolor: c.grid,
-      zeroline: false, linecolor: c.axis},
-    legend: {orientation: "h", y: 1.02, yanchor: "bottom", x: 0,
-      font: {size: 11.5}, bgcolor: "rgba(0,0,0,0)"},
+      zeroline: false, linecolor: c.axis, range: [15, 33]},
+    // Vertical, inside the top-left corner - which is empty on this data, since
+    // the coldest part of the year sits at the left of the axis.
+    legend: {orientation: "v", x: 0.012, xanchor: "left", y: 0.985, yanchor: "top",
+      font: {size: 11.5}, bgcolor: c.surface, borderwidth: 0,
+      itemsizing: "constant"},
     annotations,
   }, {displayModeBar: false, responsive: true});
+
+  wireChartClick();
 
   const src = LIVE.length ? `, of which ${LIVE.length / STATIONS.length | 0} `
       + "day fetched live from Copernicus and not stored" : "";
@@ -411,6 +449,32 @@ function draw() {
     `${pretty(station)} · ${years[0]}–${current}, ${map.size.toLocaleString()} daily `
     + `values. Reprocessed to ${REP_END || "?"}, near real time after that${src}. `
     + `Foundation SST: one value per day, with the day's solar warming removed.`;
+}
+
+// Clicking a day in the chart takes the map to it. The shared tooltip means a
+// click reports every trace at that x, so the one under the cursor is picked by
+// vertical distance - otherwise comparing 2010 and then clicking its line would
+// silently show this year's map instead.
+function wireChartClick() {
+  const gd = document.getElementById("chart");
+  if (gd._clickWired) return;
+  gd._clickWired = true;
+  gd.on("plotly_click", ev => {
+    if (!ev.points || !ev.points.length) return;
+    const dated = ev.points.filter(p => /^\d{4}$/.test(p.data.name || ""));
+    if (!dated.length) return;
+    let p = dated[0];
+    try {
+      const fl = gd._fullLayout;
+      const yData = fl.yaxis.p2d(ev.event.offsetY - fl.margin.t);
+      p = dated.reduce((best, q) =>
+        Math.abs(q.y - yData) < Math.abs(best.y - yData) ? q : best, dated[0]);
+    } catch (e) { /* whichever came first is a reasonable guess */ }
+    const date = dateFromX(+p.data.name, p.x);
+    // A day with no reading anywhere has no field to draw either, so ignore it
+    // rather than sending the map somewhere blank.
+    if (valuesAt(date).size) setMapDate(date);
+  });
 }
 
 // ---------------------------------------------------------------- map
@@ -423,20 +487,19 @@ const LABELS = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/C
 let map = null, baseLayer = null, labelLayer = null, sstLayer = null;
 let pins = {}, cbBar = null, cbMax = null, cbMin = null;
 
-let rangeTouched = false;
+// Off by default: 17-31 covers the annual cycle along this coast, so the same
+// colour means the same temperature in February and in September and two days
+// can be compared by eye. Auto trades that away for contrast within one day.
+let autoScale = false;
 
 function range() {
-  return [+document.getElementById("cmin").value || 16,
-          +document.getElementById("cmax").value || 32];
+  return [+document.getElementById("cmin").value || 17,
+          +document.getElementById("cmax").value || 31];
 }
 
-// A fixed 16-32 band is the right default in February and useless in September,
-// when the whole basin sits in its top quarter and the field renders as one
-// flat colour. Open on a band the day actually occupies, and leave it alone
-// once the reader has set their own.
 function fitRange(values) {
-  if (rangeTouched || !values.length) return;
-  document.getElementById("cmin").value = Math.floor(Math.min(...values) - 2);
+  if (!autoScale || !values.length) return;
+  document.getElementById("cmin").value = Math.floor(Math.min(...values) - 1);
   document.getElementById("cmax").value = Math.ceil(Math.max(...values) + 1);
 }
 
@@ -447,9 +510,15 @@ function fitRange(values) {
 // to be brought home to Celsius separately.
 const KELVIN = 273.15;
 
+// Of the colour maps this server actually honours, balance is the only true
+// blue-to-red one. Most other names - coolwarm, RdBu_r, bwr, seismic, turbo -
+// are accepted and then silently rendered as thermal, so they cannot be used:
+// the picture would not be the one the legend describes.
+const CMAP = "balance";
+
 function styleString() {
   const [mn, mx] = range();
-  return `cmap:thermal,range:${(mn + KELVIN).toFixed(2)}/${(mx + KELVIN).toFixed(2)}`;
+  return `cmap:${CMAP},range:${(mn + KELVIN).toFixed(2)}/${(mx + KELVIN).toFixed(2)}`;
 }
 
 // Filled from the field's own colormap, so a pin and the water under it are the
@@ -464,9 +533,16 @@ function pinColor(v) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
+// The near-real-time layer only reaches back to 2008, so any older day has to
+// come off the reprocessed one - which is the same stream the station files
+// themselves are built from, so pin and field agree for every date.
+const LAYER_REP = "SST_MED_SST_L4_REP_OBSERVATIONS_010_021/"
+  + "cmems_SST_MED_SST_L4_REP_OBSERVATIONS_010_021_202411/analysed_sst";
+const layerFor = date => (REP_END && date <= REP_END) ? LAYER_REP : LAYER;
+
 function fieldUrl(date) {
   return `${WMTS}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
-    + `&LAYER=${encodeURIComponent(LAYER)}`
+    + `&LAYER=${encodeURIComponent(layerFor(date))}`
     + `&STYLE=${encodeURIComponent(styleString())}`
     + `&TILEMATRIXSET=EPSG:3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`
     + `&FORMAT=image/png&TIME=${date}T00:00:00.000Z`;
@@ -497,11 +573,52 @@ function applyBasemap(dark) {
   labelLayer = L.tileLayer(LABELS(dark), {maxZoom: 12, pane: "shadowPane"}).addTo(map);
 }
 
-function drawPins() {
-  const latest = latestByStation();
+// null means "whatever the newest day is", so the map keeps following the data
+// as it arrives rather than freezing on the day the page happened to load.
+let mapDate = null;
+
+function latestDate() {
+  return [...latestByStation().values()].map(r => r.date).sort().pop();
+}
+const shownDate = () => mapDate || latestDate();
+
+// Readings for one particular day at every station. The preloaded per-station
+// series answer for any day back to 1982; the trailing file and the live rows
+// cover the days the archive has not reached.
+function valuesAt(date) {
+  // The trailing rows cover every station from the first paint, before the
+  // per-station archives have finished arriving in the background.
+  const tail = new Map();
+  for (const r of NRT.concat(LIVE)) tail.set(r.station + "|" + r.date, r.sst);
+  const out = new Map();
   for (const s of STATIONS) {
-    const rec = latest.get(s.name);
-    if (!rec) continue;
+    let v = SERIES[s.name] ? SERIES[s.name].get(date) : undefined;
+    if (v === undefined) v = tail.get(s.name + "|" + date);
+    if (v !== undefined) out.set(s.name, {date, sst: v,
+      live: LIVE.some(l => l.station === s.name && l.date === date)});
+  }
+  return out;
+}
+
+// A point on the shared 2020 axis back to a real date in a given year. 29
+// February has no home in a common year, so such a click lands on 28 February
+// rather than silently producing a date that does not exist.
+function dateFromX(year, xv) {
+  const d = xv instanceof Date ? xv
+    : new Date(typeof xv === "number" ? xv : String(xv).slice(0, 10) + "T00:00:00Z");
+  const m = d.getUTCMonth();
+  let day = d.getUTCDate();
+  if (m === 1 && day === 29 && new Date(Date.UTC(year, 1, 29)).getUTCMonth() !== 1)
+    day = 28;
+  return `${year}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function drawPins() {
+  const vals = valuesAt(shownDate());
+  for (const s of STATIONS) {
+    const rec = vals.get(s.name);
+    if (pins[s.name]) { map.removeLayer(pins[s.name]); delete pins[s.name]; }
+    if (!rec) continue;              // station not loaded yet, or no such day
     const sel = s.name === station;
     const html = `<div class="pin${sel ? " sel" : ""}${rec.live ? " live" : ""}" `
       + `style="background:${pinColor(rec.sst)};padding:2px 5px" `
@@ -509,16 +626,20 @@ function drawPins() {
       + `${rec.sst.toFixed(1)}</div>`;
     const icon = L.divIcon({html, className: "", iconSize: [38, 17],
       iconAnchor: [19, 8]});
-    if (pins[s.name]) map.removeLayer(pins[s.name]);
     pins[s.name] = L.marker([s.lat, s.lon], {icon, zIndexOffset: sel ? 1000 : 0})
       .addTo(map).on("click", () => select(s.name));
   }
 }
 
+function setMapDate(date) {
+  mapDate = (date && date !== latestDate()) ? date : null;
+  refreshField();
+}
+
 function refreshField() {
-  const latest = latestByStation();
-  const date = [...latest.values()].map(r => r.date).sort().pop();
-  fitRange([...latest.values()].filter(r => r.date === date).map(r => r.sst));
+  const date = shownDate();
+  const vals = valuesAt(date);
+  fitRange([...vals.values()].map(r => r.sst));
   if (sstLayer) map.removeLayer(sstLayer);
   sstLayer = L.tileLayer(fieldUrl(date), {opacity:
     +document.getElementById("opacity").value / 100, maxZoom: 12,
@@ -526,10 +647,15 @@ function refreshField() {
   sstLayer.bringToFront();
   drawPins();
   drawColorbar();
-  const live = [...latest.values()].some(r => r.live);
+  document.getElementById("mapday").textContent = date;
+  document.getElementById("latest").disabled = !mapDate;
+  const live = [...vals.values()].some(r => r.live);
+  const stream = (REP_END && date <= REP_END)
+    ? "5 km reprocessed analysis" : "1 km near-real-time analysis";
   document.getElementById("mapnote").textContent =
-    `Foundation SST for ${date}, 1 km near-real-time analysis. Pins give the `
-    + `reading at each station; click one to plot its record below.`
+    `Foundation SST for ${date}, ${stream}. Pins give the reading at each `
+    + `station; click one to plot its record below, or click a day in the chart `
+    + `to bring the map to that date.`
     + (live ? " Values marked * were read live from Copernicus, after the last "
             + "stored update." : "");
 }
@@ -558,7 +684,21 @@ function initMap() {
     if (sstLayer) sstLayer.setOpacity(+e.target.value / 100);
   };
   for (const id of ["cmin", "cmax"])
-    document.getElementById(id).onchange = () => { rangeTouched = true; refreshField(); };
+    document.getElementById(id).onchange = () => {
+      autoScale = false;
+      document.getElementById("auto").classList.remove("on");
+      refreshField();
+    };
+  document.getElementById("auto").onclick = e => {
+    autoScale = !autoScale;
+    e.target.classList.toggle("on", autoScale);
+    if (!autoScale) {                       // back to the fixed annual window
+      document.getElementById("cmin").value = 17;
+      document.getElementById("cmax").value = 31;
+    }
+    refreshField();
+  };
+  document.getElementById("latest").onclick = () => setMapDate(null);
 }
 
 // ---------------------------------------------------------------- controls
@@ -631,6 +771,12 @@ async function main() {
   // already usable, and this may add nothing at all.
   await topUp();
   if (LIVE.length) { refreshField(); draw(); }
+
+  // The other stations, in the background. Until they land the pins can only
+  // show days the trailing file covers, so a click on 1994 would leave twelve
+  // of them blank. About 0.9 MB gzipped for the lot, after the page is usable.
+  await Promise.all(STATIONS.map(s => loadStation(s.name)));
+  drawPins();
 }
 
 main();
