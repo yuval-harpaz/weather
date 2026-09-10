@@ -53,6 +53,17 @@ EXTRA_POINTS = {
     "Open_sea_ref":   (32.50, 33.50),   # no shore-normal; sampled as a point
 }
 
+# Two more stations for sea surface temperature only, extending the line north
+# past Haifa Bay to the Lebanese border. They are not in the chlorophyll set
+# because they carry no transect: an L4 SST analysis is gap-filled and smooth on
+# the 20 km scale, so there is no plume to profile, only a point to read. Both
+# were stepped ~4 km due west of the beach and land 2.4-3.2 km from the nearest
+# land pixel of the 1 km product, in family with the chlorophyll stations.
+SST_EXTRA_POINTS = {
+    "Haifa_IL":     (32.830, 34.912),   # west of the Carmel headland, open coast
+    "Nahariya_IL":  (33.005, 35.047),
+}
+
 # Chlorophyll stations sit at a fixed distance off the coast, unlike the current
 # stations which are matched to an isobath. Comparing chlorophyll between points
 # 3 km and 12 km out compares distance from shore, not place along the coast.

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sea surface temperature along the SE Mediterranean coast</title>
+<link rel="icon" href="logo.jpg">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root { color-scheme: light; }
+  body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
+    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .viz-root {
+    --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10); }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root { color-scheme: dark;
+      --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+      --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+      --border:rgba(255,255,255,0.10); } }
+  :root[data-theme="dark"] .viz-root { color-scheme: dark;
+    --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+    --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+    --border:rgba(255,255,255,0.10); }
+  .wrap { max-width:1400px; margin:0 auto; }
+  h1 { font-size:19px; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
+  .sub { color:var(--ink2); margin:0 0 14px; }
+  .bar { display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; }
+  .grp { display:flex; gap:0; }
+  .grp button { border-radius:0; margin-left:-1px; }
+  .grp button:first-child { border-radius:7px 0 0 7px; margin-left:0; }
+  .grp button:last-child { border-radius:0 7px 7px 0; }
+  .lbl { color:var(--muted); font-size:12.5px; margin-right:2px; }
+  .spacer { flex:1 }
+  button, select { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:6px 12px; cursor:pointer; }
+  button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
+  button:hover, select:hover { color:var(--ink); }
+  .card { background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:8px 4px 4px; min-height:200px; }
+  .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; }
+  .credit { font-size:12px; line-height:1.6; max-width:900px; }
+  .credit a { color:var(--ink2); }
+  .credit a:hover { color:var(--ink); }
+  .status { color:var(--muted); padding:24px 12px; }
+  #map { height:420px; border-radius:8px; }
+  .mapcbar { background:var(--surface); border:1px solid var(--border);
+    border-radius:7px; padding:6px 8px; font-size:11px; color:var(--ink2);
+    box-shadow:0 1px 4px rgba(0,0,0,.12); text-align:center; }
+  .cbbar { width:13px; height:150px; margin:3px auto; border-radius:3px;
+    border:1px solid var(--border); }
+  .cbunit { font-size:10px; color:var(--muted); margin-top:2px; }
+  /* Station pins: the reading is the mark. A dot plus a separate label would
+     collide with its neighbour every time the coast bends. */
+  .pin { display:flex; align-items:center; justify-content:center;
+    font:600 11px/1 system-ui, sans-serif; color:#fff; letter-spacing:-0.02em;
+    border-radius:9px; border:1.5px solid rgba(255,255,255,0.85);
+    box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer; white-space:nowrap; }
+  .pin.sel { border-color:#0b0b0b; border-width:2.5px;
+    box-shadow:0 0 0 2px rgba(255,255,255,.9), 0 1px 4px rgba(0,0,0,.5); }
+  .pin.live::after { content:"*"; margin-left:1px; font-size:13px; line-height:0.6; }
+  .leaflet-container { background:var(--page); }
+</style>
+</head>
+<body>
+<div class="viz-root wrap">
+
+  <h1>Sea surface temperature along the SE Mediterranean coast</h1>
+  <p class="sub" id="sub">Daily foundation SST, 1982&ndash;today.</p>
+
+  <div class="bar">
+    <span class="lbl">Opacity</span>
+    <input type="range" id="opacity" min="0" max="100" value="80" style="width:110px">
+    <span class="lbl" style="margin-left:14px">Colour range</span>
+    <input type="number" id="cmin" value="16" step="1" style="width:62px" title="low end, C">
+    <input type="number" id="cmax" value="32" step="1" style="width:62px" title="high end, C">
+    <span class="spacer"></span>
+    <button id="theme">Dark mode</button>
+  </div>
+  <div class="card"><div id="map"></div></div>
+  <p class="note" id="mapnote">loading the map&hellip;</p>
+
+  <div class="bar" style="margin-top:18px">
+    <span class="lbl">Station</span>
+    <select id="station"></select>
+    <span class="lbl" style="margin-left:14px">Colour</span>
+    <span class="grp">
+      <button class="sch" data-sch="record">Record</button>
+      <button class="sch" data-sch="age">Old to new</button>
+      <button class="sch" data-sch="baseline">Baseline range</button>
+    </span>
+    <span class="lbl" style="margin-left:14px">Compare with</span>
+    <select id="prev"></select>
+  </div>
+  <div class="card"><div id="chart"><div class="status" id="status">loading&hellip;</div></div></div>
+  <p class="note" id="foot"></p>
+
+  <p class="note credit">
+    Generated using E.U. Copernicus Marine Service Information &mdash; sea surface
+    temperature &copy; <a href="https://data.marine.copernicus.eu/product/SST_MED_SST_L4_REP_OBSERVATIONS_010_021/description"
+    target="_blank" rel="noopener">E.U. Copernicus</a>
+    (doi:10.48670/moi-00173 reprocessed, doi:10.48670/moi-00172 near real time).
+    Map tiles powered by <a href="https://www.esri.com/" target="_blank"
+    rel="noopener">Esri</a>. Coastline &copy;
+    <a href="https://www.openstreetmap.org/copyright" target="_blank"
+    rel="noopener">OpenStreetMap contributors</a> (ODbL).
+    &middot; <a href="chl_seasonal.html">Chlorophyll along the same coast</a>
+  </p>
+</div>
+
+<script>
+// ---------------------------------------------------------------- config
+const RAW = "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data";
+// GitHub Pages publishes docs/ as the site root, so "../data" resolves outside
+// it and always 404s; served from a checkout it is the other way round. Ask the
+// one that can work first rather than guaranteeing a round of console errors.
+const LOCAL = location.protocol === "file:"
+  || ["localhost", "127.0.0.1", ""].includes(location.hostname);
+const BASES = LOCAL ? ["../data", RAW] : [RAW, "../data"];
+
+const DEFAULT_STATION = "Tel_Aviv_IL";
+// The WMO standard normal, and the same window the Copernicus anomaly product
+// uses - so the grey band here and an anomaly map elsewhere mean the same thing.
+const BASE_FIRST = 1991, BASE_LAST = 2020;
+const MONTHS = ["J","F","M","A","M","J","J","A","S","O","N","D"];
+// Ticks at mid-month, so a label reads as "this month" and not "everything from
+// here on". Day numbers are slotted on 2020, a leap year, so 29 Feb has a home.
+const MONTH_MID = MONTHS.map((_, m) =>
+  Math.floor((Date.UTC(2020, m, 15) - Date.UTC(2020, 0, 1)) / 86400000) + 1);
+
+// Identity colours: current year against comparison year is the only pair a
+// reader must tell apart, and both modes pass lightness, chroma, CVD separation
+// and 3:1 contrast against their own surface. The greys are deliberately
+// achromatic - the baseline band is reference material, not a series.
+const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
+  grid:"#e1e0d9", minorgrid:"#efeee9", axis:"#c3c2b7",
+  cur:"#b2182b", prev:"#0b7fa3", band:"rgba(160,160,160,0.30)", med:"#898781",
+  ghost:"rgba(178,24,43,0.17)", rampLo:"#2166ac", rampHi:"#b2182b"};
+const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
+  grid:"#2c2c2a", minorgrid:"#232322", axis:"#383835",
+  cur:"#e05252", prev:"#12a3bf", band:"rgba(150,150,150,0.24)", med:"#898781",
+  ghost:"rgba(224,82,82,0.15)", rampLo:"#4a90d9", rampHi:"#e05252"};
+
+// ?station=Haifa_IL&scheme=age&compare=2010 - so a particular view can be linked to
+const QS = new URLSearchParams(location.search);
+let scheme = ["record", "age", "baseline"].includes(QS.get("scheme"))
+  ? QS.get("scheme") : "record";
+let station = QS.get("station") || DEFAULT_STATION, prevYear = QS.get("compare") || "";
+if (["light", "dark"].includes(QS.get("theme")))
+  document.documentElement.dataset.theme = QS.get("theme");
+let STATIONS = [], NRT = [], LIVE = [], SERIES = {}, LATEST = null, REP_END = null;
+
+const isDark = () => document.documentElement.dataset.theme
+  ? document.documentElement.dataset.theme === "dark"
+  : matchMedia("(prefers-color-scheme: dark)").matches;
+const C = () => isDark() ? DARK : LIGHT;
+const pretty = s => s.replace(/_(IL|EG|Gaza|off|ref|mouth|City)$/, "").replace(/_/g, " ");
+
+// Slot a date on the 2020 calendar by month and day rather than by day-number:
+// the years being overlaid are a mix of leap and common, so a raw day-of-year
+// would put 30 Aug 2026 on 29 Aug of a leap-year axis.
+function doyOf(iso) {
+  const d = new Date(iso + "T00:00:00Z");
+  return Math.floor((Date.UTC(2020, d.getUTCMonth(), d.getUTCDate())
+                     - Date.UTC(2020, 0, 1)) / 86400000) + 1;
+}
+const iso = d => d.toISOString().slice(0, 10);
+
+// ---------------------------------------------------------------- loading
+async function grab(name, parser) {
+  for (const base of BASES) {
+    try {
+      const r = await parser(`${base}/${name}`);
+      if (r && r.length) return r;
+    } catch (e) { /* try the next base */ }
+  }
+  return null;
+}
+
+async function loadFrame() {
+  STATIONS = (await grab("sst_stations.csv", d3.csv) || [])
+    .map(r => ({name: r.station, lat: +r.lat, lon: +r.lon, order: +r.order}))
+    .sort((a, b) => a.order - b.order);
+  NRT = (await grab("sst_nrt.csv", d3.csv) || [])
+    .map(r => ({date: r.date, station: r.station, sst: +r.sst}));
+  if (!STATIONS.length) throw new Error("no sst_stations.csv");
+}
+
+// A station's reprocessed record is 16,000 rows, so it is fetched only when the
+// station is actually looked at, and kept once fetched.
+async function loadStation(name) {
+  if (SERIES[name]) return SERIES[name];
+  const rows = await grab(`sst_rep_${name}.csv`, d3.csv);
+  const out = new Map();
+  for (const r of (rows || [])) out.set(r.date, +r.sst);
+  if (rows && rows.length) REP_END = REP_END || rows[rows.length - 1].date;
+  for (const r of NRT) if (r.station === name) out.set(r.date, r.sst);
+  for (const r of LIVE) if (r.station === name) out.set(r.date, r.sst);
+  SERIES[name] = out;
+  return out;
+}
+
+// ------------------------------------------------- live top-up (not stored)
+// The updater commits once a day, but the producer publishes around noon UTC,
+// so between those two moments the newest day exists at Copernicus and not
+// here. WMTS GetFeatureInfo serves single pixel values publicly and CORS-open,
+// and returns exactly what the authenticated download would have written, so
+// the gap can be closed in the browser. Nothing is saved: these rows live for
+// the lifetime of the page and are drawn as the "live" tail.
+const WMTS = "https://wmts.marine.copernicus.eu/teroWmts";
+// The trailing version is part of the layer path and changes when Copernicus
+// republishes the product; if the map ever goes blank, this is the line to check.
+const LAYER = "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
+  + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004_c_V2_202311/analysed_sst";
+const Z = 10;   // ~130 m per pixel at this latitude: finer than the 1 km product
+
+function tileOf(lat, lon) {
+  const n = 256 * 2 ** Z;
+  const x = (lon + 180) / 360 * n;
+  const s = Math.sin(lat * Math.PI / 180);
+  const y = (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n;
+  return {col: Math.floor(x / 256), row: Math.floor(y / 256),
+          i: Math.floor(x % 256), j: Math.floor(y % 256)};
+}
+
+async function pixel(lat, lon, date) {
+  const t = tileOf(lat, lon);
+  const url = `${WMTS}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetFeatureInfo`
+    + `&LAYER=${encodeURIComponent(LAYER)}&STYLE=cmap:thermal`
+    + `&TILEMATRIXSET=EPSG:3857&TILEMATRIX=${Z}&TILEROW=${t.row}&TILECOL=${t.col}`
+    + `&I=${t.i}&J=${t.j}&INFOFORMAT=application/json`
+    + `&TIME=${date}T00:00:00.000Z`;
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const p = (await r.json())?.features?.[0]?.properties;
+  if (!p || p.value === null || p.value === undefined || !isFinite(p.value)) return null;
+  return Math.round((p.value - 273.15) * 100) / 100;
+}
+
+async function topUp() {
+  const have = NRT.length ? NRT[NRT.length - 1].date : null;
+  if (!have) return;
+  const today = new Date();
+  const days = [];
+  for (let d = new Date(have + "T00:00:00Z"), k = 0; k < 4; k++) {
+    d = new Date(d.getTime() + 86400000);
+    if (iso(d) > iso(today)) break;
+    days.push(iso(d));
+  }
+  for (const day of days) {
+    // Probe one station first: if that day is not published yet there is no
+    // point asking for the other thirteen.
+    const probe = STATIONS.find(s => s.name === DEFAULT_STATION) || STATIONS[0];
+    const v0 = await pixel(probe.lat, probe.lon, day);
+    if (v0 === null) break;
+    const rest = await Promise.all(STATIONS.map(s =>
+      s.name === probe.name ? Promise.resolve(v0) : pixel(s.lat, s.lon, day)));
+    STATIONS.forEach((s, k) => {
+      if (rest[k] !== null) LIVE.push({date: day, station: s.name, sst: rest[k]});
+    });
+  }
+  // Fold whatever arrived into any series already loaded.
+  for (const r of LIVE) if (SERIES[r.station]) SERIES[r.station].set(r.date, r.sst);
+}
+
+function latestByStation() {
+  const out = new Map();
+  for (const r of NRT.concat(LIVE)) {
+    const cur = out.get(r.station);
+    if (!cur || r.date > cur.date) out.set(r.station, {date: r.date, sst: r.sst,
+      live: LIVE.some(l => l.station === r.station && l.date === r.date)});
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- chart
+function byYear(map) {
+  const out = {};
+  for (const [date, v] of map) {
+    const y = +date.slice(0, 4);
+    (out[y] = out[y] || new Array(368).fill(null))[doyOf(date)] = v;
+  }
+  return out;
+}
+
+// Blue for the oldest year through to red for the newest, interpolated in HCL
+// so the middle of the run stays a saturated violet instead of fading into the
+// background the way an RGB blue-to-red midpoint does.
+function ramp(t) { return d3.interpolateHcl(C().rampLo, C().rampHi)(t); }
+
+function draw() {
+  const map = SERIES[station];
+  if (!map) return;
+  // Plotly draws into the container rather than clearing it, so the placeholder
+  // has to be taken out or it sits under the finished chart for ever.
+  document.getElementById("status")?.remove();
+  const c = C();
+  const years = Object.keys(byYear(map)).map(Number).sort((a, b) => a - b);
+  const data = byYear(map);
+  const current = years[years.length - 1];
+  const x = d3.range(1, 368);
+  const traces = [], annotations = [];
+
+  const line = (y, color, width, name, show, dash) => ({
+    x, y: data[y], type: "scatter", mode: "lines", connectgaps: true,
+    line: {color, width, dash}, name: name || String(y), showlegend: !!show,
+    hovertemplate: `${name || y}  %{y:.2f} °C<extra></extra>`,
+  });
+  // Background years carry no hover: a crosshair over 45 identical lines is a
+  // wall of numbers, and the reader is being shown a shape, not a value.
+  const ghost = (y, color, width) => ({
+    x, y: data[y], type: "scattergl", mode: "lines", connectgaps: true,
+    line: {color, width}, showlegend: false, hoverinfo: "skip",
+  });
+
+  if (scheme === "baseline") {
+    const base = years.filter(y => y >= BASE_FIRST && y <= BASE_LAST);
+    const lo = [], hi = [], med = [];
+    for (const d of x) {
+      const vals = base.map(y => data[y][d]).filter(v => v !== null).sort((a, b) => a - b);
+      if (!vals.length) { lo.push(null); hi.push(null); med.push(null); continue; }
+      lo.push(vals[0]); hi.push(vals[vals.length - 1]);
+      const m = vals.length >> 1;
+      med.push(vals.length % 2 ? vals[m] : (vals[m - 1] + vals[m]) / 2);
+    }
+    traces.push({x, y: hi, type: "scatter", mode: "lines", line: {width: 0},
+      showlegend: false, hoverinfo: "skip", connectgaps: true});
+    traces.push({x, y: lo, type: "scatter", mode: "lines", line: {width: 0},
+      fill: "tonexty", fillcolor: c.band, connectgaps: true,
+      name: `${BASE_FIRST}–${BASE_LAST} range`, hoverinfo: "skip"});
+    traces.push({x, y: med, type: "scatter", mode: "lines", connectgaps: true,
+      line: {color: c.med, width: 1.5, dash: "dash"},
+      name: `${BASE_FIRST}–${BASE_LAST} median`,
+      hovertemplate: "median %{y:.2f} °C<extra></extra>"});
+  } else if (scheme === "age") {
+    const lo = years[0], span = Math.max(1, current - lo);
+    for (const y of years) {
+      if (y === current || String(y) === prevYear) continue;
+      traces.push(ghost(y, ramp((y - lo) / span), 1));
+    }
+    // A 45-entry legend is not a legend. The ramp gets a colourbar instead, and
+    // the two lines that carry identity are labelled at their own end points.
+    traces.push({x: [null], y: [null], type: "scatter", mode: "markers",
+      showlegend: false, hoverinfo: "skip",
+      marker: {colorscale: d3.range(0, 1.001, 0.1).map(t => [t, ramp(t)]),
+        cmin: lo, cmax: current, color: [lo], showscale: true,
+        colorbar: {title: {text: "year", side: "top", font: {size: 11}},
+          thickness: 11, len: 0.55, x: 1.01, tickfont: {size: 10, color: c.ink2},
+          outlinewidth: 0, tickformat: "d"}}});
+  } else {
+    for (const y of years) {
+      if (y === current || String(y) === prevYear) continue;
+      traces.push(ghost(y, c.ghost, 1));
+    }
+    traces.push({x: [null], y: [null], type: "scatter", mode: "lines",
+      line: {color: c.ghost.replace(/0\.1\d\)/, "0.6)"), width: 1},
+      name: `${years[0]}–${current - 1}`, hoverinfo: "skip"});
+  }
+
+  const lo = years[0], span = Math.max(1, current - lo);
+  const tint = y => scheme === "age" ? ramp((y - lo) / span) : null;
+
+  if (prevYear && data[+prevYear]) {
+    // Under the year ramp the comparison year is coloured by its own age, which
+    // is right but leaves it indistinguishable from its neighbours in the crowd.
+    // The dash carries the identity the colour cannot.
+    traces.push(line(+prevYear, tint(+prevYear) || c.prev, 2.2, prevYear, true,
+                     scheme === "age" ? "dot" : undefined));
+  }
+  traces.push(line(current, tint(current) || c.cur, 3, String(current), true));
+
+  // Direct-label the end of the current year, the way the reference chart does:
+  // the newest reading is the point of the whole picture.
+  const lastD = data[current].reduce((k, v, d) => v === null ? k : d, null);
+  if (lastD !== null) {
+    traces.push({x: [lastD], y: [data[current][lastD]], type: "scatter",
+      mode: "markers", marker: {color: tint(current) || c.cur, size: 9,
+        line: {color: c.surface, width: 2}},
+      showlegend: false, hoverinfo: "skip"});
+    annotations.push({x: lastD, y: data[current][lastD],
+      text: `<b>${data[current][lastD].toFixed(1)}°C</b>`, xanchor: "left",
+      yanchor: "middle", xshift: 10, showarrow: false,
+      // Under the year ramp the label lands in the middle of the crowd rather
+      // than in clear air at the right-hand edge, so it carries its own surface.
+      bgcolor: c.surface, borderpad: 3, opacity: 0.96,
+      font: {size: 13, color: tint(current) || c.cur}});
+  }
+
+  Plotly.react("chart", traces, {
+    height: 460,
+    margin: {l: 52, r: scheme === "age" ? 96 : 74, t: 12, b: 40},
+    paper_bgcolor: c.surface, plot_bgcolor: c.surface,
+    font: {color: c.ink2, size: 12},
+    hovermode: "closest",
+    xaxis: {tickvals: MONTH_MID, ticktext: MONTHS, range: [1, 367],
+      gridcolor: c.grid, zeroline: false, linecolor: c.axis, tickfont: {size: 12}},
+    yaxis: {title: {text: "°C", font: {size: 12}}, gridcolor: c.grid,
+      zeroline: false, linecolor: c.axis},
+    legend: {orientation: "h", y: 1.02, yanchor: "bottom", x: 0,
+      font: {size: 11.5}, bgcolor: "rgba(0,0,0,0)"},
+    annotations,
+  }, {displayModeBar: false, responsive: true});
+
+  const src = LIVE.length ? `, of which ${LIVE.length / STATIONS.length | 0} `
+      + "day fetched live from Copernicus and not stored" : "";
+  document.getElementById("foot").textContent =
+    `${pretty(station)} · ${years[0]}–${current}, ${map.size.toLocaleString()} daily `
+    + `values. Reprocessed to ${REP_END || "?"}, near real time after that${src}. `
+    + `Foundation SST: one value per day, with the day's solar warming removed.`;
+}
+
+// ---------------------------------------------------------------- map
+const BASEMAP = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+  + (dark ? "World_Dark_Gray_Base" : "World_Light_Gray_Base") + "/MapServer/tile/{z}/{y}/{x}";
+const LABELS = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+  + (dark ? "World_Dark_Gray_Reference" : "World_Light_Gray_Reference")
+  + "/MapServer/tile/{z}/{y}/{x}";
+
+let map = null, baseLayer = null, labelLayer = null, sstLayer = null;
+let pins = {}, cbBar = null, cbMax = null, cbMin = null;
+
+let rangeTouched = false;
+
+function range() {
+  return [+document.getElementById("cmin").value || 16,
+          +document.getElementById("cmax").value || 32];
+}
+
+// A fixed 16-32 band is the right default in February and useless in September,
+// when the whole basin sits in its top quarter and the field renders as one
+// flat colour. Open on a band the day actually occupies, and leave it alone
+// once the reader has set their own.
+function fitRange(values) {
+  if (rangeTouched || !values.length) return;
+  document.getElementById("cmin").value = Math.floor(Math.min(...values) - 2);
+  document.getElementById("cmax").value = Math.ceil(Math.max(...values) + 1);
+}
+
+// The renderer styles the raw stored values, and this product stores kelvin, so
+// a range given in Celsius puts every sea pixel above the top of the scale and
+// the whole basin comes back as one flat colour. GetLegend does not convert
+// either - it echoes back whatever numbers it was handed - so the labels have
+// to be brought home to Celsius separately.
+const KELVIN = 273.15;
+
+function styleString() {
+  const [mn, mx] = range();
+  return `cmap:thermal,range:${(mn + KELVIN).toFixed(2)}/${(mx + KELVIN).toFixed(2)}`;
+}
+
+// Filled from the field's own colormap, so a pin and the water under it are the
+// same colour at the same temperature rather than merely a similar one.
+let FIELD_CMAP = null;
+
+function pinColor(v) {
+  const [mn, mx] = range();
+  const t = Math.max(0, Math.min(1, (v - mn) / (mx - mn)));
+  if (!FIELD_CMAP) return d3.interpolateInferno(0.15 + 0.7 * t);
+  const c = FIELD_CMAP[Math.round(t * (FIELD_CMAP.length - 1))];
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function fieldUrl(date) {
+  return `${WMTS}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
+    + `&LAYER=${encodeURIComponent(LAYER)}`
+    + `&STYLE=${encodeURIComponent(styleString())}`
+    + `&TILEMATRIXSET=EPSG:3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`
+    + `&FORMAT=image/png&TIME=${date}T00:00:00.000Z`;
+}
+
+async function drawColorbar() {
+  const url = `${WMTS}?SERVICE=WMTS&REQUEST=GetLegend&LAYER=${encodeURIComponent(LAYER)}`
+    + `&STYLE=${encodeURIComponent(styleString())}`
+    + `&FORMAT=${encodeURIComponent("application/json")}`;
+  try {
+    const d = (await (await fetch(url)).json()).continuous;
+    FIELD_CMAP = d.cmap.colorMap;
+    if (!cbBar) return;
+    cbBar.style.background = "linear-gradient(to top, "
+      + d.cmap.colorMap.map((c, i) =>
+          `rgb(${c[0]},${c[1]},${c[2]}) ${(100 * i / 255).toFixed(1)}%`).join(",") + ")";
+    cbMax.textContent = (d.valueMax - KELVIN).toFixed(0);
+    cbMin.textContent = (d.valueMin - KELVIN).toFixed(0);
+    drawPins();                       // now that the real ramp is known
+  } catch (e) { /* leave the bar blank */ }
+}
+
+function applyBasemap(dark) {
+  if (baseLayer) map.removeLayer(baseLayer);
+  if (labelLayer) map.removeLayer(labelLayer);
+  baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12,
+    attribution: 'Tiles &copy; Esri'}).addTo(map);
+  labelLayer = L.tileLayer(LABELS(dark), {maxZoom: 12, pane: "shadowPane"}).addTo(map);
+}
+
+function drawPins() {
+  const latest = latestByStation();
+  for (const s of STATIONS) {
+    const rec = latest.get(s.name);
+    if (!rec) continue;
+    const sel = s.name === station;
+    const html = `<div class="pin${sel ? " sel" : ""}${rec.live ? " live" : ""}" `
+      + `style="background:${pinColor(rec.sst)};padding:2px 5px" `
+      + `title="${pretty(s.name)} · ${rec.date} · ${rec.sst.toFixed(2)} °C">`
+      + `${rec.sst.toFixed(1)}</div>`;
+    const icon = L.divIcon({html, className: "", iconSize: [38, 17],
+      iconAnchor: [19, 8]});
+    if (pins[s.name]) map.removeLayer(pins[s.name]);
+    pins[s.name] = L.marker([s.lat, s.lon], {icon, zIndexOffset: sel ? 1000 : 0})
+      .addTo(map).on("click", () => select(s.name));
+  }
+}
+
+function refreshField() {
+  const latest = latestByStation();
+  const date = [...latest.values()].map(r => r.date).sort().pop();
+  fitRange([...latest.values()].filter(r => r.date === date).map(r => r.sst));
+  if (sstLayer) map.removeLayer(sstLayer);
+  sstLayer = L.tileLayer(fieldUrl(date), {opacity:
+    +document.getElementById("opacity").value / 100, maxZoom: 12,
+    attribution: 'SST &copy; E.U. Copernicus Marine Service'}).addTo(map);
+  sstLayer.bringToFront();
+  drawPins();
+  drawColorbar();
+  const live = [...latest.values()].some(r => r.live);
+  document.getElementById("mapnote").textContent =
+    `Foundation SST for ${date}, 1 km near-real-time analysis. Pins give the `
+    + `reading at each station; click one to plot its record below.`
+    + (live ? " Values marked * were read live from Copernicus, after the last "
+            + "stored update." : "");
+}
+
+function initMap() {
+  map = L.map("map", {zoomControl: true, attributionControl: true});
+  applyBasemap(isDark());
+  const la = STATIONS.map(s => s.lat), lo = STATIONS.map(s => s.lon);
+  map.fitBounds([[Math.min(...la) - 0.3, Math.min(...lo) - 0.3],
+                 [Math.max(...la) + 0.3, Math.max(...lo) + 0.3]]);
+
+  const bar = L.control({position: "topright"});
+  bar.onAdd = () => {
+    const d = L.DomUtil.create("div", "mapcbar");
+    d.innerHTML = '<div class="cbmax"></div><div class="cbbar"></div>'
+      + '<div class="cbmin"></div><div class="cbunit">&deg;C</div>';
+    L.DomEvent.disableClickPropagation(d);
+    cbBar = d.querySelector(".cbbar");
+    cbMax = d.querySelector(".cbmax");
+    cbMin = d.querySelector(".cbmin");
+    return d;
+  };
+  bar.addTo(map);
+
+  document.getElementById("opacity").oninput = e => {
+    if (sstLayer) sstLayer.setOpacity(+e.target.value / 100);
+  };
+  for (const id of ["cmin", "cmax"])
+    document.getElementById(id).onchange = () => { rangeTouched = true; refreshField(); };
+}
+
+// ---------------------------------------------------------------- controls
+async function select(name) {
+  station = name;
+  document.getElementById("station").value = name;
+  document.getElementById("status") &&
+    (document.getElementById("status").textContent = "loading " + pretty(name) + "…");
+  await loadStation(name);
+  fillPrev();
+  drawPins();
+  draw();
+}
+
+function fillPrev() {
+  const sel = document.getElementById("prev");
+  const years = [...new Set([...SERIES[station].keys()].map(d => +d.slice(0, 4)))]
+    .sort((a, b) => b - a);
+  const current = years[0];
+  const keep = prevYear;
+  sel.innerHTML = '<option value="">none</option>'
+    + years.filter(y => y !== current).map(y => `<option value="${y}">${y}</option>`).join("");
+  sel.value = years.includes(+keep) && +keep !== current ? keep : "";
+  prevYear = sel.value;
+}
+
+function wire() {
+  document.querySelectorAll("button.sch").forEach(b => b.onclick = () => {
+    scheme = b.dataset.sch;
+    document.querySelectorAll("button.sch").forEach(o =>
+      o.classList.toggle("on", o === b));
+    draw();
+  });
+  document.getElementById("prev").onchange = e => { prevYear = e.target.value; draw(); };
+  document.getElementById("station").onchange = e => select(e.target.value);
+  document.getElementById("theme").onclick = () => {
+    document.documentElement.dataset.theme = isDark() ? "light" : "dark";
+    document.getElementById("theme").textContent = isDark() ? "Light mode" : "Dark mode";
+    applyBasemap(isDark());
+    draw();
+  };
+  document.getElementById("theme").textContent = isDark() ? "Light mode" : "Dark mode";
+}
+
+async function main() {
+  try {
+    await loadFrame();
+  } catch (e) {
+    document.getElementById("status").textContent =
+      "no data found — expected data/sst_stations.csv and data/sst_rep_<station>.csv "
+      + "(run `python code/sst_stations.py backfill`).";
+    return;
+  }
+  document.getElementById("station").innerHTML = STATIONS.map(s =>
+    `<option value="${s.name}">${pretty(s.name)}</option>`).join("");
+  if (!STATIONS.some(s => s.name === station)) station = DEFAULT_STATION;
+  document.getElementById("station").value = station;
+  document.querySelectorAll("button.sch").forEach(b =>
+    b.classList.toggle("on", b.dataset.sch === scheme));
+  wire();
+  initMap();
+  await loadStation(station);
+  fillPrev();
+  refreshField();
+  draw();
+  document.getElementById("sub").textContent =
+    `Daily foundation SST at ${STATIONS.length} coastal stations, 1982–today. `
+    + `Every year of the record is drawn; the newest is picked out.`;
+  // Only now go looking for anything newer than the stored files: the page is
+  // already usable, and this may add nothing at all.
+  await topUp();
+  if (LIVE.length) { refreshField(); draw(); }
+}
+
+main();
+</script>
+</body>
+</html>
