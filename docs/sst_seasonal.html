@@ -134,7 +134,8 @@ const DEFAULT_STATION = "Tel_Aviv_IL";
 // The WMO standard normal, and the same window the Copernicus anomaly product
 // uses - so the grey band here and an anomaly map elsewhere mean the same thing.
 const BASE_FIRST = 1991, BASE_LAST = 2020;
-const MONTHS = ["J","F","M","A","M","J","J","A","S","O","N","D"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"];
 // Every year is laid over one common calendar, 2020 - a leap year, so 29 Feb
 // has a home. Ticks sit at mid-month, so a label reads as "this month" rather
 // than "everything from here on".
@@ -424,7 +425,10 @@ function draw() {
     // A date axis rather than a day number, so the shared tooltip is headed
     // "18 Jul" instead of "200". The year is suppressed - it is 2020 for every
     // trace, which is the scaffolding, not information.
-    xaxis: {type: "date", tickvals: MONTH_MID, ticktext: MONTHS,
+    // automargin because the full month names are given as explicit ticktext:
+    // Plotly will not thin them out, so on a narrow window it rotates them
+    // instead, and without the reserved space the tails are cut off.
+    xaxis: {type: "date", tickvals: MONTH_MID, ticktext: MONTHS, automargin: true,
       range: ["2020-01-01", "2020-12-31"], hoverformat: "%e %b",
       gridcolor: c.grid, zeroline: false, linecolor: c.axis, tickfont: {size: 12},
       showspikes: true, spikemode: "across", spikethickness: 1,
