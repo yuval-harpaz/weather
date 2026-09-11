@@ -97,7 +97,9 @@
         <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>
       </svg></a>
     <span class="lbl" style="margin-left:14px">Day</span>
-    <span id="mapday" class="lbl" style="color:var(--ink)">&mdash;</span>
+    <button id="dprev" title="previous day">&#9664;</button>
+    <input type="date" id="mapdate">
+    <button id="dnext" title="next day">&#9654;</button>
     <button id="latest" title="back to the most recent day">Latest</button>
     <span class="spacer"></span>
     <button id="theme">Dark mode</button>
@@ -135,7 +137,7 @@
     rel="noopener">Esri</a>. Coastline &copy;
     <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
-    &middot; <a href="chl_seasonal.html">Chlorophyll along the same coast</a>
+    &middot; <a href="chl_seasonal.html" id="chllink">Chlorophyll along the same coast</a>
   </p>
 </div>
 
@@ -187,6 +189,9 @@ const QS = new URLSearchParams(location.search);
 let scheme = ["record", "age", "baseline"].includes(QS.get("scheme"))
   ? QS.get("scheme") : "record";
 let station = QS.get("station") || DEFAULT_STATION, prevYear = QS.get("compare") || "";
+// ?date=2025-08-20 - the day the map opens on, and what the chlorophyll page
+// hands over when the reader switches between the two maps.
+const QDATE = /^\d{4}-\d{2}-\d{2}$/.test(QS.get("date") || "") ? QS.get("date") : null;
 if (["light", "dark"].includes(QS.get("theme")))
   document.documentElement.dataset.theme = QS.get("theme");
 let STATIONS = [], NRT = [], LIVE = [], SERIES = {}, LATEST = null, REP_END = null;
@@ -227,19 +232,34 @@ async function loadFrame() {
   if (!STATIONS.length) throw new Error("no sst_stations.csv");
 }
 
-// A station's reprocessed record is 16,000 rows, so it is fetched only when the
-// station is actually looked at, and kept once fetched.
-async function loadStation(name) {
-  if (SERIES[name]) return SERIES[name];
-  const rows = await grab(`sst_rep_${name}.csv`, d3.csv);
+// A station's archive is 16,000 rows, so a series is fetched only when it is
+// actually looked at, and kept once fetched. Keyed by stream and station: the
+// two analyses are never merged, so asking for one never returns the other's
+// days, and the chart's year list is whatever that one stream covers.
+async function loadSeries(stream, name) {
+  const key = `${stream}|${name}`;
+  if (SERIES[key]) return SERIES[key];
+  const rows = await grab(`sst_${stream}_${name}.csv`, d3.csv);
   const out = new Map();
   for (const r of (rows || [])) out.set(r.date, +r.sst);
-  if (rows && rows.length) REP_END = REP_END || rows[rows.length - 1].date;
-  for (const r of NRT) if (r.station === name) out.set(r.date, r.sst);
-  for (const r of LIVE) if (r.station === name) out.set(r.date, r.sst);
-  SERIES[name] = out;
+  if (rows && rows.length) {
+    const end = rows[rows.length - 1].date;
+    if (stream === "rep") REP_END = REP_END || end;
+  }
+  // The trailing file and the live rows are the 1 km stream continuing past
+  // where the per-station files stop, so they belong to that series only.
+  if (stream === "nrt") {
+    for (const r of NRT) if (r.station === name) out.set(r.date, r.sst);
+    for (const r of LIVE) if (r.station === name) out.set(r.date, r.sst);
+  }
+  SERIES[key] = out;
   return out;
 }
+
+// The series the chart is currently drawing: the stream chosen for the map, so
+// one button moves both.
+const chartStream = () => activeSource(shownDate());
+const chartSeries = () => SERIES[`${chartStream()}|${station}`];
 
 // ------------------------------------------------- live top-up (not stored)
 // The updater commits once a day, but the producer publishes around noon UTC,
@@ -324,8 +344,11 @@ async function topUp() {
       if (rest[k] !== null) LIVE.push({date: day, station: s.name, sst: rest[k]});
     });
   }
-  // Fold whatever arrived into any series already loaded.
-  for (const r of LIVE) if (SERIES[r.station]) SERIES[r.station].set(r.date, r.sst);
+  // Live rows are the 1 km stream continuing, so they extend that series only.
+  for (const r of LIVE) {
+    const m = SERIES[`nrt|${r.station}`];
+    if (m) m.set(r.date, r.sst);
+  }
 }
 
 function latestByStation() {
@@ -354,7 +377,7 @@ function byYear(map) {
 function ramp(t) { return d3.interpolateHcl(C().rampLo, C().rampHi)(t); }
 
 function draw() {
-  const map = SERIES[station];
+  const map = chartSeries();
   if (!map) return;
   // Plotly draws into the container rather than clearing it, so the placeholder
   // has to be taken out or it sits under the finished chart for ever.
@@ -382,7 +405,12 @@ function draw() {
   });
 
   if (scheme === "baseline") {
+    // 1991-2020 is the standard normal, but the 1 km analysis only starts in
+    // 2008, so on that stream the band is whatever part of the window exists.
+    // The legend is labelled from the years actually used rather than from the
+    // window asked for - a band drawn from 13 years must not claim 30.
     const base = years.filter(y => y >= BASE_FIRST && y <= BASE_LAST);
+    const span = base.length ? `${base[0]}\u2013${base[base.length - 1]}` : "no";
     const lo = [], hi = [], med = [];
     for (const d of DOY) {
       const vals = base.map(y => data[y][d]).filter(v => v !== null).sort((a, b) => a - b);
@@ -395,10 +423,10 @@ function draw() {
       showlegend: false, hoverinfo: "skip", connectgaps: true});
     traces.push({x, y: lo, type: "scatter", mode: "lines", line: {width: 0},
       fill: "tonexty", fillcolor: c.band, connectgaps: true,
-      name: `${BASE_FIRST}–${BASE_LAST} range`, hoverinfo: "skip"});
+      name: `${span} range`, hoverinfo: "skip"});
     traces.push({x, y: med, type: "scatter", mode: "lines", connectgaps: true,
       line: {color: c.med, width: 1.5, dash: "dash"},
-      name: `${BASE_FIRST}–${BASE_LAST} median`,
+      name: `${span} median`,
       hovertemplate: "median %{y:.2f} °C<extra></extra>"});
   } else if (scheme === "age") {
     const lo = years[0], span = Math.max(1, current - lo);
@@ -491,9 +519,13 @@ function draw() {
 
   const src = LIVE.length ? `, of which ${LIVE.length / STATIONS.length | 0} `
       + "day fetched live from Copernicus and not stored" : "";
+  drawnStream = chartStream();
+  const cfg = SOURCES[drawnStream];
   document.getElementById("foot").textContent =
-    `${pretty(station)} · ${years[0]}–${current}, ${map.size.toLocaleString()} daily `
-    + `values. Reprocessed to ${REP_END || "?"}, near real time after that${src}. `
+    `${pretty(station)} · ${cfg.label}, ${years[0]}–${current}, `
+    + `${map.size.toLocaleString()} daily values${src}. `
+    + `The two analyses are never mixed: this is one of them end to end, and the `
+    + `field button swaps both the map and these lines. `
     + `Foundation SST: one value per day, with the day's solar warming removed.`;
 }
 
@@ -571,12 +603,19 @@ function styleString() {
 // same colour at the same temperature rather than merely a similar one.
 let FIELD_CMAP = null;
 
-function pinColor(v) {
+// Returns the fill and a label colour that survives it. The blue-white-red ramp
+// is near-white through the middle of its range, so a label fixed to white
+// vanishes on exactly the readings closest to average - the ink has to follow
+// the fill rather than be assumed.
+function pinStyle(v) {
   const [mn, mx] = range();
   const t = Math.max(0, Math.min(1, (v - mn) / (mx - mn)));
-  if (!FIELD_CMAP) return d3.interpolateInferno(0.15 + 0.7 * t);
-  const c = FIELD_CMAP[Math.round(t * (FIELD_CMAP.length - 1))];
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
+  const c = FIELD_CMAP
+    ? FIELD_CMAP[Math.round(t * (FIELD_CMAP.length - 1))]
+    : (({r, g, b}) => [r, g, b])(d3.rgb(d3.interpolateInferno(0.15 + 0.7 * t)));
+  const lin = x => (x /= 255) <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  const L = 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+  return {bg: `rgb(${c[0]},${c[1]},${c[2]})`, fg: L > 0.42 ? "#0b0b0b" : "#ffffff"};
 }
 
 // Which fields exist for a given day. The archive stops about a month back and
@@ -642,7 +681,7 @@ function applyBasemap(dark) {
 
 // null means "whatever the newest day is", so the map keeps following the data
 // as it arrives rather than freezing on the day the page happened to load.
-let mapDate = null;
+let mapDate = QDATE;
 
 function latestDate() {
   return [...latestByStation().values()].map(r => r.date).sort().pop();
@@ -659,7 +698,8 @@ function valuesAt(date) {
   for (const r of NRT.concat(LIVE)) tail.set(r.station + "|" + r.date, r.sst);
   const out = new Map();
   for (const s of STATIONS) {
-    let v = SERIES[s.name] ? SERIES[s.name].get(date) : undefined;
+    const m = SERIES[`${activeSource(date)}|${s.name}`];
+    let v = m ? m.get(date) : undefined;
     if (v === undefined) v = tail.get(s.name + "|" + date);
     if (v !== undefined) out.set(s.name, {date, sst: v,
       live: LIVE.some(l => l.station === s.name && l.date === date)});
@@ -687,8 +727,9 @@ function drawPins() {
     if (pins[s.name]) { map.removeLayer(pins[s.name]); delete pins[s.name]; }
     if (!rec) continue;              // station not loaded yet, or no such day
     const sel = s.name === station;
+    const st = pinStyle(rec.sst);
     const html = `<div class="pin${sel ? " sel" : ""}${rec.live ? " live" : ""}" `
-      + `style="background:${pinColor(rec.sst)};padding:2px 5px" `
+      + `style="background:${st.bg};color:${st.fg};padding:2px 5px" `
       + `title="${pretty(s.name)} · ${rec.date} · ${rec.sst.toFixed(2)} °C">`
       + `${rec.sst.toFixed(1)}</div>`;
     const icon = L.divIcon({html, className: "", iconSize: [38, 17],
@@ -698,9 +739,69 @@ function drawPins() {
   }
 }
 
-function setMapDate(date) {
+// Every stream is loaded for every station once that stream is first needed, so
+// the pins can answer for any day. Kept as one promise per stream so a burst of
+// day-stepping does not start the same fourteen downloads again.
+const STREAM_LOADING = {};
+function ensureStream(stream) {
+  if (!STREAM_LOADING[stream])
+    STREAM_LOADING[stream] = Promise.all(
+      STATIONS.map(s => loadSeries(stream, s.name)))
+      .then(() => { drawPins(); syncSourceControls(); });
+  return STREAM_LOADING[stream];
+}
+
+// The stream the chart was last drawn from, so stepping through days only
+// redraws 45 years of lines when the day actually crossed a stream boundary.
+let drawnStream = null;
+
+async function setMapDate(date) {
   mapDate = (date && date !== latestDate()) ? date : null;
+  const stream = activeSource(shownDate());
+  await loadSeries(stream, station);
+  ensureStream(stream);
   refreshField();
+  if (stream !== drawnStream) { fillPrev(); draw(); }
+  syncUrl();
+}
+
+function stepDay(n) {
+  const d = new Date(shownDate() + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  setMapDate(iso(d));
+}
+
+// The date lives in the address bar only when it is not the newest day, so the
+// plain URL always means "today" and a link that carries ?date= always means a
+// particular day - which is what makes swapping between this map and the
+// chlorophyll one keep its place.
+function syncUrl() {
+  const q = new URLSearchParams(location.search);
+  if (mapDate) q.set("date", mapDate); else q.delete("date");
+  const qs = q.toString();
+  history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+  const link = document.getElementById("chllink");
+  if (link) link.href = "chl_seasonal.html" + (mapDate ? "?date=" + mapDate : "");
+}
+
+// Whether a day has a second field to offer depends on where the archive ends,
+// and that is only learned once an archive file has been read. Opening straight
+// onto a past date therefore evaluates this before the answer is known, so it
+// has to be cheap enough to run again when the background loads land - which
+// rules out doing it inside refreshField, where it would rebuild the tiles.
+function syncSourceControls() {
+  const date = shownDate(), key = activeSource(date), src = SOURCES[key];
+  const have = sourcesFor(date);
+  const other = key === "rep" ? "nrt" : "rep";
+  const btn = document.getElementById("source");
+  btn.textContent = src.label;
+  btn.disabled = !have[other];
+  btn.title = have[other]
+    ? `showing the ${src.label} field — click for the ${SOURCES[other].label} one`
+    : `only the ${src.label} field covers ${date}`;
+  const link = document.getElementById("srclink");
+  link.href = src.url;
+  link.title = `${src.label}: open this product's page at Copernicus Marine`;
 }
 
 function refreshField() {
@@ -716,22 +817,14 @@ function refreshField() {
   sstLayer.bringToFront();
   drawPins();
   drawColorbar();
-  document.getElementById("mapday").textContent = date;
+  document.getElementById("mapdate").value = date;
   document.getElementById("latest").disabled = !mapDate;
+  document.getElementById("dnext").disabled = date >= latestDate();
+  document.getElementById("dprev").disabled = date <= SOURCES.rep.first;
 
-  // The button offers the other field, and only when that day actually has one.
+  syncSourceControls();
+
   const have = sourcesFor(date);
-  const other = key === "rep" ? "nrt" : "rep";
-  const btn = document.getElementById("source");
-  btn.textContent = src.label;
-  btn.disabled = !have[other];
-  btn.title = have[other]
-    ? `showing the ${src.label} field — click for the ${SOURCES[other].label} one`
-    : `only the ${src.label} field covers ${date}`;
-  const link = document.getElementById("srclink");
-  link.href = src.url;
-  link.title = `${src.label}: open this product's page at Copernicus Marine`;
-
   const live = [...vals.values()].some(r => r.live);
   // Pins always read the stored series, which is built from the archive, so say
   // so when the field on screen is the other stream - the two differ by under a
@@ -786,9 +879,17 @@ function initMap() {
     refreshField();
   };
   document.getElementById("latest").onclick = () => setMapDate(null);
-  document.getElementById("source").onclick = () => {
+  document.getElementById("dprev").onclick = () => stepDay(-1);
+  document.getElementById("dnext").onclick = () => stepDay(1);
+  document.getElementById("mapdate").onchange = e => e.target.value
+    && setMapDate(e.target.value);
+  document.getElementById("source").onclick = async () => {
     sourcePref = activeSource(shownDate()) === "rep" ? "nrt" : "rep";
+    await loadSeries(sourcePref, station);
+    ensureStream(sourcePref);
     refreshField();
+    fillPrev();
+    draw();
   };
 }
 
@@ -798,7 +899,7 @@ async function select(name) {
   document.getElementById("station").value = name;
   document.getElementById("status") &&
     (document.getElementById("status").textContent = "loading " + pretty(name) + "…");
-  await loadStation(name);
+  await loadSeries(chartStream(), name);
   fillPrev();
   drawPins();
   draw();
@@ -806,7 +907,7 @@ async function select(name) {
 
 function fillPrev() {
   const sel = document.getElementById("prev");
-  const years = [...new Set([...SERIES[station].keys()].map(d => +d.slice(0, 4)))]
+  const years = [...new Set([...chartSeries().keys()].map(d => +d.slice(0, 4)))]
     .sort((a, b) => b - a);
   const current = years[0];
   const keep = prevYear;
@@ -851,10 +952,11 @@ async function main() {
     b.classList.toggle("on", b.dataset.sch === scheme));
   wire();
   initMap();
-  await loadStation(station);
+  await loadSeries(activeSource(shownDate()), station);
   fillPrev();
   refreshField();
   draw();
+  syncUrl();
   document.getElementById("sub").textContent =
     `Daily foundation SST at ${STATIONS.length} coastal stations, 1982–today. `
     + `Every year of the record is drawn; the newest is picked out.`;
@@ -866,8 +968,10 @@ async function main() {
   // The other stations, in the background. Until they land the pins can only
   // show days the trailing file covers, so a click on 1994 would leave twelve
   // of them blank. About 0.9 MB gzipped for the lot, after the page is usable.
-  await Promise.all(STATIONS.map(s => loadStation(s.name)));
-  drawPins();
+  await ensureStream(activeSource(shownDate()));
+  // The other analysis too, so pressing the field button is instant and so is a
+  // jump back before 2008, where only the archive reaches.
+  await ensureStream(activeSource(shownDate()) === "rep" ? "nrt" : "rep");
 }
 
 main();

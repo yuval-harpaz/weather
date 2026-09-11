@@ -1,20 +1,20 @@
 """
 Daily sea surface temperature at each coastal station.
 
-Two streams, split by file rather than by a column. The reprocessed record runs
-from 1982 and is what every year in the chart is drawn from; it ends about a
-month back. The near-real-time record covers that trailing month and is the only
-part that changes from day to day.
+Two analyses of the same water, kept apart. The reprocessed one is 5 km and runs
+from 1982, ending about a month back; the near-real-time one is 1 km and runs
+from 2008 to today. They disagree by under a tenth of a degree, but splicing
+them into a single series would still put a step at whatever date the join
+happened to fall on, so each stream gets its own file and the page decides which
+to draw.
 
-Keeping them in separate files is what keeps the repository small: the per
-station reprocessed file is 16,000 rows and is rewritten only when the archive
-advances, roughly monthly, while the file that is rewritten every day holds a
-few hundred rows. Written as one file it would be a 400 kB blob committed daily.
-
-The split also removes the reconciliation logic the chlorophyll updater needs:
-the near-real-time file starts the day after the reprocessed record ends, so
-when the archive advances the overlap simply stops being written. Nothing has to
-decide which stream wins.
+Both per-station files stop at the archive's end, and one small trailing file
+carries every station's days after that. That is what keeps the repository
+small: the per-station files are thousands of rows but are rewritten only when
+the archive advances, roughly monthly, while the file rewritten every day holds
+a few hundred rows. It also removes the reconciliation logic the chlorophyll
+updater needs - the trailing file starts the day after the per-station files
+end, so nothing has to decide which copy of a day wins.
 
 Values are foundation SST - the temperature with the day's solar warming removed
 - so there is one number per day and no daily maximum to take. The hourly
@@ -29,8 +29,9 @@ RUN:
     in the environment (or ~/.copernicusmarine credentials).
 
 OUTPUT (in ../data):
-    sst_rep_<Station>.csv    date,sst   reprocessed, 1982 -> archive end
-    sst_nrt.csv              date,station,sst   the trailing weeks, all stations
+    sst_rep_<Station>.csv    date,sst   5 km reprocessed, 1982 -> archive end
+    sst_nrt_<Station>.csv    date,sst   1 km near real time, 2008 -> archive end
+    sst_nrt.csv              date,station,sst   1 km, the days after that
     sst_stations.csv         station,lat,lon,order   geography for the map
 """
 
@@ -56,6 +57,9 @@ REP = "cmems_SST_MED_SST_L4_REP_OBSERVATIONS_010_021"
 NRT = "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004_c_V2"
 
 REP_START = "1982-01-01"
+# The near-real-time record starts here, so before 2008 the archive is the only
+# thing there is and the page has no choice to offer.
+NRT_START = "2008-01-01"
 # Enough to survive a long outage without ever growing without bound. The window
 # only has to reach back to wherever the archive currently ends.
 NRT_MAX_DAYS = 150
@@ -143,8 +147,17 @@ def series(dataset_id, lat, lon, start, end):
     return out.round(2).dropna()
 
 
-def rep_file(name):
-    return DATA / f"sst_rep_{name}.csv"
+# The two records the page can draw, kept in separate files on purpose: mixing a
+# 5 km and a 1 km analysis into one series would put a step of a tenth of a
+# degree in the middle of it at whatever date the join happened to fall.
+STREAMS = {
+    "rep": dict(dataset=REP, start=REP_START, label="5 km reprocessed, 1982 ->"),
+    "nrt": dict(dataset=NRT, start=NRT_START, label="1 km near real time, 2008 ->"),
+}
+
+
+def stream_file(stream, name):
+    return DATA / f"sst_{stream}_{name}.csv"
 
 
 def write_geography(pts):
@@ -154,40 +167,55 @@ def write_geography(pts):
 
 
 def backfill():
-    """Fetch the whole reprocessed record for every station, from scratch."""
+    """Fetch both records for every station, from scratch."""
     pts = stations()
     end = record_end(REP)
-    print(f"reprocessed record ends {end}")
-    for name, (la, lo) in pts.items():
-        s = series(REP, la, lo, REP_START, end)
-        s.rename_axis("date").rename("sst").to_csv(rep_file(name))
-        print(f"  {name:<16} {len(s):6,} days  {s.index[0]} -> {s.index[-1]}"
-              f"  mean {s.mean():.2f} C")
+    print(f"reprocessed record ends {end}; both per-station files stop there, "
+          f"and sst_nrt.csv carries the days after it")
+    for stream in STREAMS:
+        cfg = STREAMS[stream]
+        print(f"\n{cfg['label']}")
+        for name, (la, lo) in pts.items():
+            s = series(cfg["dataset"], la, lo, cfg["start"], end)
+            if s.empty:
+                print(f"  {name:<16} nothing returned")
+                continue
+            s.rename_axis("date").rename("sst").to_csv(stream_file(stream, name))
+            print(f"  {name:<16} {len(s):6,} days  {s.index[0]} -> {s.index[-1]}"
+                  f"  mean {s.mean():.2f} C")
     write_geography(pts)
     return 0
 
 
-def extend_rep(pts, end):
-    """Append whatever the archive has added since the files were last written."""
+def extend(pts, stream, end):
+    """Append whatever each record has added since the files were last written.
+
+    Both streams stop at the archive's end on purpose. The near-real-time one
+    could run right up to today, but then the same days would live in a
+    per-station file and in the trailing file at once, and the page would have
+    to decide which copy wins. Cutting both at the same boundary means the
+    trailing file is simply the continuation.
+    """
+    cfg = STREAMS[stream]
     added = 0
     for name, (la, lo) in pts.items():
-        f = rep_file(name)
+        f = stream_file(stream, name)
         if not f.exists():
-            print(f"  {name}: no reprocessed file yet - run `backfill` first")
+            print(f"  {name}: no {stream} file yet - run `backfill` first")
             continue
         have = pd.read_csv(f, index_col="date")["sst"]
         start = (dt.date.fromisoformat(have.index[-1])
                  + dt.timedelta(days=1)).isoformat()
         if start > end:
             continue
-        fresh = series(REP, la, lo, start, end)
+        fresh = series(cfg["dataset"], la, lo, start, end)
         if fresh.empty:
             continue
         both = pd.concat([have, fresh])
         both = both[~both.index.duplicated(keep="last")]
         both.rename_axis("date").rename("sst").to_csv(f)
         added += len(fresh)
-        print(f"  {name:<16} archive +{len(fresh)} days -> {both.index[-1]}")
+        print(f"  {name:<16} {stream} +{len(fresh)} days -> {both.index[-1]}")
     return added
 
 
@@ -221,7 +249,8 @@ def main(argv):
     pts = stations()
     rep_end = record_end(REP)
     print(f"archive ends {rep_end}")
-    extend_rep(pts, rep_end)
+    for stream in STREAMS:
+        extend(pts, stream, rep_end)
     n, nrt_end = update_nrt(pts, rep_end)
     write_geography(pts)
     print(f"latest day available {nrt_end}")

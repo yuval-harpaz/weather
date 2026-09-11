@@ -148,7 +148,7 @@
     rel="noopener">Esri</a>. Coastline &copy;
     <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
-    &middot; <a href="sst_seasonal.html">Sea surface temperature along the same coast</a>
+    &middot; <a href="sst_seasonal.html" id="sstlink">Sea surface temperature along the same coast</a>
   </p>
 </div>
 
@@ -172,6 +172,14 @@ const RAW = "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/m
 // and "../data" resolves outside it - always a 404. Served from a checkout it is
 // the other way round. Ask the one that can work first, and keep the other as a
 // fallback rather than a guaranteed round of console errors.
+// ?date=2025-08-20 - the day the map opens on, and what the sea-temperature
+// page hands over when the reader switches between the two maps. Absent means
+// "the newest day", so a bare URL never goes stale.
+const QDATE = (() => {
+  const v = new URLSearchParams(location.search).get("date");
+  return /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : null;
+})();
+
 const LOCAL = location.protocol === "file:"
   || ["localhost", "127.0.0.1", ""].includes(location.hostname);
 const BASES = LOCAL ? ["../data", RAW] : [RAW, "../data"];
@@ -603,7 +611,7 @@ async function initMap() {
     document.getElementById("cmax").disabled = scaleMode !== "fixed";
     restyle();
   });
-  setMapDate(latestDate());
+  setMapDate(QDATE || latestDate());
 }
 
 function applyBasemap(dark) {
@@ -630,6 +638,19 @@ function lastReprocessed() {
   return best;
 }
 
+// The date is written to the address bar only when it is not the newest day, so
+// a plain URL always means "today" and a link carrying ?date= always means a
+// particular day. The sea-temperature page reads and writes the same parameter.
+function syncUrl() {
+  const q = new URLSearchParams(location.search);
+  const atLatest = !mapDate || mapDate === latestDate();
+  if (atLatest) q.delete("date"); else q.set("date", mapDate);
+  const qs = q.toString();
+  history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+  const link = document.getElementById("sstlink");
+  if (link) link.href = "sst_seasonal.html" + (atLatest ? "" : "?date=" + mapDate);
+}
+
 function stepDay(n) {
   if (!mapDate) return;
   const d = new Date(mapDate + "T00:00:00Z");
@@ -641,6 +662,7 @@ function setMapDate(dateStr) {
   if (!dateStr) return;
   mapDate = dateStr;
   document.getElementById("mapdate").value = dateStr;
+  syncUrl();
 
   const previous = chlLayer;
   const next = L.tileLayer(chlUrl(dateStr), {

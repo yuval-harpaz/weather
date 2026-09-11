@@ -48,7 +48,7 @@ jobs:
           # Only the files this job produces. The trailing file changes daily;
           # the per-station archive files only when the reprocessed record
           # advances, roughly once a month.
-          git add data/sst_nrt.csv data/sst_rep_*.csv data/sst_stations.csv
+          git add data/sst_nrt.csv data/sst_rep_*.csv data/sst_nrt_*.csv data/sst_stations.csv
           if git diff --cached --quiet; then
             echo "no changes to commit"
           else
