@@ -43,7 +43,8 @@
     background:var(--surface); border:1px solid var(--border); border-radius:7px;
     padding:6px 12px; cursor:pointer; }
   button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
-  button:hover, select:hover { color:var(--ink); }
+  button:hover:not(:disabled), select:hover { color:var(--ink); }
+  button:disabled { opacity:.45; cursor:default; }
   .card { background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:8px 4px 4px; min-height:200px; }
   .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; }
@@ -51,6 +52,9 @@
   .credit a { color:var(--ink2); }
   .credit a:hover { color:var(--ink); }
   .status { color:var(--muted); padding:24px 12px; }
+  .iconlink { display:inline-flex; align-items:center; color:var(--muted);
+    padding:4px 2px; text-decoration:none; }
+  .iconlink:hover { color:var(--ink); }
   #map { height:420px; border-radius:8px; }
   .mapcbar { background:var(--surface); border:1px solid var(--border);
     border-radius:7px; padding:6px 8px; font-size:11px; color:var(--ink2);
@@ -83,6 +87,15 @@
     <input type="number" id="cmin" value="17" step="1" style="width:62px" title="low end, C">
     <input type="number" id="cmax" value="31" step="1" style="width:62px" title="high end, C">
     <button id="auto" title="fit the scale to the day being shown">Auto</button>
+    <span class="lbl" style="margin-left:14px">Field</span>
+    <button id="source">&mdash;</button>
+    <a id="srclink" class="iconlink" target="_blank" rel="noopener"
+       title="open this product's page at Copernicus Marine" aria-label="product page">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/>
+        <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>
+      </svg></a>
     <span class="lbl" style="margin-left:14px">Day</span>
     <span id="mapday" class="lbl" style="color:var(--ink)">&mdash;</span>
     <button id="latest" title="back to the most recent day">Latest</button>
@@ -108,11 +121,17 @@
   <p class="note" id="foot"></p>
 
   <p class="note credit">
-    Generated using E.U. Copernicus Marine Service Information &mdash; sea surface
-    temperature &copy; <a href="https://data.marine.copernicus.eu/product/SST_MED_SST_L4_REP_OBSERVATIONS_010_021/description"
-    target="_blank" rel="noopener">E.U. Copernicus</a>
-    (doi:10.48670/moi-00173 reprocessed, doi:10.48670/moi-00172 near real time).
-    Map tiles powered by <a href="https://www.esri.com/" target="_blank"
+    Generated using E.U. Copernicus Marine Service Information. Sea surface
+    temperature &copy;
+    <a href="https://data.marine.copernicus.eu/product/SST_MED_SST_L4_REP_OBSERVATIONS_010_021/description"
+    target="_blank" rel="noopener">E.U. Copernicus &mdash; 5 km reprocessed</a>
+    (<a href="https://doi.org/10.48670/moi-00173" target="_blank"
+    rel="noopener">doi:10.48670/moi-00173</a>) and
+    <a href="https://data.marine.copernicus.eu/product/SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/description"
+    target="_blank" rel="noopener">1 km near real time</a>
+    (<a href="https://doi.org/10.48670/moi-00172" target="_blank"
+    rel="noopener">doi:10.48670/moi-00172</a>).
+    Powered by <a href="https://www.esri.com/" target="_blank"
     rel="noopener">Esri</a>. Coastline &copy;
     <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
@@ -134,12 +153,10 @@ const DEFAULT_STATION = "Tel_Aviv_IL";
 // The WMO standard normal, and the same window the Copernicus anomaly product
 // uses - so the grey band here and an anomaly map elsewhere mean the same thing.
 const BASE_FIRST = 1991, BASE_LAST = 2020;
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
-                "August", "September", "October", "November", "December"];
 // Every year is laid over one common calendar, 2020 - a leap year, so 29 Feb
-// has a home. Ticks sit at mid-month, so a label reads as "this month" rather
-// than "everything from here on".
-const MONTH_MID = MONTHS.map((_, m) => `2020-${String(m + 1).padStart(2, "0")}-15`);
+// has a home. Ticks fall on the first of each month and the name is written to
+// the right of that mark, across the month it belongs to, so a gridline is a
+// boundary between months rather than a line through the middle of one.
 // Index i of every series is day number i, so the x array has to be indexed the
 // same way and start at a placeholder: pairing a 1-based day axis against a
 // 0-based value array puts every line one day late.
@@ -232,10 +249,34 @@ async function loadStation(name) {
 // the gap can be closed in the browser. Nothing is saved: these rows live for
 // the lifetime of the page and are drawn as the "live" tail.
 const WMTS = "https://wmts.marine.copernicus.eu/teroWmts";
-// The trailing version is part of the layer path and changes when Copernicus
-// republishes the product; if the map ever goes blank, this is the line to check.
-const LAYER = "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
-  + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004_c_V2_202311/analysed_sst";
+// The two fields the map can draw. The trailing version is part of each layer
+// path and changes when Copernicus republishes the product; if the map ever
+// goes blank, these are the lines to check.
+// They overlap from 2008 to the end of the archive, which is the window where
+// the reader gets a choice: same water, one analysis at 1 km and one at 5 km.
+const SOURCES = {
+  nrt: {
+    layer: "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
+      + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004_c_V2_202311/analysed_sst",
+    label: "1 km near real time", short: "1 km",
+    first: "2008-01-01", last: null,          // null: runs to whatever is newest
+    url: "https://data.marine.copernicus.eu/product/"
+      + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/description",
+    credit: "1 km near-real-time SST &copy; E.U. Copernicus Marine Service",
+  },
+  rep: {
+    layer: "SST_MED_SST_L4_REP_OBSERVATIONS_010_021/"
+      + "cmems_SST_MED_SST_L4_REP_OBSERVATIONS_010_021_202411/analysed_sst",
+    label: "5 km reprocessed", short: "5 km",
+    first: "1982-01-01", last: null,          // null: runs to the archive's end
+    url: "https://data.marine.copernicus.eu/product/"
+      + "SST_MED_SST_L4_REP_OBSERVATIONS_010_021/description",
+    credit: "5 km reprocessed SST &copy; E.U. Copernicus Marine Service",
+  },
+};
+// The layer the live top-up reads pixels from - always the near-real-time one,
+// since it is only ever asked about days the archive has not reached.
+const LAYER = SOURCES.nrt.layer;
 const Z = 10;   // ~130 m per pixel at this latitude: finer than the 1 km product
 
 function tileOf(lat, lon) {
@@ -428,7 +469,8 @@ function draw() {
     // automargin because the full month names are given as explicit ticktext:
     // Plotly will not thin them out, so on a narrow window it rotates them
     // instead, and without the reserved space the tails are cut off.
-    xaxis: {type: "date", tickvals: MONTH_MID, ticktext: MONTHS, automargin: true,
+    xaxis: {type: "date", dtick: "M1", tick0: "2020-01-01", tickformat: "%B",
+      ticklabelmode: "period", automargin: true,
       range: ["2020-01-01", "2020-12-31"], hoverformat: "%e %b",
       gridcolor: c.grid, zeroline: false, linecolor: c.axis, tickfont: {size: 12},
       showspikes: true, spikemode: "across", spikethickness: 1,
@@ -537,12 +579,30 @@ function pinColor(v) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
-// The near-real-time layer only reaches back to 2008, so any older day has to
-// come off the reprocessed one - which is the same stream the station files
-// themselves are built from, so pin and field agree for every date.
-const LAYER_REP = "SST_MED_SST_L4_REP_OBSERVATIONS_010_021/"
-  + "cmems_SST_MED_SST_L4_REP_OBSERVATIONS_010_021_202411/analysed_sst";
-const layerFor = date => (REP_END && date <= REP_END) ? LAYER_REP : LAYER;
+// Which fields exist for a given day. The archive stops about a month back and
+// the near-real-time record starts in 2008, so before 2008 there is only the
+// archive, after the archive's end only the near-real-time field, and in
+// between - eighteen years of it - the reader can pick.
+function sourcesFor(date) {
+  return {
+    rep: !!REP_END && date >= SOURCES.rep.first && date <= REP_END,
+    nrt: date >= SOURCES.nrt.first && date <= latestDate(),
+  };
+}
+
+// Remembered across dates, so choosing the finer field once keeps it wherever
+// it exists rather than snapping back on every click.
+let sourcePref = null;
+
+function activeSource(date) {
+  const have = sourcesFor(date);
+  if (sourcePref && have[sourcePref]) return sourcePref;
+  // Default to the finer field wherever it exists, and drop to the archive only
+  // for the years before 2008, where nothing else covers the day.
+  return have.nrt ? "nrt" : "rep";
+}
+
+const layerFor = date => SOURCES[activeSource(date)].layer;
 
 function fieldUrl(date) {
   return `${WMTS}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
@@ -553,7 +613,8 @@ function fieldUrl(date) {
 }
 
 async function drawColorbar() {
-  const url = `${WMTS}?SERVICE=WMTS&REQUEST=GetLegend&LAYER=${encodeURIComponent(LAYER)}`
+  const url = `${WMTS}?SERVICE=WMTS&REQUEST=GetLegend`
+    + `&LAYER=${encodeURIComponent(layerFor(shownDate()))}`
     + `&STYLE=${encodeURIComponent(styleString())}`
     + `&FORMAT=${encodeURIComponent("application/json")}`;
   try {
@@ -573,7 +634,9 @@ function applyBasemap(dark) {
   if (baseLayer) map.removeLayer(baseLayer);
   if (labelLayer) map.removeLayer(labelLayer);
   baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12,
-    attribution: 'Tiles &copy; Esri'}).addTo(map);
+    attribution: 'Powered by <a href="https://www.esri.com/" target="_blank"'
+      + ' rel="noopener">Esri</a> &middot; <a href="https://www.openstreetmap.org/'
+      + 'copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}).addTo(map);
   labelLayer = L.tileLayer(LABELS(dark), {maxZoom: 12, pane: "shadowPane"}).addTo(map);
 }
 
@@ -644,22 +707,42 @@ function refreshField() {
   const date = shownDate();
   const vals = valuesAt(date);
   fitRange([...vals.values()].map(r => r.sst));
+  const key = activeSource(date), src = SOURCES[key];
   if (sstLayer) map.removeLayer(sstLayer);
   sstLayer = L.tileLayer(fieldUrl(date), {opacity:
     +document.getElementById("opacity").value / 100, maxZoom: 12,
-    attribution: 'SST &copy; E.U. Copernicus Marine Service'}).addTo(map);
+    attribution: `<a href="${src.url}" target="_blank" rel="noopener">`
+      + `${src.credit}</a>`}).addTo(map);
   sstLayer.bringToFront();
   drawPins();
   drawColorbar();
   document.getElementById("mapday").textContent = date;
   document.getElementById("latest").disabled = !mapDate;
+
+  // The button offers the other field, and only when that day actually has one.
+  const have = sourcesFor(date);
+  const other = key === "rep" ? "nrt" : "rep";
+  const btn = document.getElementById("source");
+  btn.textContent = src.label;
+  btn.disabled = !have[other];
+  btn.title = have[other]
+    ? `showing the ${src.label} field — click for the ${SOURCES[other].label} one`
+    : `only the ${src.label} field covers ${date}`;
+  const link = document.getElementById("srclink");
+  link.href = src.url;
+  link.title = `${src.label}: open this product's page at Copernicus Marine`;
+
   const live = [...vals.values()].some(r => r.live);
-  const stream = (REP_END && date <= REP_END)
-    ? "5 km reprocessed analysis" : "1 km near-real-time analysis";
+  // Pins always read the stored series, which is built from the archive, so say
+  // so when the field on screen is the other stream - the two differ by under a
+  // tenth of a degree, but not by nothing.
+  const mixed = key === "nrt" && have.rep;
   document.getElementById("mapnote").textContent =
-    `Foundation SST for ${date}, ${stream}. Pins give the reading at each `
-    + `station; click one to plot its record below, or click a day in the chart `
-    + `to bring the map to that date.`
+    `Foundation SST for ${date}, ${src.label} analysis. Pins give the reading at `
+    + `each station; click one to plot its record below, or click a day in the `
+    + `chart to bring the map to that date.`
+    + (mixed ? " The pins stay on the stored archive series, which runs about "
+             + "0.08 °C cooler than this field." : "")
     + (live ? " Values marked * were read live from Copernicus, after the last "
             + "stored update." : "");
 }
@@ -703,6 +786,10 @@ function initMap() {
     refreshField();
   };
   document.getElementById("latest").onclick = () => setMapDate(null);
+  document.getElementById("source").onclick = () => {
+    sourcePref = activeSource(shownDate()) === "rep" ? "nrt" : "rep";
+    refreshField();
+  };
 }
 
 // ---------------------------------------------------------------- controls
