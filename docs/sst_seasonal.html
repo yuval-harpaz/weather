@@ -52,6 +52,10 @@
   .credit a { color:var(--ink2); }
   .credit a:hover { color:var(--ink); }
   .status { color:var(--muted); padding:24px 12px; }
+  .btnlink { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:6px 12px; text-decoration:none; display:inline-flex; align-items:center; }
+  .btnlink:hover { color:var(--ink); border-color:var(--axis); }
   .iconlink { display:inline-flex; align-items:center; color:var(--muted);
     padding:4px 2px; text-decoration:none; }
   .iconlink:hover { color:var(--ink); }
@@ -102,6 +106,8 @@
     <button id="dnext" title="next day">&#9654;</button>
     <button id="latest" title="back to the most recent day">Latest</button>
     <span class="spacer"></span>
+    <a class="btnlink chllink" href="chl_seasonal.html"
+       title="the same coast, same day, chlorophyll">Chlorophyll map &#8599;</a>
     <button id="theme">Dark mode</button>
   </div>
   <div class="card"><div id="map"></div></div>
@@ -137,7 +143,7 @@
     rel="noopener">Esri</a>. Coastline &copy;
     <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
-    &middot; <a href="chl_seasonal.html" id="chllink">Chlorophyll along the same coast</a>
+    &middot; <a href="chl_seasonal.html" class="chllink">Chlorophyll along the same coast</a>
   </p>
 </div>
 
@@ -376,6 +382,11 @@ function byYear(map) {
 // background the way an RGB blue-to-red midpoint does.
 function ramp(t) { return d3.interpolateHcl(C().rampLo, C().rampHi)(t); }
 
+const Y_RANGE = [15, 33];
+const X_RANGE = ["2020-01-01", "2020-12-31"];
+// Set by the reader dragging or double-clicking, not by our own redraws.
+let userZoomed = false, redrawing = false;
+
 function draw() {
   const map = chartSeries();
   if (!map) return;
@@ -463,25 +474,44 @@ function draw() {
   }
   traces.push(line(current, curColor, 3, String(current), true));
 
-  // Direct-label the end of the current year, the way the reference chart does:
-  // the newest reading is the point of the whole picture.
-  const lastD = data[current].reduce((k, v, d) => v === null ? k : d, null);
-  if (lastD !== null) {
-    traces.push({x: [XDATES[lastD]], y: [data[current][lastD]], type: "scatter",
-      mode: "markers", marker: {color: curColor, size: 9,
+  // Mark the day the map is showing, so the two halves of the page point at the
+  // same moment. On the newest day that is the end of the current year's line,
+  // which is where the reference chart puts it; stepping back moves the marker
+  // to that day, in that day's own year, however far into the crowd it falls.
+  const pick = shownDate();
+  const pickYear = +pick.slice(0, 4), pickDoy = doyOf(pick);
+  const pickVal = data[pickYear] ? data[pickYear][pickDoy] : null;
+  if (pickVal !== null && pickVal !== undefined) {
+    // A day outside the current year sits among the background lines, where the
+    // year's own colour would say nothing - ink reads against all of them.
+    const markColor = pickYear === current ? curColor : c.ink;
+    traces.push({x: [XDATES[pickDoy]], y: [pickVal], type: "scatter",
+      mode: "markers", marker: {color: markColor, size: 9,
         line: {color: c.surface, width: 2}},
       showlegend: false, hoverinfo: "skip"});
-    annotations.push({x: XDATES[lastD], y: data[current][lastD],
-      text: `<b>${data[current][lastD].toFixed(1)}°C</b>`, xanchor: "left",
-      yanchor: "middle", xshift: 10, showarrow: false,
-      // Under the year ramp the label lands in the middle of the crowd rather
-      // than in clear air at the right-hand edge, so it carries its own surface.
+    annotations.push({x: XDATES[pickDoy], y: pickVal,
+      text: `<b>${pickYear === current ? "" : pickYear + "  "}`
+        + `${pickVal.toFixed(1)}°C</b>`,
+      xanchor: "left", yanchor: "middle", xshift: 10, showarrow: false,
+      // The label lands in the middle of the crowd rather than in clear air at
+      // the right-hand edge, so it carries its own surface.
       bgcolor: c.surface, borderpad: 3, opacity: 0.96,
-      font: {size: 13, color: curColor}});
+      font: {size: 13, color: markColor}});
   }
 
+  // react() resets the view on every redraw, and uirevision alone does not save
+  // it because the explicit range below outranks it. So the current ranges are
+  // read back and handed in again: swapping 1 km for 5 km keeps whatever the
+  // reader was looking at, while an untouched chart still opens on 15-33.
+  const gd = document.getElementById("chart");
+  const live2 = userZoomed && gd && gd._fullLayout && gd._fullLayout.yaxis;
+  const yRange = live2 ? gd._fullLayout.yaxis.range.slice() : Y_RANGE.slice();
+  const xRange = live2 ? gd._fullLayout.xaxis.range.slice() : X_RANGE.slice();
+
+  redrawing = true;
   Plotly.react("chart", traces, {
     height: 460,
+    uirevision: "sst",
     margin: {l: 52, r: scheme === "age" ? 96 : 74, t: 12, b: 40},
     paper_bgcolor: c.surface, plot_bgcolor: c.surface,
     font: {color: c.ink2, size: 12},
@@ -499,14 +529,14 @@ function draw() {
     // instead, and without the reserved space the tails are cut off.
     xaxis: {type: "date", dtick: "M1", tick0: "2020-01-01", tickformat: "%B",
       ticklabelmode: "period", automargin: true,
-      range: ["2020-01-01", "2020-12-31"], hoverformat: "%e %b",
+      range: xRange, hoverformat: "%e %b",
       gridcolor: c.grid, zeroline: false, linecolor: c.axis, tickfont: {size: 12},
       showspikes: true, spikemode: "across", spikethickness: 1,
       spikecolor: c.axis, spikedash: "solid"},
     // Fixed, so switching station or scheme does not silently rescale the axis
     // under the reader and make two stations look alike.
     yaxis: {title: {text: "°C", font: {size: 12}}, gridcolor: c.grid,
-      zeroline: false, linecolor: c.axis, range: [15, 33]},
+      zeroline: false, linecolor: c.axis, range: yRange},
     // Vertical, inside the top-left corner - which is empty on this data, since
     // the coldest part of the year sits at the left of the axis.
     legend: {orientation: "v", x: 0.012, xanchor: "left", y: 0.985, yanchor: "top",
@@ -514,6 +544,7 @@ function draw() {
       itemsizing: "constant"},
     annotations,
   }, {displayModeBar: false, responsive: true});
+  redrawing = false;
 
   wireChartClick();
 
@@ -537,6 +568,11 @@ function wireChartClick() {
   const gd = document.getElementById("chart");
   if (gd._clickWired) return;
   gd._clickWired = true;
+  gd.on("plotly_relayout", ev => {
+    if (redrawing) return;                       // our own react(), not a drag
+    if (ev["yaxis.autorange"] || ev["xaxis.autorange"]) userZoomed = false;
+    else if (Object.keys(ev).some(k => /^[xy]axis\.range/.test(k))) userZoomed = true;
+  });
   gd.on("plotly_click", ev => {
     if (!ev.points || !ev.points.length) return;
     const dated = ev.points.filter(p => /^\d{4}$/.test(p.data.name || ""));
@@ -761,7 +797,8 @@ async function setMapDate(date) {
   await loadSeries(stream, station);
   ensureStream(stream);
   refreshField();
-  if (stream !== drawnStream) { fillPrev(); draw(); }
+  if (stream !== drawnStream) fillPrev();
+  draw();                       // the marker follows the day, so always redraw
   syncUrl();
 }
 
@@ -780,8 +817,8 @@ function syncUrl() {
   if (mapDate) q.set("date", mapDate); else q.delete("date");
   const qs = q.toString();
   history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
-  const link = document.getElementById("chllink");
-  if (link) link.href = "chl_seasonal.html" + (mapDate ? "?date=" + mapDate : "");
+  for (const a of document.querySelectorAll("a.chllink"))
+    a.href = "chl_seasonal.html" + (mapDate ? "?date=" + mapDate : "");
 }
 
 // Whether a day has a second field to offer depends on where the archive ends,
@@ -824,18 +861,11 @@ function refreshField() {
 
   syncSourceControls();
 
-  const have = sourcesFor(date);
   const live = [...vals.values()].some(r => r.live);
-  // Pins always read the stored series, which is built from the archive, so say
-  // so when the field on screen is the other stream - the two differ by under a
-  // tenth of a degree, but not by nothing.
-  const mixed = key === "nrt" && have.rep;
   document.getElementById("mapnote").textContent =
     `Foundation SST for ${date}, ${src.label} analysis. Pins give the reading at `
     + `each station; click one to plot its record below, or click a day in the `
     + `chart to bring the map to that date.`
-    + (mixed ? " The pins stay on the stored archive series, which runs about "
-             + "0.08 °C cooler than this field." : "")
     + (live ? " Values marked * were read live from Copernicus, after the last "
             + "stored update." : "");
 }

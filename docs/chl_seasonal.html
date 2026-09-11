@@ -66,6 +66,10 @@
   input[type=date] { font:inherit; font-size:12.5px; color:var(--ink2);
     background:var(--surface); border:1px solid var(--border);
     border-radius:7px; padding:5px 9px; }
+  .btnlink { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:6px 12px; text-decoration:none; display:inline-flex; align-items:center; }
+  .btnlink:hover { color:var(--ink); border-color:var(--axis); }
 </style>
 </head>
 <body class="viz-root">
@@ -83,6 +87,8 @@
     <button id="dlatest">Latest</button>
     <span class="lbl" id="maphint">or click any point on a chart</span>
     <span class="spacer"></span>
+    <a class="btnlink sstlink" href="sst_seasonal.html"
+       title="the same coast, same day, sea temperature">Sea temperature map &#8599;</a>
     <span class="lbl">Colours</span>
     <select id="cmap">
       <option value="cmap:algae,logScale">algae, log</option>
@@ -148,7 +154,7 @@
     rel="noopener">Esri</a>. Coastline &copy;
     <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
-    &middot; <a href="sst_seasonal.html" id="sstlink">Sea surface temperature along the same coast</a>
+    &middot; <a href="sst_seasonal.html" class="sstlink">Sea surface temperature along the same coast</a>
   </p>
 </div>
 
@@ -647,8 +653,8 @@ function syncUrl() {
   if (atLatest) q.delete("date"); else q.set("date", mapDate);
   const qs = q.toString();
   history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
-  const link = document.getElementById("sstlink");
-  if (link) link.href = "sst_seasonal.html" + (atLatest ? "" : "?date=" + mapDate);
+  for (const a of document.querySelectorAll("a.sstlink"))
+    a.href = "sst_seasonal.html" + (atLatest ? "" : "?date=" + mapDate);
 }
 
 function stepDay(n) {
