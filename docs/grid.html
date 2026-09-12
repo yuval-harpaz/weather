@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electricity reserve at peak — Israel</title>
+<link rel="icon" href="logo.jpg">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root, .viz-root { color-scheme: light;
+    --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10); }
+  body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
+    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])),
+    :root:where(:not([data-theme="light"])) .viz-root { color-scheme: dark;
+      --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+      --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+      --border:rgba(255,255,255,0.10); } }
+  :root[data-theme="dark"], :root[data-theme="dark"] .viz-root { color-scheme: dark;
+    --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+    --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+    --border:rgba(255,255,255,0.10); }
+  .wrap { max-width:1400px; margin:0 auto; }
+  h1 { font-size:19px; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
+  .sub { color:var(--ink2); margin:0 0 14px; max-width:960px; }
+  .bar { display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; }
+  .grp { display:flex; gap:0; }
+  .grp button { border-radius:0; margin-left:-1px; }
+  .grp button:first-child { border-radius:7px 0 0 7px; margin-left:0; }
+  .grp button:last-child { border-radius:0 7px 7px 0; }
+  .lbl { color:var(--muted); font-size:12.5px; margin-right:2px; }
+  .spacer { flex:1 }
+  button, select { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:6px 12px; cursor:pointer; }
+  button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
+  button:hover:not(:disabled), select:hover { color:var(--ink); }
+  .card { background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:8px 4px 4px; min-height:200px; }
+  .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; max-width:1000px; }
+  .credit { font-size:12px; line-height:1.6; max-width:960px; }
+  .credit a, .note a { color:var(--ink2); }
+  .credit a:hover, .note a:hover { color:var(--ink); }
+  .status { color:var(--muted); padding:24px 12px; }
+  table.events { border-collapse:collapse; font-size:12.5px; margin:8px 2px 0;
+    width:100%; max-width:1100px; }
+  table.events th, table.events td { padding:4px 10px 4px 0; text-align:left;
+    border-bottom:1px solid var(--border); vertical-align:top; }
+  table.events th { color:var(--muted); font-weight:600; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .source { display:inline-flex; align-items:center; gap:8px; margin-right:8px;
+    vertical-align:middle; }
+  /* Their logo is dark ink on transparent, so it disappears on a dark page. */
+  :root[data-theme="dark"] .source img,
+  :root:where(:not([data-theme="light"])) .source img { filter:invert(1) brightness(1.6); }
+  @media (prefers-color-scheme: light) {
+    :root:where(:not([data-theme="dark"])) .source img { filter:none; } }
+</style>
+</head>
+<body>
+<div class="viz-root wrap">
+
+  <h1>Electricity reserve at peak &mdash; Israel</h1>
+  <p class="sub" id="sub">
+    Each day's peak demand, and how much spare generation was left behind it.
+  </p>
+
+  <div class="bar">
+    <span class="lbl">Show</span>
+    <span class="grp">
+      <button class="mode on" data-mode="reserve_pct">Reserve %</button>
+      <button class="mode" data-mode="reserve_mw">Reserve MW</button>
+      <button class="mode" data-mode="peak_mw">Peak MW</button>
+    </span>
+    <span class="lbl" style="margin-left:14px">Layout</span>
+    <span class="grp">
+      <button class="view on" data-view="year">By year</button>
+      <button class="view" data-view="line">Timeline</button>
+    </span>
+    <span class="spacer"></span>
+    <button id="theme">Dark mode</button>
+  </div>
+
+  <div class="card"><div id="chart"><div class="status" id="status">loading&hellip;</div></div></div>
+  <p class="note" id="foot"></p>
+
+  <h2 style="font-size:15px;font-weight:600;margin:22px 0 0">Flagged days</h2>
+  <p class="note" id="evnote" style="margin-top:4px"></p>
+  <div id="events"></div>
+
+  <p class="note" id="whatmw">
+    <b>MW</b> is a megawatt, a million watts &mdash; a rate of power, not an
+    amount of energy. It is how much the whole country is drawing at that
+    instant. The peak here is the highest such moment of the day: on a hot
+    August afternoon in 2025 it reached 17,270&nbsp;MW, or 17.3&nbsp;GW,
+    roughly seventeen million kettles at once. <b>Reserve</b> is the generation
+    that was available and not being used at that moment &mdash; the headroom.
+    Quoted as a percentage it is that headroom as a share of the peak, so 5%
+    means the country was running with one part spare for every twenty in use.
+  </p>
+
+  <p class="note credit">
+    <span class="source">
+      Source:
+      <a href="https://www.noga-iso.co.il/obligation-to-report/daily-demand-peaks/"
+         target="_blank" rel="noopener"
+         title="Noga — Israel Independent System Operator, daily demand peaks">
+        <img src="https://www.noga-iso.co.il/media/jhzn54k0/logostiki.svg?v=1dc52170218afd0"
+             alt="Noga — Israel Independent System Operator" height="34">
+      </a>
+    </span>
+    Peak-hour data published by Noga, the Israel Independent System Operator,
+    under its reporting obligation, one file per month.
+    Temperatures are the Israel Meteorological Service stations collected in this
+    repository. The flagging and the wording of each note are produced by
+    <span class="mono">code/grid_update.py</span>, not by hand.
+    &middot; <a href="index.html">All charts</a>
+  </p>
+</div>
+
+<script>
+// ---------------------------------------------------------------- config
+const RAW = "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data";
+const LOCAL = location.protocol === "file:"
+  || ["localhost", "127.0.0.1", ""].includes(location.hostname);
+const BASES = LOCAL ? ["../data", RAW] : [RAW, "../data"];
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"];
+// Reserve is squeezed from below, so the interesting end of the axis is zero.
+// Reserve is squeezed from below, so every axis starts at or near zero and
+// reaches past the highest value on record (84.8% on a quiet winter Saturday).
+const FLOOR = {reserve_pct: [0, 90], reserve_mw: [0, 8000], peak_mw: [6000, 18000]};
+const UNIT = {reserve_pct: "%", reserve_mw: " MW", peak_mw: " MW"};
+const TITLE = {reserve_pct: "reserve as a share of the peak",
+               reserve_mw: "reserve at the peak hour",
+               peak_mw: "peak demand"};
+const YLAB = {reserve_pct: "Reserve %", reserve_mw: "Reserve MW",
+              peak_mw: "Peak MW"};
+
+const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
+  grid:"#e1e0d9", axis:"#c3c2b7", cur:"#b2182b", band:"rgba(160,160,160,0.30)",
+  warm:"#b2182b", cold:"#0b7fa3", plain:"#8a6d1f"};
+const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
+  grid:"#2c2c2a", axis:"#383835", cur:"#e05252", band:"rgba(150,150,150,0.24)",
+  warm:"#e05252", cold:"#12a3bf", plain:"#d9b34a"};
+
+let mode = "reserve_pct", view = "year", ROWS = [];
+
+const isDark = () => document.documentElement.dataset.theme
+  ? document.documentElement.dataset.theme === "dark"
+  : matchMedia("(prefers-color-scheme: dark)").matches;
+const C = () => isDark() ? DARK : LIGHT;
+
+// Same common-calendar trick the sea pages use: every year is laid over 2020,
+// a leap year, so 29 February has somewhere to sit.
+const onCommon = iso => {
+  const d = new Date(iso + "T00:00:00Z");
+  return `2020-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
+       + `-${String(d.getUTCDate()).padStart(2, "0")}`;
+};
+
+async function load() {
+  for (const base of BASES) {
+    try {
+      const rows = await d3.csv(`${base}/grid_peaks.csv`);
+      if (rows && rows.length) return rows;
+    } catch (e) { /* try the next base */ }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- chart
+function draw() {
+  const c = C(), traces = [];
+  const years = [...new Set(ROWS.map(r => r.year))].sort();
+  const current = years[years.length - 1];
+  const num = r => r[mode];
+
+  if (view === "year") {
+    // Drawn as a band rather than one line per year. Daily reserve swings hard -
+    // partly weather, partly the working week, where Friday and Saturday sit
+    // some seven points above a weekday - so four overlaid years of it is a
+    // hairball that hides the thing worth seeing, which is the low edge.
+    const prior = years.filter(y => y !== current);
+    const byDay = new Map();
+    for (const r of ROWS) {
+      if (r.year === current || num(r) === null) continue;
+      if (!byDay.has(r.common)) byDay.set(r.common, []);
+      byDay.get(r.common).push(num(r));
+    }
+    const days = [...byDay.keys()].sort();
+    const lo = [], hi = [], med = [];
+    for (const d of days) {
+      const v = byDay.get(d).sort((a, b) => a - b);
+      lo.push(v[0]); hi.push(v[v.length - 1]);
+      med.push(v.length % 2 ? v[v.length >> 1]
+                            : (v[(v.length >> 1) - 1] + v[v.length >> 1]) / 2);
+    }
+    traces.push({x: days, y: hi, type: "scatter", mode: "lines",
+      line: {width: 0}, showlegend: false, hoverinfo: "skip"});
+    traces.push({x: days, y: lo, type: "scatter", mode: "lines", line: {width: 0},
+      fill: "tonexty", fillcolor: c.band,
+      name: `${prior[0]}–${prior[prior.length - 1]} range`, hoverinfo: "skip"});
+    traces.push({x: days, y: med, type: "scatter", mode: "lines",
+      line: {color: c.muted, width: 1.3, dash: "dash"},
+      name: `${prior[0]}–${prior[prior.length - 1]} median`,
+      hovertemplate: `median %{y:.1f}${UNIT[mode]}<extra></extra>`});
+    const rs = ROWS.filter(r => r.year === current && num(r) !== null);
+    traces.push({x: rs.map(r => r.common), y: rs.map(num), type: "scatter",
+      mode: "lines", line: {color: c.cur, width: 1.8}, name: String(current),
+      hovertemplate: `%{x|%e %b} ${current}<br>%{y:.1f}${UNIT[mode]}<extra></extra>`});
+  } else {
+    const rs = ROWS.filter(r => num(r) !== null);
+    traces.push({x: rs.map(r => r.date), y: rs.map(num), type: "scatter",
+      mode: "lines", line: {color: c.cur, width: 1.2}, name: "daily",
+      showlegend: false,
+      hovertemplate: `%{x|%e %b %Y}<br>%{y:.1f}${UNIT[mode]}<extra></extra>`});
+  }
+
+  // The flagged days, split by what the weather said about them. Colour follows
+  // the explanation, not the severity: cold and heat are different stories and
+  // an unexplained day is the one worth a second look.
+  const groups = [
+    ["cold snap", r => r.explained && r.temp_kind === "min", c.cold],
+    ["heat wave", r => r.explained && r.temp_kind === "max", c.warm],
+    ["not explained by temperature", r => !r.explained, c.plain],
+  ];
+  for (const [label, test, color] of groups) {
+    const rs = ROWS.filter(r => r.event && test(r) && num(r) !== null);
+    if (!rs.length) continue;
+    traces.push({
+      x: rs.map(r => view === "year" ? r.common : r.date), y: rs.map(num),
+      text: rs.map(r => `${r.date}<br>${r.note.replace(/ — /g, "<br>")}`),
+      type: "scatter", mode: "markers", name: label,
+      marker: {color, size: 9, line: {color: c.surface, width: 1.5}},
+      hovertemplate: "%{text}<extra></extra>",
+    });
+  }
+  // Demand-management calls that did not meet the bar for a flag - the reserve
+  // was comfortable and the peak modest - are still shown, because the contracts
+  // being invoked at all is worth seeing. Square and black so they read as a
+  // different kind of thing from the flagged days.
+  const quiet = ROWS.filter(r => r.demand_response && !r.event && num(r) !== null);
+  if (quiet.length) traces.push({
+    x: quiet.map(r => view === "year" ? r.common : r.date), y: quiet.map(num),
+    text: quiet.map(r => `${r.date}<br>demand response, reserve `
+      + `${r.reserve_pct.toFixed(0)}% on a ${(r.peak_mw / 1000).toFixed(1)} GW peak`
+      + `<br>not flagged: neither tight nor a large peak`),
+    type: "scatter", mode: "markers", name: "demand response, reserve comfortable",
+    marker: {color: c.ink, size: 8, symbol: "square",
+      line: {color: c.surface, width: 1.5}},
+    hovertemplate: "%{text}<extra></extra>",
+  });
+
+  const gd = document.getElementById("chart");
+  Plotly.react(gd, traces, {
+    height: 470, margin: {l: 58, r: 20, t: 14, b: 44},
+    paper_bgcolor: c.surface, plot_bgcolor: c.surface,
+    font: {color: c.ink2, size: 12}, hovermode: "closest",
+    hoverlabel: {bgcolor: c.surface, bordercolor: c.axis,
+      font: {color: c.ink, size: 12}, align: "left"},
+    uirevision: "grid",
+    xaxis: view === "year"
+      ? {type: "date", dtick: "M1", tick0: "2020-01-01", tickformat: "%B",
+         ticklabelmode: "period", automargin: true, hoverformat: "%e %b",
+         range: ["2020-01-01", "2020-12-31"], gridcolor: c.grid,
+         zeroline: false, linecolor: c.axis}
+      : {type: "date", automargin: true, gridcolor: c.grid, zeroline: false,
+         linecolor: c.axis},
+    yaxis: {title: {text: YLAB[mode], font: {size: 12}},
+      range: FLOOR[mode], gridcolor: c.grid, zeroline: false, linecolor: c.axis},
+    legend: {orientation: "v", x: 0.988, xanchor: "right", y: 0.985, yanchor: "top",
+      bgcolor: c.surface, font: {size: 11.5}, borderwidth: 0},
+  }, {displayModeBar: false, responsive: true});
+
+  document.getElementById("status")?.remove();
+
+  const flagged = ROWS.filter(r => r.event);
+  const dr = ROWS.filter(r => r.demand_response);
+  const quietN = dr.filter(r => !r.event).length;
+  document.getElementById("foot").textContent =
+    `${TITLE[mode]} · ${ROWS.length.toLocaleString()} days, ${ROWS[0].date} to `
+    + `${ROWS[ROWS.length - 1].date}. ${flagged.length} days are flagged: the `
+    + `reserve fell to a tenth of the peak or less, or the peak stood at least `
+    + `3 GW above the days either side of it, or the demand-management contracts were invoked `
+    + `on a day that was not otherwise comfortable. Those contracts were called `
+    + `on ${dr.length} days in all; the ${quietN} that came on a comfortable `
+    + `reserve are drawn as black squares rather than counted as events.`;
+}
+
+// ---------------------------------------------------------------- table
+function table() {
+  const rs = ROWS.filter(r => r.event).sort((a, b) => a.date < b.date ? -1 : 1);
+  document.getElementById("evnote").textContent =
+    `${rs.length} days, in date order. "Explained" means the station sat in the `
+    + `coldest or hottest tenth of its own season, so the weather accounts for the `
+    + `load; the rest are worth a second look.`;
+  document.getElementById("events").innerHTML =
+    "<table class='events'><tr><th>date</th><th>peak MW</th><th>above<br>neighbours</th>"
+    + "<th>reserve MW</th><th>reserve %</th><th>flag</th><th>station</th>"
+    + "<th>°C</th><th>reading</th></tr>"
+    + rs.map(r => `<tr><td>${r.date}</td><td class=num>${r.peak_mw ?? ""}</td>`
+        // Prominence is only meaningful for the days it was the reason for.
+        + `<td class=num>${r.peak_spike && r.peak_prom_mw !== null
+            ? "+" + r.peak_prom_mw.toLocaleString() : ""}</td>`
+        + `<td class=num>${r.reserve_mw ?? ""}</td>`
+        + `<td class=num>${r.reserve_pct === null ? "" : r.reserve_pct.toFixed(1)}</td>`
+        + `<td>${r.event}</td><td>${r.temp_station.toLowerCase()
+            .replace(/\b\w/g, m => m.toUpperCase())}</td>`
+        + `<td class=num>${r.temp_c === null ? "" : r.temp_c.toFixed(1)}</td>`
+        + `<td>${r.note.split(" — ").slice(1).join(" — ")}</td></tr>`).join("")
+    + "</table>";
+}
+
+// ---------------------------------------------------------------- controls
+function wire() {
+  for (const [cls, set] of [["mode", v => mode = v], ["view", v => view = v]]) {
+    document.querySelectorAll(`button.${cls}`).forEach(b => b.onclick = () => {
+      set(b.dataset[cls]);
+      document.querySelectorAll(`button.${cls}`).forEach(o =>
+        o.classList.toggle("on", o === b));
+      draw();
+    });
+  }
+  const t = document.getElementById("theme");
+  t.onclick = () => {
+    document.documentElement.dataset.theme = isDark() ? "light" : "dark";
+    t.textContent = isDark() ? "Light mode" : "Dark mode";
+    draw();
+  };
+  t.textContent = isDark() ? "Light mode" : "Dark mode";
+}
+
+async function main() {
+  const rows = await load();
+  if (!rows) {
+    document.getElementById("status").textContent =
+      "no data found — expected data/grid_peaks.csv (run `python code/grid_update.py`).";
+    return;
+  }
+  const num = v => (v === "" || v === undefined || v === null || isNaN(+v)) ? null : +v;
+  ROWS = rows.map(r => ({
+    date: r.date, year: +r.date.slice(0, 4), common: onCommon(r.date),
+    peak_mw: num(r.peak_mw), reserve_mw: num(r.reserve_mw),
+    reserve_pct: num(r.reserve_pct),
+    demand_response: String(r.demand_response).toLowerCase() === "true",
+    event: r.event || "", explained: String(r.explained).toLowerCase() === "true",
+    temp_station: r.temp_station || "", temp_kind: r.temp_kind || "",
+    temp_c: num(r.temp_c), peak_prom_mw: num(r.peak_prom_mw),
+    peak_spike: String(r.peak_spike).toLowerCase() === "true",
+    note: r.note || "",
+  })).sort((a, b) => a.date < b.date ? -1 : 1);
+  wire();
+  draw();
+  table();
+  document.getElementById("sub").textContent =
+    "Each day's peak demand and the spare generation left behind it, as published "
+    + "by the system operator. Days when the grid leaned on demand-management "
+    + "contracts, or ran on a reserve of a tenth of the peak or less, are marked "
+    + "and checked against that day's temperature.";
+}
+
+main();
+</script>
+</body>
+</html>
