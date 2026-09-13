@@ -85,6 +85,12 @@ BIG_PEAK_MW = 12000
 # the whole record, 5,278 MW clear, half again as much as anything else.
 SPIKE_WINDOW = 7          # days either side to search for the flanking valleys
 SPIKE_PROM_MW = 3000
+# A reserve can also fall away without demand rising, and that is a different
+# animal: the load was ordinary and the generation simply was not there. Those
+# days do not reach the tight line and no weather explains them, so they would
+# pass unnoticed - 28 February 2026 sat at 12.9% with a peak 207 MW BELOW its
+# own fortnight, while the days either side of it held 30-38%.
+SUPPLY_PCT = 15.0
 
 
 def fetch(url, timeout=60):
@@ -200,7 +206,7 @@ def annotate(df):
     hot = {s: np.array([v[s] for d, v in maxs.items()
                         if d.month in SUMMER and s in v]) for s in STATIONS}
 
-    events, notes, kinds, vals, whos, pcts = [], [], [], [], [], []
+    events, notes, kinds, vals, whos, pcts, oks = [], [], [], [], [], [], []
     for _, r in df.iterrows():
         day, pct, peak = r["date"], r["reserve_pct"], r["peak_mw"]
         tight = pd.notna(pct) and pct <= TIGHT_PCT
@@ -210,9 +216,14 @@ def annotate(df):
         # actually under pressure - either the reserve was not comfortable, or
         # the peak itself was large.
         dr = bool(r["demand_response"]) and (pd.isna(pct) or pct <= EASY_PCT or big)
+        # Low reserve on a day when demand was not high: the squeeze came from
+        # the supply side, so no temperature will account for it.
+        supply = (not tight and pd.notna(pct) and pct <= SUPPLY_PCT
+                  and pd.notna(r["peak_vs_local"]) and r["peak_vs_local"] <= 0)
         parts = ([("demand response" if dr else None)]
                  + [("tight reserve" if tight else None)]
-                 + [("peak spike" if spike else None)])
+                 + [("peak spike" if spike else None)]
+                 + [("low reserve, demand ordinary" if supply else None)])
         event = ", ".join([x for x in parts if x])
         best = (None, None, None, None)     # station, kind, value, percentile
         if event:
@@ -237,6 +248,15 @@ def annotate(df):
         station, kind, value, score = best
         explained = score is not None and score <= TAIL
         lead = event
+        if supply:
+            gap = abs(r["peak_vs_local"])
+            how = (f"{gap:,.0f} MW below" if gap >= 1 else "level with")
+            note = (f"{event} — {pct:.1f}% reserve on a peak {how} the days "
+                    f"around it, so the shortfall was in supply, not demand")
+            events.append(event); notes.append(note); kinds.append("")
+            vals.append(np.nan); whos.append(""); pcts.append(np.nan)
+            oks.append(False)          # supply-side: weather is not the reason
+            continue
         if r["peak_spike"] and pd.notna(r["peak_prom_mw"]):
             lead = (f"{event} of {r['peak_mw']:,.0f} MW, standing "
                     f"{r['peak_prom_mw']:,.0f} MW above the days around it")
@@ -252,6 +272,7 @@ def annotate(df):
                     f"{'winter' if kind == 'min' else 'summer'} days"
                     + ("" if explained else "; not an extreme day"))
         events.append(event)
+        oks.append(bool(event) and explained)
         notes.append(note)
         kinds.append(kind or "")
         vals.append(value if value is not None else np.nan)
@@ -259,8 +280,7 @@ def annotate(df):
         pcts.append(round(score, 4) if score is not None else np.nan)
 
     df["event"] = events
-    df["explained"] = [bool(e) and bool(n) and "not an extreme" not in n
-                       for e, n in zip(events, notes)]
+    df["explained"] = oks
     df["temp_station"] = whos
     df["temp_kind"] = kinds
     df["temp_c"] = vals
@@ -278,6 +298,9 @@ def main(argv):
     df = collect()
     df["reserve_pct"] = (100 * df["reserve_mw"] / df["peak_mw"]).round(2)
     df["peak_prom_mw"] = prominence(df["peak_mw"].to_numpy())
+    local = df["peak_mw"].rolling(SPIKE_WINDOW * 2 + 1, center=True,
+                                  min_periods=7).median()
+    df["peak_vs_local"] = (df["peak_mw"] - local).round(0)
     df["peak_spike"] = ((df["peak_mw"] > BIG_PEAK_MW)
                         & (df["peak_prom_mw"] >= SPIKE_PROM_MW)).fillna(False)
     df = annotate(df)
@@ -300,7 +323,8 @@ def main(argv):
 
     DATA.mkdir(exist_ok=True)
     out = df[["date", "peak_hour", "peak_mw", "capacity_mw", "reserve_mw",
-              "reserve_pct", "peak_prom_mw", "renewables_mw", "storage_mw",
+              "reserve_pct", "peak_prom_mw", "peak_vs_local", "renewables_mw",
+              "storage_mw",
               "demand_response", "peak_spike", "event", "explained",
               "temp_station", "temp_kind", "temp_c", "temp_rank", "note"]]
     out.to_csv(OUT, index=False)

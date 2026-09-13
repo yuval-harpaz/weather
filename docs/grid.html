@@ -143,10 +143,10 @@ const YLAB = {reserve_pct: "Reserve %", reserve_mw: "Reserve MW",
 
 const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
   grid:"#e1e0d9", axis:"#c3c2b7", cur:"#b2182b", band:"rgba(160,160,160,0.30)",
-  warm:"#b2182b", cold:"#0b7fa3", plain:"#8a6d1f"};
+  warm:"#b2182b", cold:"#0b7fa3", plain:"#8a6d1f", supply:"#6a51a3"};
 const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
   grid:"#2c2c2a", axis:"#383835", cur:"#e05252", band:"rgba(150,150,150,0.24)",
-  warm:"#e05252", cold:"#12a3bf", plain:"#d9b34a"};
+  warm:"#e05252", cold:"#12a3bf", plain:"#d9b34a", supply:"#a78bda"};
 
 let mode = "reserve_pct", view = "year", ROWS = [];
 
@@ -224,10 +224,14 @@ function draw() {
   // The flagged days, split by what the weather said about them. Colour follows
   // the explanation, not the severity: cold and heat are different stories and
   // an unexplained day is the one worth a second look.
+  const isSupply = r => r.event.includes("demand ordinary");
   const groups = [
     ["cold snap", r => r.explained && r.temp_kind === "min", c.cold],
     ["heat wave", r => r.explained && r.temp_kind === "max", c.warm],
-    ["not explained by temperature", r => !r.explained, c.plain],
+    // Their reason is known and it is not the weather, so they are not lumped
+    // in with the days where nothing accounts for the load.
+    ["supply short, demand ordinary", isSupply, c.supply],
+    ["not explained by temperature", r => !r.explained && !isSupply(r), c.plain],
   ];
   for (const [label, test, color] of groups) {
     const rs = ROWS.filter(r => r.event && test(r) && num(r) !== null);
@@ -286,7 +290,8 @@ function draw() {
     `${TITLE[mode]} · ${ROWS.length.toLocaleString()} days, ${ROWS[0].date} to `
     + `${ROWS[ROWS.length - 1].date}. ${flagged.length} days are flagged: the `
     + `reserve fell to a tenth of the peak or less, or the peak stood at least `
-    + `3 GW above the days either side of it, or the demand-management contracts were invoked `
+    + `3 GW above the days either side of it, or the reserve fell below a seventh `
+    + `without demand rising at all, or the demand-management contracts were invoked `
     + `on a day that was not otherwise comfortable. Those contracts were called `
     + `on ${dr.length} days in all; the ${quietN} that came on a comfortable `
     + `reserve are drawn as black squares rather than counted as events.`;
