@@ -134,18 +134,26 @@ def collect():
     """Download every published month and stack them into one frame."""
     links = month_links()
     print(f"index lists {len(links)} monthly files")
-    frames = []
+    frames, failed = [], []
     for i, link in enumerate(links, 1):
         try:
             frames.append(parse_month(fetch(SITE + link)))
         except Exception as exc:
             print(f"  {link.split('/')[-1]}: {type(exc).__name__}, skipped")
+            failed.append(link.split("/")[-1])
             continue
         time.sleep(0.2)                     # their server, their pace
         if i % 12 == 0:
             print(f"  {i}/{len(links)}")
     if not frames:
         raise SystemExit("nothing downloaded - has the page moved?")
+    # A month that fails to download must not quietly shorten the table. The
+    # published file is rebuilt from scratch every run, so a partial fetch would
+    # delete real history and the workflow would commit the deletion.
+    if failed:
+        raise SystemExit(f"{len(failed)} of {len(links)} months failed to "
+                         f"download ({', '.join(failed[:3])}...); refusing to "
+                         f"rebuild from a partial set")
     df = pd.concat(frames, ignore_index=True)
     return (df.drop_duplicates(subset="date", keep="last")
               .sort_values("date").reset_index(drop=True))
@@ -289,6 +297,55 @@ def annotate(df):
     return df
 
 
+def collapse_runs(df):
+    """Keep one flag per run of consecutive flagged days.
+
+    A cold snap or a heatwave lasts days, and flagging each of them says the
+    same thing several times over - 10 to 12 June 2026 were three consecutive
+    spikes of one event. The run is represented by its most extreme day: the
+    biggest peak where the run contains a spike, otherwise the lowest reserve.
+    The others are kept in the table with their numbers intact and simply stop
+    being flagged, so nothing is lost, only the repetition.
+    """
+    flagged = df.index[df["event"] != ""].tolist()
+    if not flagged:
+        df["suppressed"] = False
+        df["run_days"] = 0
+        return df
+    runs, cur = [], [flagged[0]]
+    for i in flagged[1:]:
+        prev = cur[-1]
+        if (df.at[i, "date"] - df.at[prev, "date"]).days == 1:
+            cur.append(i)
+        else:
+            runs.append(cur); cur = [i]
+    runs.append(cur)
+
+    suppressed = pd.Series(False, index=df.index)
+    run_days = pd.Series(0, index=df.index)
+    for run in runs:
+        run_days.loc[run] = len(run)
+        if len(run) == 1:
+            continue
+        if df.loc[run, "peak_spike"].any():
+            keep = df.loc[run, "peak_mw"].idxmax()
+            how = "highest peak"
+        else:
+            keep = df.loc[run, "reserve_pct"].idxmin()
+            how = "lowest reserve"
+        for i in run:
+            if i != keep:
+                suppressed[i] = True
+        df.at[keep, "note"] += (f" · the {how} of {len(run)} consecutive "
+                                f"flagged days, "
+                                f"{df.at[run[0], 'date']} to {df.at[run[-1], 'date']}")
+    df["suppressed"] = suppressed
+    df["run_days"] = run_days
+    df.loc[suppressed, "event"] = ""
+    df.loc[suppressed, "explained"] = False
+    return df
+
+
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
@@ -304,17 +361,22 @@ def main(argv):
     df["peak_spike"] = ((df["peak_mw"] > BIG_PEAK_MW)
                         & (df["peak_prom_mw"] >= SPIKE_PROM_MW)).fillna(False)
     df = annotate(df)
+    df = collapse_runs(df)
 
     before = len(pd.read_csv(OUT)) if OUT.exists() else 0
     gap = pd.date_range(df["date"].min(), df["date"].max()).difference(
         pd.to_datetime(df["date"]))
     print(f"{len(df):,} days, {df['date'].min()} -> {df['date'].max()}, "
           f"{len(gap)} missing")
-    quiet = int((df["demand_response"] & (df["event"] == "")).sum())
+    # Only the ones demoted for being comfortable - not the ones dropped as
+    # repeats inside a run, which are a different thing entirely.
+    quiet = int((df["demand_response"] & (df["event"] == "")
+                 & ~df["suppressed"]).sum())
     print(f"  demand response on {int(df['demand_response'].sum())} days "
           f"({quiet} of them on a comfortable reserve, shown but not flagged)")
     print(f"  peak spikes {int(df['peak_spike'].sum())}, "
-          f"{int((df['event'] != '').sum())} days flagged, "
+          f"{int((df['event'] != '').sum())} days flagged after collapsing "
+          f"{int(df['suppressed'].sum())} repeats within runs, "
           f"{int(df['explained'].sum())} explained by temperature")
 
     if args.dry_run:
@@ -324,8 +386,8 @@ def main(argv):
     DATA.mkdir(exist_ok=True)
     out = df[["date", "peak_hour", "peak_mw", "capacity_mw", "reserve_mw",
               "reserve_pct", "peak_prom_mw", "peak_vs_local", "renewables_mw",
-              "storage_mw",
-              "demand_response", "peak_spike", "event", "explained",
+              "storage_mw", "demand_response", "peak_spike", "event",
+              "explained", "suppressed", "run_days",
               "temp_station", "temp_kind", "temp_c", "temp_rank", "note"]]
     out.to_csv(OUT, index=False)
     print(f"  wrote {OUT.name} ({OUT.stat().st_size / 1024:.0f} kB), "

@@ -248,7 +248,8 @@ function draw() {
   // was comfortable and the peak modest - are still shown, because the contracts
   // being invoked at all is worth seeing. Square and black so they read as a
   // different kind of thing from the flagged days.
-  const quiet = ROWS.filter(r => r.demand_response && !r.event && num(r) !== null);
+  const quiet = ROWS.filter(r => r.demand_response && !r.event && !r.suppressed
+                                 && num(r) !== null);
   if (quiet.length) traces.push({
     x: quiet.map(r => view === "year" ? r.common : r.date), y: quiet.map(num),
     text: quiet.map(r => `${r.date}<br>demand response, reserve `
@@ -285,7 +286,7 @@ function draw() {
 
   const flagged = ROWS.filter(r => r.event);
   const dr = ROWS.filter(r => r.demand_response);
-  const quietN = dr.filter(r => !r.event).length;
+  const quietN = dr.filter(r => !r.event && !r.suppressed).length;
   document.getElementById("foot").textContent =
     `${TITLE[mode]} · ${ROWS.length.toLocaleString()} days, ${ROWS[0].date} to `
     + `${ROWS[ROWS.length - 1].date}. ${flagged.length} days are flagged: the `
@@ -357,6 +358,8 @@ async function main() {
     temp_station: r.temp_station || "", temp_kind: r.temp_kind || "",
     temp_c: num(r.temp_c), peak_prom_mw: num(r.peak_prom_mw),
     peak_spike: String(r.peak_spike).toLowerCase() === "true",
+    suppressed: String(r.suppressed).toLowerCase() === "true",
+    run_days: num(r.run_days),
     note: r.note || "",
   })).sort((a, b) => a.date < b.date ? -1 : 1);
   wire();
