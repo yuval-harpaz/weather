@@ -23,11 +23,18 @@ minimum of -0.6 C, against +8.9 C on every other day. A day is called explained
 when the responsible station sat in the tail of its own seasonal distribution.
 
 RUN:
-    python grid_update.py            # refresh, rebuild, re-annotate
+    python grid_update.py            # fetch what changed, re-derive, write
+    python grid_update.py --rebuild  # re-download all 55 months from scratch
     python grid_update.py --dry-run  # report what would change, write nothing
 
 OUTPUT (in ../data):
-    grid_peaks.csv    one row per day, all months in one file
+    grid_peaks.csv      one row per day, all months in one file
+    grid_sources.csv    which monthly file each month came from, and when
+
+Only months that are new, republished under a new link, or among the newest two
+are downloaded; everything else is carried over from the table on disk. A normal
+week is one request, for the index page. Use --rebuild after changing how a
+month is parsed, or to check the older months for corrections.
 """
 
 import argparse
@@ -47,6 +54,8 @@ import pandas as pd
 HERE = pathlib.Path(__file__).parent
 DATA = HERE.parent / "data"
 OUT = DATA / "grid_peaks.csv"
+# What was fetched last time, so a run can tell a new month from a known one.
+SOURCES = DATA / "grid_sources.csv"
 
 INDEX = "https://www.noga-iso.co.il/obligation-to-report/daily-demand-peaks/"
 SITE = "https://www.noga-iso.co.il"
@@ -92,6 +101,15 @@ SPIKE_PROM_MW = 3000
 # pass unnoticed - 28 February 2026 sat at 12.9% with a peak 207 MW BELOW its
 # own fortnight, while the days either side of it held 30-38%.
 SUPPLY_PCT = 15.0
+# The newest months are re-fetched every run even when their link has not
+# changed, because a late correction to last month is plausible and would
+# otherwise never be noticed. Older months are treated as settled; use
+# --rebuild to check them.
+REFRESH_MONTHS = 2
+# The columns a month contributes. Everything else in the output is derived
+# from these and recomputed locally on every run.
+RAW_KEEP = ["date", "peak_hour", "capacity_mw", "peak_mw", "renewables_mw",
+            "storage_mw", "reserve_mw", "demand_response"]
 
 
 def fetch(url, timeout=60, tries=4):
@@ -154,34 +172,119 @@ def parse_month(raw):
     return df.dropna(subset=["date"])
 
 
-def collect():
-    """Download every published month and stack them into one frame."""
+MONTH_RE = re.compile(r"peak_hour_(\d{2})-?(\d{2})-?(\d{4})\.csv")
+
+
+def file_month(name):
+    """'peak_hour_31-05-2022.csv' and 'peak_hour_31012026.csv' -> '2022-05'."""
+    m = MONTH_RE.search(name)
+    return f"{m.group(3)}-{m.group(2)}" if m else None
+
+
+def read_sources():
+    """{filename: url} as last fetched, or empty on the first incremental run."""
+    if not SOURCES.exists():
+        return {}
+    d = pd.read_csv(SOURCES)
+    return dict(zip(d["file"], d["url"]))
+
+
+def read_existing():
+    """The raw columns of the table already on disk, or None."""
+    if not OUT.exists():
+        return None
+    d = pd.read_csv(OUT)
+    if "date" not in d:
+        return None
+    d["date"] = pd.to_datetime(d["date"], errors="coerce").dt.date
+    d["demand_response"] = (d["demand_response"].astype(str).str.lower() == "true")
+    missing = [c for c in RAW_KEEP if c not in d.columns]
+    if missing:
+        print(f"  existing table lacks {missing}; a full rebuild is needed")
+        return None
+    return d.dropna(subset=["date"])[RAW_KEEP]
+
+
+def collect(force_all=False):
+    """Fetch what has changed and fold it into the table already on disk.
+
+    Rebuilding all fifty-five months every week was fifty-five requests for
+    data that changes once a month, and asking for them in a burst is what got
+    twelve of them refused at once - a run that then published a table missing
+    a year. Reading the index costs one request; usually nothing else is needed.
+    """
     links = month_links()
-    print(f"index lists {len(links)} monthly files")
+    known = read_sources()
+    have = None if force_all else read_existing()
+    by_file = {l.split("/")[-1]: l for l in links}
+    months = {name: file_month(name) for name in by_file}
+    recent = sorted(m for m in months.values() if m)[-REFRESH_MONTHS:]
+
+    # A table built before this file existed is trusted for the months it
+    # already covers, rather than re-downloading all of them to prove it.
+    if have is not None and not known:
+        covered = {str(d)[:7] for d in have["date"]}
+        if all(m in covered for m in months.values()):
+            known = dict(by_file)
+            print("  adopting the existing table as the starting point")
+
+    wanted = []
+    for name, link in by_file.items():
+        if have is None:
+            wanted.append(name)
+        elif name not in known:
+            wanted.append(name)                 # a month that is new to us
+        elif known[name] != link:
+            wanted.append(name)                 # republished under a new id
+        elif months[name] in recent:
+            wanted.append(name)                 # late corrections land here
+    wanted.sort()
+
+    print(f"index lists {len(links)} monthly files; "
+          f"{len(wanted)} to fetch{' (full rebuild)' if have is None else ''}")
+
     frames, failed = [], []
-    for i, link in enumerate(links, 1):
+    for i, name in enumerate(wanted, 1):
         try:
-            frames.append(parse_month(fetch(SITE + link)))
+            frames.append(parse_month(fetch(SITE + by_file[name])))
         except Exception as exc:
             code = getattr(exc, "code", "")
-            print(f"  {link.split('/')[-1]}: {type(exc).__name__} {code}, gave up")
-            failed.append(link.split("/")[-1])
+            print(f"  {name}: {type(exc).__name__} {code}, gave up")
+            failed.append(name)
             continue
         time.sleep(0.6)                     # their server, their pace
-        if i % 12 == 0:
-            print(f"  {i}/{len(links)}")
-    if not frames:
-        raise SystemExit("nothing downloaded - has the page moved?")
-    # A month that fails to download must not quietly shorten the table. The
-    # published file is rebuilt from scratch every run, so a partial fetch would
-    # delete real history and the workflow would commit the deletion.
+        if len(wanted) > 12 and i % 12 == 0:
+            print(f"  {i}/{len(wanted)}")
+
+    # A month that fails must not shorten the table. Starting from what is
+    # already on disk means a failure can only mean "nothing new today", but a
+    # full rebuild has no such floor, so it is refused outright.
     if failed:
-        raise SystemExit(f"{len(failed)} of {len(links)} months failed to "
-                         f"download ({', '.join(failed[:3])}...); refusing to "
-                         f"rebuild from a partial set")
-    df = pd.concat(frames, ignore_index=True)
-    return (df.drop_duplicates(subset="date", keep="last")
-              .sort_values("date").reset_index(drop=True))
+        raise SystemExit(f"{len(failed)} of {len(wanted)} months failed to "
+                         f"download ({', '.join(failed[:3])}); refusing to "
+                         f"write from a partial set")
+    if have is None and not frames:
+        raise SystemExit("nothing downloaded - has the page moved?")
+
+    fresh = (pd.concat(frames, ignore_index=True)[RAW_KEEP]
+             if frames else pd.DataFrame(columns=RAW_KEEP))
+    if have is None:
+        df = fresh
+    else:
+        touched = {str(d)[:7] for d in fresh["date"]} if len(fresh) else set()
+        keep = have[~have["date"].astype(str).str[:7].isin(touched)]
+        df = pd.concat([keep, fresh], ignore_index=True)
+        print(f"  {len(touched)} month(s) refreshed, "
+              f"{len(keep):,} rows carried over unchanged")
+
+    df = (df.drop_duplicates(subset="date", keep="last")
+            .sort_values("date").reset_index(drop=True))
+    # Only record what was actually proven good by this run.
+    fetched = dt.date.today().isoformat()
+    rows = [{"file": n, "url": by_file[n], "month": months[n],
+             "fetched": fetched if n in wanted else ""} for n in sorted(by_file)]
+    pd.DataFrame(rows).to_csv(SOURCES, index=False)
+    return df
 
 
 def prominence(peaks):
@@ -375,9 +478,11 @@ def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
                     help="report what would change without writing")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="re-download all months instead of only what changed")
     args = ap.parse_args(argv)
 
-    df = collect()
+    df = collect(force_all=args.rebuild)
     df["reserve_pct"] = (100 * df["reserve_mw"] / df["peak_mw"]).round(2)
     df["peak_prom_mw"] = prominence(df["peak_mw"].to_numpy())
     local = df["peak_mw"].rolling(SPIKE_WINDOW * 2 + 1, center=True,
