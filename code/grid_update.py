@@ -38,6 +38,7 @@ import pathlib
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 
 import numpy as np
@@ -93,9 +94,32 @@ SPIKE_PROM_MW = 3000
 SUPPLY_PCT = 15.0
 
 
-def fetch(url, timeout=60):
-    return urllib.request.urlopen(
-        urllib.request.Request(url, headers=UA), timeout=timeout).read()
+def fetch(url, timeout=60, tries=4):
+    """Fetch with backoff.
+
+    Fifty-five files in a row is enough for the server to start refusing, and a
+    refusal used to cost a month of history: a whole run once lost twelve months
+    this way. Transient failures are retried, and the status code is reported so
+    a permanent one is still recognisable as permanent.
+    """
+    delay = 2.0
+    for attempt in range(1, tries + 1):
+        try:
+            return urllib.request.urlopen(
+                urllib.request.Request(url, headers=UA), timeout=timeout).read()
+        except urllib.error.HTTPError as exc:
+            if exc.code in (400, 401, 403, 404) or attempt == tries:
+                raise
+            print(f"    HTTP {exc.code}, retrying in {delay:.0f}s "
+                  f"({attempt}/{tries - 1})")
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == tries:
+                raise
+            print(f"    {type(exc).__name__}, retrying in {delay:.0f}s "
+                  f"({attempt}/{tries - 1})")
+        time.sleep(delay)
+        delay *= 2
+    raise SystemExit("unreachable")
 
 
 def month_links():
@@ -139,10 +163,11 @@ def collect():
         try:
             frames.append(parse_month(fetch(SITE + link)))
         except Exception as exc:
-            print(f"  {link.split('/')[-1]}: {type(exc).__name__}, skipped")
+            code = getattr(exc, "code", "")
+            print(f"  {link.split('/')[-1]}: {type(exc).__name__} {code}, gave up")
             failed.append(link.split("/")[-1])
             continue
-        time.sleep(0.2)                     # their server, their pace
+        time.sleep(0.6)                     # their server, their pace
         if i % 12 == 0:
             print(f"  {i}/{len(links)}")
     if not frames:
