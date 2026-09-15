@@ -143,6 +143,10 @@
     rel="noopener">Esri</a>. Coastline &copy;
     <a href="https://www.openstreetmap.org/copyright" target="_blank"
     rel="noopener">OpenStreetMap contributors</a> (ODbL).
+    Sdot Yam buoy temperature courtesy of the
+    <a href="https://med-lter.haifa.ac.il/sdot-yam-float-overview/" target="_blank"
+    rel="noopener">Morris Kahn Marine Research Station, the School of Marine
+    Sciences, and the University of Haifa</a>.
     &middot; <a href="chl_seasonal.html" class="chllink">Chlorophyll along the same coast</a>
   </p>
 </div>
@@ -202,6 +206,27 @@ if (["light", "dark"].includes(QS.get("theme")))
   document.documentElement.dataset.theme = QS.get("theme");
 let STATIONS = [], NRT = [], LIVE = [], SERIES = {}, LATEST = null, REP_END = null;
 
+// The one in-water instrument on the map. Everything else here is a satellite
+// analysis; this is a thermistor on a mooring, and it is drawn as a buoy so the
+// difference in kind is visible before anything is read.
+const BUOY_KEY = "Sdot_Yam_buoy";
+const BUOY_AT = {name: BUOY_KEY, lat: 32.49463, lon: 34.87989};
+let BUOY_SST = new Map(), BUOY_FRESH = new Map();
+const onBuoy = () => station === BUOY_KEY;
+const MKMRS = '<a href="https://med-lter.haifa.ac.il/sdot-yam-float-overview/"'
+  + ' target="_blank" rel="noopener">Morris Kahn Marine Research Station, the'
+  + ' School of Marine Sciences, and the University of Haifa</a>';
+
+// The station's own dashboard, the one embedded on the MKMRS overview page. It
+// answers without credentials and sends Access-Control-Allow-Origin: *, so the
+// browser can read it directly and the daily file need not be the last word.
+const BUOY_API = "https://weather-dashboard-mkmrs.vercel.app/api/devices/4604/parameters";
+const BUOY_TEMP = 117387;   // water temperature, C
+const BUOY_DEPTH = 117437;  // ADCP pressure depth - the validity signal
+const NO_DATA = -1000;      // anything lower is the -100000 never-received marker
+const SUBMERGED_M = 0.05;   // deeper than this means the instrument is in the sea
+const MATCH_MS = 30 * 60000;
+
 const isDark = () => document.documentElement.dataset.theme
   ? document.documentElement.dataset.theme === "dark"
   : matchMedia("(prefers-color-scheme: dark)").matches;
@@ -235,6 +260,13 @@ async function loadFrame() {
     .sort((a, b) => a.order - b.order);
   NRT = (await grab("sst_nrt.csv", d3.csv) || [])
     .map(r => ({date: r.date, station: r.station, sst: +r.sst}));
+  // Read from the repository like every other file on this page - the endpoint
+  // the buoy is collected from is a secret, but its daily summary is committed,
+  // so the map needs nothing the reader does not already have.
+  for (const r of (await grab("buoy_sdot_yam.csv", d3.csv) || [])) {
+    const v = +r.sst;
+    if (r.sst !== "" && !isNaN(v)) BUOY_SST.set(r.date, v);
+  }
   if (!STATIONS.length) throw new Error("no sst_stations.csv");
 }
 
@@ -262,10 +294,75 @@ async function loadSeries(stream, name) {
   return out;
 }
 
+// ------------------------------------------------- buoy top-up (not stored)
+// The buoy reports every half hour and the summary file is committed once a day,
+// so between those two the newest readings exist at the station and not here.
+// Nothing is saved; these days live for as long as the tab is open.
+async function buoyRaw(pid, from, to) {
+  const url = `${BUOY_API}/${pid}/data?from=${encodeURIComponent(from)}`
+    + `&to=${encodeURIComponent(to)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`buoy ${pid}: HTTP ${r.status}`);
+  return ((await r.json()).data || []).map(d => ({
+      day: String(d.timestamp).slice(0, 10),
+      at: String(d.timestamp),
+      t: Date.parse(String(d.timestamp).replace(" ", "T") + "Z"),
+      v: +d.value,
+    })).filter(d => Number.isFinite(d.t) && Number.isFinite(d.v) && d.v > NO_DATA);
+}
+
+// The newest reading of each day rather than the day's median: this is what the
+// station's own dashboard puts on screen, and a page that disagreed with it
+// about the present would be the more confusing of the two. The stored days
+// behind it stay medians, so the live point is the one thing here that is an
+// instant rather than a day - the footnote says so.
+//
+// The depth filter is not optional. About a third of the record was logged with
+// the buoy capsized or ashore, where the sonde bakes in the sun and reads up to
+// 40 C; the ADCP's pressure channel reads exactly 0 out of the water, and
+// without consulting it the "latest reading" could be a deck temperature.
+function buoyLatest(temp, depth) {
+  const out = new Map();
+  for (const s of temp) {
+    let near = null, best = Infinity;
+    for (const d of depth) {
+      const gap = Math.abs(d.t - s.t);
+      if (gap < best) { best = gap; near = d; }
+    }
+    if (!near || best > MATCH_MS || near.v <= SUBMERGED_M) continue;
+    const cur = out.get(s.day);
+    if (!cur || s.t > cur.t) out.set(s.day, {v: s.v, t: s.t, at: s.at});
+  }
+  return out;
+}
+
+async function topUpBuoy() {
+  if (!BUOY_SST.size) return;
+  // From the last stored day, not the day after it: the file holds that day's
+  // median, and the reading that supersedes it is usually inside the same day.
+  // Asking from the following day would leave the newest value a median and the
+  // page would disagree with the station's own dashboard about the present.
+  const from = [...BUOY_SST.keys()].sort().pop();
+  const to = iso(new Date());
+  if (from > to) return;
+  try {
+    const [temp, depth] = await Promise.all([
+      buoyRaw(BUOY_TEMP, `${from} 00:00:00`, `${to} 23:59:59`),
+      buoyRaw(BUOY_DEPTH, `${from} 00:00:00`, `${to} 23:59:59`),
+    ]);
+    for (const [day, r] of buoyLatest(temp, depth)) {
+      BUOY_SST.set(day, r.v);
+      BUOY_FRESH.set(day, r.at);
+    }
+  } catch (e) { /* the file stands on its own; live is a bonus */ }
+}
+
 // The series the chart is currently drawing: the stream chosen for the map, so
 // one button moves both.
 const chartStream = () => activeSource(shownDate());
-const chartSeries = () => SERIES[`${chartStream()}|${station}`];
+// The buoy is not a pixel in either analysis, so it answers for itself rather
+// than through the stream the map is showing.
+const chartSeries = () => onBuoy() ? BUOY_SST : SERIES[`${chartStream()}|${station}`];
 
 // ------------------------------------------------- live top-up (not stored)
 // The updater commits once a day, but the producer publishes around noon UTC,
@@ -400,8 +497,12 @@ function draw() {
   const x = XDATES;
   const traces = [], annotations = [];
 
+  // The analyses have no gaps to bridge; the buoy does - three months out of
+  // the water in 2026 - and drawing through them would invent a spring it never
+  // measured, which is exactly what the footnote promises it does not do.
+  const joins = !onBuoy();
   const line = (y, color, width, name, show, dash) => ({
-    x, y: data[y], type: "scatter", mode: "lines", connectgaps: true,
+    x, y: data[y], type: "scatter", mode: "lines", connectgaps: joins,
     line: {color, width, dash}, name: name || String(y), showlegend: !!show,
     hovertemplate: `${name || y}  %{y:.2f} °C<extra></extra>`,
   });
@@ -411,7 +512,7 @@ function draw() {
   // protection refuse a WebGL context outright, and measured on this data SVG
   // is the faster of the two anyway (40-80 ms against 113 ms for 45 line traces).
   const ghost = (y, color, width) => ({
-    x, y: data[y], type: "scatter", mode: "lines", connectgaps: true,
+    x, y: data[y], type: "scatter", mode: "lines", connectgaps: joins,
     line: {color, width}, showlegend: false, hoverinfo: "skip",
   });
 
@@ -461,7 +562,8 @@ function draw() {
     }
     traces.push({x: [null], y: [null], type: "scatter", mode: "lines",
       line: {color: c.ghost.replace(/0\.1\d\)/, "0.6)"), width: 1},
-      name: `${years[0]}–${current - 1}`, hoverinfo: "skip"});
+      name: years[0] === current - 1 ? `${years[0]}`
+        : `${years[0]}–${current - 1}`, hoverinfo: "skip"});
   }
 
   // Under the year ramp the highlighted years step outside it: the newest year
@@ -552,12 +654,26 @@ function draw() {
       + "day fetched live from Copernicus and not stored" : "";
   drawnStream = chartStream();
   const cfg = SOURCES[drawnStream];
-  document.getElementById("foot").textContent =
-    `${pretty(station)} · ${cfg.label}, ${years[0]}–${current}, `
-    + `${map.size.toLocaleString()} daily values${src}. `
-    + `The two analyses are never mixed: this is one of them end to end, and the `
-    + `field button swaps both the map and these lines. `
-    + `Foundation SST: one value per day, with the day's solar warming removed.`;
+  const footEl = document.getElementById("foot");
+  const live = onBuoy() && BUOY_FRESH.size
+    ? ` The newest point is marked * on the map and is the buoy's latest `
+      + `reading (${[...BUOY_FRESH.values()].sort().pop()}) rather than a `
+      + `whole-day median, matching the station's own dashboard.` : "";
+  footEl.textContent = onBuoy()
+    ? `${pretty(station)} · thermistor on the mooring, ${years[0]}–${current}, `
+      + `${map.size.toLocaleString()} daily values. `
+      + `A median of the day's in-water samples, so it is a measurement rather `
+      + `than an analysis: no gap filling, and the days the buoy was out of the `
+      + `water are absent rather than interpolated. Two seasons is too short a `
+      + `record for the year ramp or a baseline, so only Record is offered.${live}`
+    : `${pretty(station)} · ${cfg.label}, ${years[0]}–${current}, `
+      + `${map.size.toLocaleString()} daily values${src}. `
+      + `The two analyses are never mixed: this is one of them end to end, and the `
+      + `field button swaps both the map and these lines. `
+      + `Foundation SST: one value per day, with the day's solar warming removed.`;
+  // textContent first so nothing from the data can be read as markup, then the
+  // one piece of trusted HTML this line needs.
+  if (onBuoy()) footEl.innerHTML = footEl.innerHTML + ` Buoy data: ${MKMRS}.`;
 }
 
 // Clicking a day in the chart takes the map to it. The shared tooltip means a
@@ -599,7 +715,7 @@ const LABELS = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/C
   + "/MapServer/tile/{z}/{y}/{x}";
 
 let map = null, baseLayer = null, labelLayer = null, sstLayer = null;
-let pins = {}, cbBar = null, cbMax = null, cbMin = null;
+let pins = {}, buoyPin = null, cbBar = null, cbMax = null, cbMin = null;
 
 // Off by default: 17-31 covers the annual cycle along this coast, so the same
 // colour means the same temperature in February and in September and two days
@@ -773,6 +889,38 @@ function drawPins() {
     pins[s.name] = L.marker([s.lat, s.lon], {icon, zIndexOffset: sel ? 1000 : 0})
       .addTo(map).on("click", () => select(s.name));
   }
+  drawBuoy();
+}
+
+// A buoy rather than a label: wide body carrying the reading, tapering to a tip
+// that sits on the mooring itself, so the shape says where the number was taken
+// and the fill - the same ramp as the field - says how it compares.
+function drawBuoy() {
+  const date = shownDate();
+  if (buoyPin) { map.removeLayer(buoyPin); buoyPin = null; }
+  const v = BUOY_SST.get(date);
+  if (v === undefined) return;       // out of the water, or no reading that day
+  const st = pinStyle(v);
+  const html = `<svg width="46" height="39" viewBox="0 0 46 39"`
+    + ` style="overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">`
+    + `<path d="M5 8 Q5 3 10 3 H36 Q41 3 41 8 V20 L23 37.5 L5 20 Z"`
+    + ` fill="${st.bg}" stroke="${onBuoy() ? "#0b0b0b" : "rgba(255,255,255,0.85)"}"`
+    + ` stroke-width="${onBuoy() ? 2.5 : 1.5}" stroke-linejoin="round"/>`
+    + `<text x="23" y="16" text-anchor="middle" fill="${st.fg}"`
+    + ` font-family="system-ui, sans-serif" font-size="12" font-weight="600"`
+    + ` letter-spacing="-0.02em">${v.toFixed(1)}</text>`
+    + (BUOY_FRESH.has(date)
+        ? `<text x="37.5" y="13" fill="${st.fg}" font-family="system-ui, sans-serif"`
+          + ` font-size="13" font-weight="600">*</text>` : "")
+    + `</svg>`;
+  const icon = L.divIcon({html, className: "", iconSize: [46, 39],
+    iconAnchor: [23, 38]});
+  buoyPin = L.marker([BUOY_AT.lat, BUOY_AT.lon], {icon, zIndexOffset: 1200,
+    title: `${pretty(BUOY_KEY)} · ${v.toFixed(2)} °C · `
+      + (BUOY_FRESH.has(date)
+          ? `latest reading, ${BUOY_FRESH.get(date)}`
+          : `${date} · median of the day's in-water samples`)
+      }).addTo(map).on("click", () => select(BUOY_KEY));
 }
 
 // Every stream is loaded for every station once that stream is first needed, so
@@ -866,6 +1014,11 @@ function refreshField() {
     `Foundation SST for ${date}, ${src.label} analysis. Pins give the reading at `
     + `each station; click one to plot its record below, or click a day in the `
     + `chart to bring the map to that date.`
+    + (BUOY_SST.has(date)
+        ? " The buoy shape off Caesarea is the Sdot Yam mooring — a thermistor"
+          + " in the water rather than a satellite reading, on the same colour"
+          + " scale. It is absent on the days the buoy was out of the water."
+        : "")
     + (live ? " Values marked * were read live from Copernicus, after the last "
             + "stored update." : "");
 }
@@ -929,7 +1082,8 @@ async function select(name) {
   document.getElementById("station").value = name;
   document.getElementById("status") &&
     (document.getElementById("status").textContent = "loading " + pretty(name) + "…");
-  await loadSeries(chartStream(), name);
+  if (name !== BUOY_KEY) await loadSeries(chartStream(), name);
+  syncScheme();
   fillPrev();
   drawPins();
   draw();
@@ -947,9 +1101,30 @@ function fillPrev() {
   prevYear = sel.value;
 }
 
+// "Old to new" ramps a colour across decades and "Baseline range" draws a
+// 1991-2020 normal; the buoy has under two years and neither can be computed
+// from it, so on the buoy they are switched off rather than left to produce a
+// ramp of two colours and an empty band. The station's own choice is remembered
+// and handed back on the way out.
+let gridScheme = null;
+function syncScheme() {
+  if (onBuoy()) {
+    if (gridScheme === null) gridScheme = scheme;
+    scheme = "record";
+  } else if (gridScheme !== null) {
+    scheme = gridScheme;
+    gridScheme = null;
+  }
+  document.querySelectorAll("button.sch").forEach(b => {
+    b.disabled = onBuoy() && b.dataset.sch !== "record";
+    b.classList.toggle("on", b.dataset.sch === scheme);
+  });
+}
+
 function wire() {
   document.querySelectorAll("button.sch").forEach(b => b.onclick = () => {
     scheme = b.dataset.sch;
+    gridScheme = null;
     document.querySelectorAll("button.sch").forEach(o =>
       o.classList.toggle("on", o === b));
     draw();
@@ -975,11 +1150,12 @@ async function main() {
     return;
   }
   document.getElementById("station").innerHTML = STATIONS.map(s =>
-    `<option value="${s.name}">${pretty(s.name)}</option>`).join("");
-  if (!STATIONS.some(s => s.name === station)) station = DEFAULT_STATION;
+    `<option value="${s.name}">${pretty(s.name)}</option>`).join("")
+    + (BUOY_SST.size ? `<option value="${BUOY_KEY}">${pretty(BUOY_KEY)}</option>` : "");
+  if (!STATIONS.some(s => s.name === station)
+      && !(station === BUOY_KEY && BUOY_SST.size)) station = DEFAULT_STATION;
   document.getElementById("station").value = station;
-  document.querySelectorAll("button.sch").forEach(b =>
-    b.classList.toggle("on", b.dataset.sch === scheme));
+  syncScheme();          // also covers arriving on ?station=Sdot_Yam_buoy
   wire();
   initMap();
   await loadSeries(activeSource(shownDate()), station);
@@ -992,8 +1168,8 @@ async function main() {
     + `Every year of the record is drawn; the newest is picked out.`;
   // Only now go looking for anything newer than the stored files: the page is
   // already usable, and this may add nothing at all.
-  await topUp();
-  if (LIVE.length) { refreshField(); draw(); }
+  await Promise.all([topUp(), topUpBuoy()]);
+  if (LIVE.length || BUOY_FRESH.size) { refreshField(); draw(); }
 
   // The other stations, in the background. Until they land the pins can only
   // show days the trailing file covers, so a click on 1994 would leave twelve
