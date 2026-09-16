@@ -840,6 +840,18 @@ function latestDate() {
 }
 const shownDate = () => mapDate || latestDate();
 
+// The buoy reports every half hour and the analysis is published a day or so
+// behind it, so on most afternoons the mooring already knows something the
+// satellite does not. The map still opens on the newest analysed day - a field
+// with fourteen blank pins would be a worse first screen - but the day arrows
+// are allowed to walk past it, as far as the buoy has got.
+const latestBuoy = () => [...BUOY_SST.keys()].sort().pop();
+function walkEnd() {
+  const sat = latestDate(), buoy = latestBuoy();
+  return buoy && buoy > sat ? buoy : sat;
+}
+const beyondField = date => date > latestDate();
+
 // Readings for one particular day at every station. The preloaded per-station
 // series answer for any day back to 1982; the trailing file and the live rows
 // cover the days the archive has not reached.
@@ -901,20 +913,19 @@ function drawBuoy() {
   const v = BUOY_SST.get(date);
   if (v === undefined) return;       // out of the water, or no reading that day
   const st = pinStyle(v);
-  const html = `<svg width="46" height="39" viewBox="0 0 46 39"`
+  // The value and its live marker are one centred string: drawn as two texts
+  // the asterisk lands on the outline and gets cut in half.
+  const label = v.toFixed(1) + (BUOY_FRESH.has(date) ? "*" : "");
+  const html = `<svg width="52" height="39" viewBox="0 0 52 39"`
     + ` style="overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">`
-    + `<path d="M5 8 Q5 3 10 3 H36 Q41 3 41 8 V20 L23 37.5 L5 20 Z"`
+    + `<path d="M5 8 Q5 3 10 3 H42 Q47 3 47 8 V20 L26 37.5 L5 20 Z"`
     + ` fill="${st.bg}" stroke="${onBuoy() ? "#0b0b0b" : "rgba(255,255,255,0.85)"}"`
     + ` stroke-width="${onBuoy() ? 2.5 : 1.5}" stroke-linejoin="round"/>`
-    + `<text x="23" y="16" text-anchor="middle" fill="${st.fg}"`
+    + `<text x="26" y="16" text-anchor="middle" fill="${st.fg}"`
     + ` font-family="system-ui, sans-serif" font-size="12" font-weight="600"`
-    + ` letter-spacing="-0.02em">${v.toFixed(1)}</text>`
-    + (BUOY_FRESH.has(date)
-        ? `<text x="37.5" y="13" fill="${st.fg}" font-family="system-ui, sans-serif"`
-          + ` font-size="13" font-weight="600">*</text>` : "")
-    + `</svg>`;
-  const icon = L.divIcon({html, className: "", iconSize: [46, 39],
-    iconAnchor: [23, 38]});
+    + ` letter-spacing="-0.02em">${label}</text></svg>`;
+  const icon = L.divIcon({html, className: "", iconSize: [52, 39],
+    iconAnchor: [26, 38]});
   buoyPin = L.marker([BUOY_AT.lat, BUOY_AT.lon], {icon, zIndexOffset: 1200,
     title: `${pretty(BUOY_KEY)} · ${v.toFixed(2)} °C · `
       + (BUOY_FRESH.has(date)
@@ -979,11 +990,14 @@ function syncSourceControls() {
   const have = sourcesFor(date);
   const other = key === "rep" ? "nrt" : "rep";
   const btn = document.getElementById("source");
-  btn.textContent = src.label;
+  const none = !have.rep && !have.nrt;
+  btn.textContent = none ? "none" : src.label;
   btn.disabled = !have[other];
-  btn.title = have[other]
-    ? `showing the ${src.label} field — click for the ${SOURCES[other].label} one`
-    : `only the ${src.label} field covers ${date}`;
+  btn.title = none
+    ? `no analysis covers ${date} yet`
+    : have[other]
+      ? `showing the ${src.label} field — click for the ${SOURCES[other].label} one`
+      : `only the ${src.label} field covers ${date}`;
   const link = document.getElementById("srclink");
   link.href = src.url;
   link.title = `${src.label}: open this product's page at Copernicus Marine`;
@@ -994,24 +1008,34 @@ function refreshField() {
   const vals = valuesAt(date);
   fitRange([...vals.values()].map(r => r.sst));
   const key = activeSource(date), src = SOURCES[key];
-  if (sstLayer) map.removeLayer(sstLayer);
-  sstLayer = L.tileLayer(fieldUrl(date), {opacity:
-    +document.getElementById("opacity").value / 100, maxZoom: 12,
-    attribution: `<a href="${src.url}" target="_blank" rel="noopener">`
-      + `${src.credit}</a>`}).addTo(map);
-  sstLayer.bringToFront();
+  const bare = beyondField(date);
+  if (sstLayer) { map.removeLayer(sstLayer); sstLayer = null; }
+  // Past the analysis there is no field to draw. Asking for one anyway would
+  // get a tile of OGC exceptions, and carrying yesterday's field forward would
+  // be worse - it would look like data for a day nobody has measured.
+  if (!bare) {
+    sstLayer = L.tileLayer(fieldUrl(date), {opacity:
+      +document.getElementById("opacity").value / 100, maxZoom: 12,
+      attribution: `<a href="${src.url}" target="_blank" rel="noopener">`
+        + `${src.credit}</a>`}).addTo(map);
+    sstLayer.bringToFront();
+  }
   drawPins();
   drawColorbar();
   document.getElementById("mapdate").value = date;
   document.getElementById("latest").disabled = !mapDate;
-  document.getElementById("dnext").disabled = date >= latestDate();
+  document.getElementById("dnext").disabled = date >= walkEnd();
   document.getElementById("dprev").disabled = date <= SOURCES.rep.first;
 
   syncSourceControls();
 
   const live = [...vals.values()].some(r => r.live);
-  document.getElementById("mapnote").textContent =
-    `Foundation SST for ${date}, ${src.label} analysis. Pins give the reading at `
+  document.getElementById("mapnote").textContent = bare
+    ? `${date} — ahead of the satellite, which has published up to `
+      + `${latestDate()}. No field and no station pins for this day; what is `
+      + `on the map is the buoy, which reports for itself. Latest goes back to `
+      + `the newest analysed day.`
+    : `Foundation SST for ${date}, ${src.label} analysis. Pins give the reading at `
     + `each station; click one to plot its record below, or click a day in the `
     + `chart to bring the map to that date.`
     + (BUOY_SST.has(date)
