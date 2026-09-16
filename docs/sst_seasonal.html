@@ -1168,7 +1168,9 @@ async function main() {
     + `Every year of the record is drawn; the newest is picked out.`;
   // Only now go looking for anything newer than the stored files: the page is
   // already usable, and this may add nothing at all.
-  await Promise.all([topUp(), topUpBuoy()]);
+  // allSettled, not all: these are two unrelated services, and a network
+  // failure at one must not stop the other's result from being painted.
+  await Promise.allSettled([topUp(), topUpBuoy()]);
   if (LIVE.length || BUOY_FRESH.size) { refreshField(); draw(); }
 
   // The other stations, in the background. Until they land the pins can only

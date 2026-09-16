@@ -11,3 +11,6 @@ data/daily_comparison.csv
 AGENTS.md
 .idea/
 */*.parquet
+
+# CAMERI buoy data - not cleared for publication; remove once they agree
+data/cameri_buoys.csv
