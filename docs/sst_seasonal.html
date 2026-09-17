@@ -209,6 +209,16 @@ let STATIONS = [], NRT = [], LIVE = [], SERIES = {}, LATEST = null, REP_END = nu
 // The one in-water instrument on the map. Everything else here is a satellite
 // analysis; this is a thermistor on a mooring, and it is drawn as a buoy so the
 // difference in kind is visible before anything is read.
+// An average of the six Israeli stations, carried as a station in its own right
+// so the pin, the dropdown and the chart all treat it like any other. It is not
+// a pixel: nothing is sampled here, the value is derived from the six below.
+const MEAN_KEY = "Israeli_coast_mean";
+const MEAN_OF = ["Ashkelon_IL", "Ashdod_IL", "Tel_Aviv_IL", "Hadera_IL",
+                 "Haifa_IL", "Nahariya_IL"];
+// Midway between Tel Aviv and Hadera, which puts it 4.9 km out - the same
+// distance offshore as the stations it averages, and clear of both pins.
+const MEAN_AT = {lat: 32.2891, lon: 34.7831, order: 2.5};
+
 const BUOY_KEY = "Sdot_Yam_buoy";
 const BUOY_AT = {name: BUOY_KEY, lat: 32.49463, lon: 34.87989};
 let BUOY_SST = new Map(), BUOY_FRESH = new Map();
@@ -268,6 +278,11 @@ async function loadFrame() {
     if (r.sst !== "" && !isNaN(v)) BUOY_SST.set(r.date, v);
   }
   if (!STATIONS.length) throw new Error("no sst_stations.csv");
+  if (MEAN_OF.every(n => STATIONS.some(s => s.name === n))) {
+    STATIONS.push({name: MEAN_KEY, lat: MEAN_AT.lat, lon: MEAN_AT.lon,
+                   order: MEAN_AT.order, mean: true, members: MEAN_OF});
+    STATIONS.sort((a, b) => a.order - b.order);
+  }
 }
 
 // A station's archive is 16,000 rows, so a series is fetched only when it is
@@ -277,6 +292,7 @@ async function loadFrame() {
 async function loadSeries(stream, name) {
   const key = `${stream}|${name}`;
   if (SERIES[key]) return SERIES[key];
+  if (name === MEAN_KEY) return loadMeanSeries(stream);
   const rows = await grab(`sst_${stream}_${name}.csv`, d3.csv);
   const out = new Map();
   for (const r of (rows || [])) out.set(r.date, +r.sst);
@@ -355,6 +371,29 @@ async function topUpBuoy() {
       BUOY_FRESH.set(day, r.at);
     }
   } catch (e) { /* the file stands on its own; live is a bonus */ }
+}
+
+// Averaged only where every member answers. Letting the mean fall back to
+// whichever stations happen to have that day would make it step as members come
+// and go, and that step would read as a change in the sea rather than a change
+// in the arithmetic. As it happens all six share one span, so nothing is lost.
+async function loadMeanSeries(stream) {
+  const key = `${stream}|${MEAN_KEY}`;
+  if (SERIES[key]) return SERIES[key];
+  const maps = await Promise.all(MEAN_OF.map(n => loadSeries(stream, n)));
+  const out = new Map();
+  if (maps[0]) {
+    for (const date of maps[0].keys()) {
+      let sum = 0, n = 0;
+      for (const m of maps) {
+        const v = m && m.get(date);
+        if (v !== undefined && v !== null) { sum += v; n++; }
+      }
+      if (n === MEAN_OF.length) out.set(date, sum / n);
+    }
+  }
+  SERIES[key] = out;
+  return out;
 }
 
 // The series the chart is currently drawing: the stream chosen for the map, so
@@ -441,9 +480,10 @@ async function topUp() {
     const probe = STATIONS.find(s => s.name === DEFAULT_STATION) || STATIONS[0];
     const v0 = await pixel(probe.lat, probe.lon, day);
     if (v0 === null) break;
-    const rest = await Promise.all(STATIONS.map(s =>
+    const real = STATIONS.filter(s => !s.mean);
+    const rest = await Promise.all(real.map(s =>
       s.name === probe.name ? Promise.resolve(v0) : pixel(s.lat, s.lon, day)));
-    STATIONS.forEach((s, k) => {
+    real.forEach((s, k) => {
       if (rest[k] !== null) LIVE.push({date: day, station: s.name, sst: rest[k]});
     });
   }
@@ -668,6 +708,11 @@ function draw() {
       + `record for the year ramp or a baseline, so only Record is offered.${live}`
     : `${pretty(station)} · ${cfg.label}, ${years[0]}–${current}, `
       + `${map.size.toLocaleString()} daily values${src}. `
+      + (station === MEAN_KEY
+          ? `The mean of ${MEAN_OF.length} stations, Ashkelon to Nahariya, on `
+            + `the days all ${MEAN_OF.length} report; nothing is sampled at the `
+            + `pin itself. `
+          : "")
       + `The two analyses are never mixed: this is one of them end to end, and the `
       + `field button swaps both the map and these lines. `
       + `Foundation SST: one value per day, with the day's solar warming removed.`;
@@ -862,11 +907,24 @@ function valuesAt(date) {
   for (const r of NRT.concat(LIVE)) tail.set(r.station + "|" + r.date, r.sst);
   const out = new Map();
   for (const s of STATIONS) {
+    if (s.mean) continue;                  // derived below, from the rest
     const m = SERIES[`${activeSource(date)}|${s.name}`];
     let v = m ? m.get(date) : undefined;
     if (v === undefined) v = tail.get(s.name + "|" + date);
     if (v !== undefined) out.set(s.name, {date, sst: v,
       live: LIVE.some(l => l.station === s.name && l.date === date)});
+  }
+  // Taken from the values just resolved rather than from its own series, so the
+  // pin is there on the first paint - the trailing file already covers every
+  // member for the recent days, long before their archives finish downloading.
+  const avg = STATIONS.find(s => s.mean);
+  if (avg) {
+    const parts = avg.members.map(n => out.get(n)).filter(Boolean);
+    if (parts.length === avg.members.length) {
+      out.set(avg.name, {date,
+        sst: parts.reduce((a, r) => a + r.sst, 0) / parts.length,
+        live: parts.some(r => r.live)});
+    }
   }
   return out;
 }
