@@ -80,8 +80,9 @@
 <body class="viz-root">
 <div class="wrap">
   <div class="pagehead">
-  <h1>Chlorophyll along the SE Mediterranean coast</h1>
-    <a class="homelink" href="index.html" title="All charts" aria-label="Home">
+  <h1 data-i18n="title">Chlorophyll along the SE Mediterranean coast</h1>
+    <a class="homelink" href="index.html" data-i18n-title="homeTip"
+       title="All charts" aria-label="Home">
       <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round"
            stroke-linejoin="round">
@@ -89,7 +90,7 @@
         <polyline points="9 22 9 12 15 12 15 22"/>
       </svg></a>
   </div>
-  <p class="sub">Daily satellite chlorophyll-a along the SE Mediterranean coast, from the
+  <p class="sub" data-i18n="sub">Daily satellite chlorophyll-a along the SE Mediterranean coast, from the
      Nile Delta to Haifa. The map shows the selected day's chlorophyll field, image
      sampling points 4 km offshore, and the 20 km transects used for the time series.
      Pick a date below, or click a chart point to jump to that day. White areas are clouds or land.</p>
@@ -98,13 +99,14 @@
        The two pages share a ?date= and a reader moves between them, so a control
        that moves under the cursor is a control they have to hunt for. -->
   <div class="bar">
-    <span class="lbl">Day</span>
-    <button id="dprev" title="previous day">&#9664;</button>
+    <span class="lbl" data-i18n="day">Day</span>
+    <button id="dprev" data-i18n-title="prevTip" title="previous day">&#9664;</button>
     <input type="date" id="mapdate">
-    <button id="dnext" title="next day">&#9654;</button>
-    <button id="dlatest" title="back to the most recent day">Latest</button>
-    <span class="lbl" id="maphint">or click any point on a chart</span>
-    <span class="lbl" style="margin-left:14px">Colours</span>
+    <button id="dnext" data-i18n-title="nextTip" title="next day">&#9654;</button>
+    <button id="dlatest" data-i18n="latest" data-i18n-title="latestTip"
+      title="back to the most recent day">Latest</button>
+    <span class="lbl" id="maphint" data-i18n="maphint">or click any point on a chart</span>
+    <span class="lbl" style="margin-left:14px" data-i18n="colours">Colours</span>
     <select id="cmap">
       <option value="cmap:algae,logScale">algae, log</option>
       <option value="cmap:algae">algae, linear</option>
@@ -112,51 +114,53 @@
       <option value="cmap:viridis">viridis, linear</option>
     </select>
     <span class="grp">
-      <button class="cscale on" data-cscale="fixed">Fixed</button>
-      <button class="cscale" data-cscale="auto">Auto</button>
+      <button class="cscale on" data-cscale="fixed" data-i18n="fixed">Fixed</button>
+      <button class="cscale" data-cscale="auto" data-i18n="auto">Auto</button>
     </span>
     <input type="number" id="cmax" value="10" min="0.05" step="1" style="width:74px"
-           title="upper end of the colour scale, mg m⁻³">
-    <span class="lbl" style="margin-left:14px">Opacity</span>
+           data-i18n-title="cmaxTip" title="upper end of the colour scale, mg m⁻³">
+    <span class="lbl" style="margin-left:14px" data-i18n="opacity">Opacity</span>
     <input type="range" id="opacity" min="20" max="100" value="85" style="width:110px">
     <span class="spacer"></span>
-    <a class="btnlink sstlink" href="sst_seasonal.html"
+    <a class="btnlink sstlink" href="sst_seasonal.html" data-i18n="sstLink"
+       data-i18n-title="sstLinkTip"
        title="the same coast, same day, sea temperature">Sea temperature map &#8599;</a>
+    <button id="lang" title="עברית / English">עברית</button>
     <button id="theme">Dark mode</button>
   </div>
   <div class="card"><div id="map"></div></div>
   <p class="note" id="mapnote"></p>
 
-  <p class="note" id="timeseries-note" style="margin-top:10px">
+  <p class="note" id="timeseries-note" data-i18n="tsNote" style="margin-top:10px">
     The time series below show chlorophyll at each coastal site using the selected measure.
     The shaded band shows the range across the baseline years, while the current year and
     an optional comparison year are shown as lines. Northernmost site is top right.
     Drag sideways to zoom in; double-click to reset.
   </p>
   <div class="bar">
-    <span class="lbl">Measure</span>
+    <span class="lbl" data-i18n="measure">Measure</span>
     <select id="measure">
-      <option value="transect_p80" selected>20km percentile 80</option>
-      <option value="transect_mean">20km mean</option>
-      <option value="transect_max">20km max</option>
-      <option value="at_station">4km off shore</option>
+      <option value="transect_p80" selected data-i18n="mP80">20km percentile 80</option>
+      <option value="transect_mean" data-i18n="mMean">20km mean</option>
+      <option value="transect_max" data-i18n="mMax">20km max</option>
+      <option value="at_station" data-i18n="mStation">4km off shore</option>
     </select>
-    <span class="lbl" style="margin-left:14px">Aggregation</span>
+    <span class="lbl" style="margin-left:14px" data-i18n="agg">Aggregation</span>
     <span class="grp">
-      <button class="agg on" data-agg="raw">Raw</button>
-      <button class="agg" data-agg="max">Monthly max</button>
-      <button class="agg" data-agg="mean">Monthly mean</button>
+      <button class="agg on" data-agg="raw" data-i18n="raw">Raw</button>
+      <button class="agg" data-agg="max" data-i18n="monMax">Monthly max</button>
+      <button class="agg" data-agg="mean" data-i18n="monMean">Monthly mean</button>
     </span>
-    <span class="lbl" style="margin-left:14px">Scale</span>
+    <span class="lbl" style="margin-left:14px" data-i18n="scale">Scale</span>
     <span class="grp">
-      <button class="scl on" data-scl="log">Log</button>
-      <button class="scl" data-scl="linear">Linear</button>
+      <button class="scl on" data-scl="log" data-i18n="log">Log</button>
+      <button class="scl" data-scl="linear" data-i18n="linear">Linear</button>
     </span>
     <span class="grp" style="margin-left:8px">
-      <button class="pan on" data-pan="fixed">Fixed</button>
-      <button class="pan" data-pan="auto">Auto</button>
+      <button class="pan on" data-pan="fixed" data-i18n="fixed">Fixed</button>
+      <button class="pan" data-pan="auto" data-i18n="auto">Auto</button>
     </span>
-    <span class="lbl" style="margin-left:14px">Compare with</span>
+    <span class="lbl" style="margin-left:14px" data-i18n="compare">Compare with</span>
     <select id="prev"></select>
     <span class="spacer"></span>
   </div>
@@ -177,6 +181,97 @@
 </div>
 
 <script>
+// ---------------------------------------------------------------- language
+// The choice is the reader's and it sticks: stored under one key that both the
+// chlorophyll and the sea temperature page read, so switching language here
+// switches it there too. Hebrew turns the page right-to-left; the map and the
+// charts stay left-to-right, because a time axis running backwards would be
+// harder to read, not easier.
+const LANG_KEY = "coastLang";
+let lang = localStorage.getItem(LANG_KEY) === "he" ? "he" : "en";
+
+const STR = {
+  en: {},                       // English is what the markup already says
+  he: {
+    title: "כלורופיל לאורך חופי מזרח הים התיכון",
+    sub: "כלורופיל-a יומי מלוויין לאורך חופי מזרח הים התיכון, מדלתת הנילוס ועד חיפה. " +
+         "המפה מציגה את שדה הכלורופיל של היום הנבחר, את נקודות הדגימה 4 ק\"מ מהחוף, " +
+         "ואת חתכי ה-20 ק\"מ המשמשים לסדרות העת. בחרו תאריך למטה, או לחצו על נקודה " +
+         "בגרף כדי לקפוץ לאותו יום. שטחים לבנים הם עננים או יבשה.",
+    tsNote: "הגרפים שלמטה מציגים כלורופיל בכל אתר חופי לפי המדד הנבחר. הרצועה המוצללת " +
+            "מציגה את טווח שנות הבסיס, והשנה הנוכחית ושנת ההשוואה מוצגות כקווים. " +
+            "האתר הצפוני ביותר נמצא בפינה הימנית העליונה. גררו לצדדים כדי להתקרב; " +
+            "לחיצה כפולה מאפסת.",
+    day: "יום",
+    latest: "אחרון",
+    latestTip: "חזרה ליום העדכני ביותר",
+    prevTip: "היום הקודם",
+    nextTip: "היום הבא",
+    maphint: "או לחצו על נקודה בגרף",
+    colours: "צבעים",
+    fixed: "קבוע",
+    auto: "אוטומטי",
+    opacity: "אטימות",
+    measure: "מדד",
+    mP80: "אחוזון 80 עד 20 ק\"מ",
+    mMean: "ממוצע עד 20 ק\"מ",
+    mMax: "מרבי עד 20 ק\"מ",
+    mStation: "4 ק\"מ מהחוף",
+    agg: "צבירה",
+    raw: "גולמי",
+    monMax: "מרבי חודשי",
+    monMean: "ממוצע חודשי",
+    scale: "סקאלה",
+    log: "לוגריתמי",
+    linear: "ליניארי",
+    compare: "השוואה עם",
+    sstLink: "מפת טמפרטורת הים ↗",
+    sstLinkTip: "אותו חוף, אותו יום, טמפרטורת הים",
+    homeTip: "כל התרשימים",
+    cmaxTip: "הקצה העליון של סקאלת הצבע, מ\"ג למ\"ק",
+    dark: "מצב כהה",
+    light: "מצב בהיר",
+    loading: "טוען…",
+    footNrt: ", מהם {0} בזמן אמת (נקודות בתצוגה הגולמית)",
+    footNoNrt: ", ללא ימים בזמן אמת",
+    foot: "רב-חיישני 1 ק\"מ, מ\"ג למ\"ק. בסיס {0}, שנה נוכחית {1}, יום אחרון {2}{3}. נטען מ-{4}.",
+    mapnote: "כלורופיל-a לתאריך {0}, זרם {1}, מוצג על ידי ה-WMTS של קופרניקוס ימי. " +
+             "לבן הוא ענן או יבשה. הסמנים הם תחנות הדגימה, והקווים הם חתכי ה-0–20 ק\"מ שלהן.",
+    streamNrt: "זמן אמת",
+    streamMy: "מעובד מחדש",
+    noData: "לא נמצאו נתונים — נדרש data/chl_transect_{0}_<שנה>.csv במאגר או בתיקייה אחת מעל דף זה",
+  },
+};
+
+function t(key, ...args) {
+  const table = STR[lang] || {};
+  let out = table[key];
+  if (out === undefined) return null;          // fall back to the English markup
+  args.forEach((v, i) => { out = out.split("{" + i + "}").join(v); });
+  return out;
+}
+
+function applyLang() {
+  const he = lang === "he";
+  document.documentElement.lang = he ? "he" : "en";
+  document.documentElement.dir = he ? "rtl" : "ltr";
+  for (const el of document.querySelectorAll("[data-i18n]")) {
+    if (el.dataset.en === undefined) el.dataset.en = el.textContent;
+    const v = t(el.dataset.i18n);
+    el.textContent = v === null ? el.dataset.en : v;
+  }
+  for (const el of document.querySelectorAll("[data-i18n-title]")) {
+    if (el.dataset.enTitle === undefined) el.dataset.enTitle = el.title;
+    const v = t(el.dataset.i18nTitle);
+    el.title = v === null ? el.dataset.enTitle : v;
+  }
+  const b = document.getElementById("lang");
+  if (b) b.textContent = he ? "English" : "עברית";
+  // Written by its own handler, so it has to be refreshed here too.
+  const th = document.getElementById("theme");
+  if (th) th.textContent = isDark()
+    ? (t("light") ?? "Light mode") : (t("dark") ?? "Dark mode");
+}
 // ---------------------------------------------------------------- config
 const SENSOR = "multi1km";
 const FIRST_YEAR = 2015;
@@ -489,11 +584,13 @@ function draw() {
   const where = SOURCE && SOURCE.startsWith("http") ? "the committed copy on GitHub"
                                                     : "the local data folder";
   document.getElementById("foot").textContent =
-    `Multi-sensor 1 km, mg m⁻³. Baseline ${span}, current year ${CURRENT}, ` +
-    `latest day ${latestDate}` +
-    (nrtDays.size ? `, of which ${nrtDays.size} near-real-time (dots in the raw view)`
-                  : ", no near-real-time days present") +
-    `. Loaded from ${where}.`;
+    t("foot", span, CURRENT, latestDate,
+      nrtDays.size ? t("footNrt", nrtDays.size) : t("footNoNrt"), where) ??
+    (`Multi-sensor 1 km, mg m⁻³. Baseline ${span}, current year ${CURRENT}, ` +
+     `latest day ${latestDate}` +
+     (nrtDays.size ? `, of which ${nrtDays.size} near-real-time (dots in the raw view)`
+                   : ", no near-real-time days present") +
+     `. Loaded from ${where}.`);
 }
 
 
@@ -642,6 +739,15 @@ async function initMap() {
     if (chlLayer) chlLayer.setOpacity(+e.target.value / 100);
   };
   const restyle = () => { setMapDate(mapDate); draw(); };
+  document.getElementById("lang").onclick = () => {
+    lang = lang === "he" ? "en" : "he";
+    localStorage.setItem(LANG_KEY, lang);
+    applyLang();
+    // The notes and the charts are written, not marked up, so they have to be
+    // rebuilt rather than swapped.
+    setMapDate(mapDate);
+    draw();
+  };
   document.getElementById("cmap").onchange = restyle;
   document.getElementById("cmax").onchange = restyle;
   document.querySelectorAll("button.cscale").forEach(b => b.onclick = () => {
@@ -651,6 +757,7 @@ async function initMap() {
     document.getElementById("cmax").disabled = scaleMode !== "fixed";
     restyle();
   });
+  applyLang();
   setMapDate(QDATE || latestDate());
   // After the page is usable: this reaches out to Copernicus and may add nothing.
   topUpFromMap().then(ok => { if (ok) { draw(); } });
@@ -870,9 +977,10 @@ function setMapDate(dateStr) {
 
   drawSites(dateStr);
   drawColorbar();
-  const stream = layerFor(dateStr) === LAYER_NRT ? "near real time" : "reprocessed";
-  document.getElementById("mapnote").textContent =
-    `Chlorophyll-a for ${dateStr}, ${stream} stream, rendered by the Copernicus `
+  const stream = layerFor(dateStr) === LAYER_NRT
+    ? (t("streamNrt") ?? "near real time") : (t("streamMy") ?? "reprocessed");
+  document.getElementById("mapnote").textContent = t("mapnote", dateStr, stream)
+    ?? `Chlorophyll-a for ${dateStr}, ${stream} stream, rendered by the Copernicus `
     + `Marine WMTS. White is cloud or land. Markers are the sampling stations, `
     + `lines their 0-20 km transects; hover a marker for that day's value.`;
 }
@@ -929,7 +1037,7 @@ const isDark = () => stamped === null ? mq.matches : stamped;
 (async function init() {
   await loadAll();
   if (!ROWS.length) {
-    document.getElementById("status").textContent =
+    document.getElementById("status").textContent = t("noData", SENSOR) ??
       "no data found — expected data/chl_transect_" + SENSOR + "_<year>.csv " +
       "in the repo or one directory up from this page";
     return;
@@ -953,7 +1061,8 @@ const isDark = () => stamped === null ? mq.matches : stamped;
 function render() {
   const d = isDark();
   document.documentElement.dataset.theme = d ? "dark" : "light";
-  document.getElementById("theme").textContent = d ? "Light mode" : "Dark mode";
+  document.getElementById("theme").textContent =
+    d ? (t("light") ?? "Light mode") : (t("dark") ?? "Dark mode");
   draw();
 }
 </script>

@@ -98,8 +98,9 @@
 <div class="viz-root wrap">
 
   <div class="pagehead">
-  <h1>Sea surface temperature along the SE Mediterranean coast</h1>
-    <a class="homelink" href="index.html" title="All charts" aria-label="Home">
+  <h1 data-i18n="title">Sea surface temperature along the SE Mediterranean coast</h1>
+    <a class="homelink" href="index.html" data-i18n-title="homeTip"
+       title="All charts" aria-label="Home">
       <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round"
            stroke-linejoin="round">
@@ -114,59 +115,63 @@
        The two pages share a ?date= and a reader moves between them, so a
        control that moves under the cursor is a control they have to hunt for. -->
   <div class="bar">
-    <span class="lbl">Day</span>
-    <button id="dprev" title="previous day">&#9664;</button>
+    <span class="lbl" data-i18n="day">Day</span>
+    <button id="dprev" data-i18n-title="prevTip" title="previous day">&#9664;</button>
     <input type="date" id="mapdate">
-    <button id="dnext" title="next day">&#9654;</button>
-    <button id="latest" title="back to the most recent day">Latest</button>
-    <span class="lbl" style="margin-left:14px">Colour range</span>
-    <input type="number" id="cmin" value="17" step="1" style="width:62px" title="low end, C">
-    <input type="number" id="cmax" value="31" step="1" style="width:62px" title="high end, C">
-    <button id="auto" title="fit the scale to the day being shown">Auto</button>
-    <span class="lbl" style="margin-left:14px">Field</span>
+    <button id="dnext" data-i18n-title="nextTip" title="next day">&#9654;</button>
+    <button id="latest" data-i18n="latest" data-i18n-title="latestTip"
+      title="back to the most recent day">Latest</button>
+    <span class="lbl" style="margin-left:14px" data-i18n="crange">Colour range</span>
+    <input type="number" id="cmin" value="17" step="1" style="width:62px" data-i18n-title="lowTip" title="low end, C">
+    <input type="number" id="cmax" value="31" step="1" style="width:62px" data-i18n-title="highTip" title="high end, C">
+    <button id="auto" data-i18n="auto" data-i18n-title="autoTip"
+      title="fit the scale to the day being shown">Auto</button>
+    <span class="lbl" style="margin-left:14px" data-i18n="field">Field</span>
     <button id="source">&mdash;</button>
     <a id="srclink" class="iconlink" target="_blank" rel="noopener"
-       title="open this product's page at Copernicus Marine" aria-label="product page">
+       data-i18n-title="prodTip" title="open this product's page at Copernicus Marine" aria-label="product page">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/>
         <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>
       </svg></a>
-    <span class="lbl" style="margin-left:14px">Opacity</span>
+    <span class="lbl" style="margin-left:14px" data-i18n="opacity">Opacity</span>
     <input type="range" id="opacity" min="0" max="100" value="80" style="width:110px">
     <span class="spacer"></span>
     <a class="btnlink chllink" href="chl_seasonal.html"
+       data-i18n="chlLink" data-i18n-title="chlLinkTip"
        title="the same coast, same day, chlorophyll">Chlorophyll map &#8599;</a>
+    <button id="lang" title="עברית / English">עברית</button>
     <button id="theme">Dark mode</button>
   </div>
   <div class="card"><div id="map"></div></div>
   <p class="note" id="mapnote">loading the map&hellip;</p>
 
   <div class="bar" style="margin-top:18px">
-    <span class="lbl">Station</span>
+    <span class="lbl" data-i18n="station">Station</span>
     <select id="station"></select>
-    <span class="lbl" style="margin-left:14px">Colour</span>
+    <span class="lbl" style="margin-left:14px" data-i18n="colour">Colour</span>
     <span class="grp">
-      <button class="sch" data-sch="record">Record</button>
-      <button class="sch" data-sch="age">Old to new</button>
-      <button class="sch" data-sch="baseline">Baseline range</button>
+      <button class="sch" data-sch="record" data-i18n="schRecord">Record</button>
+      <button class="sch" data-sch="age" data-i18n="schAge">Old to new</button>
+      <button class="sch" data-sch="baseline" data-i18n="schBase">Baseline range</button>
     </span>
-    <span class="lbl" style="margin-left:14px">Compare with</span>
+    <span class="lbl" style="margin-left:14px" data-i18n="compare">Compare with</span>
     <select id="prev"></select>
     <span class="grp" style="margin-left:14px">
-      <button id="air"
+      <button id="air" data-i18n="airBtn"
         title="overlay the daily maximum air temperature at Bet Dagan, 7 km inland">
         Bet Dagan air</button>
-      <button id="smooth"
+      <button id="smooth" data-i18n="smoothBtn"
         title="7-day centred mean of the air temperature, three days either side">
         Smooth</button>
     </span>
     <select id="bdmode" style="margin-left:6px"
       title="which daily air temperature at Bet Dagan: the day's high, its low,
              or the mid-range between them">
-      <option value="min">min</option>
-      <option value="mid">mid-range</option>
-      <option value="max" selected>max</option>
+      <option value="min" data-i18n="modeMin">min</option>
+      <option value="mid" data-i18n="modeMid">mid-range</option>
+      <option value="max" selected data-i18n="modeMax">max</option>
     </select>
   </div>
   <div class="card"><div id="chart"><div class="status" id="status">loading&hellip;</div></div></div>
@@ -201,6 +206,106 @@
 </div>
 
 <script>
+// ---------------------------------------------------------------- language
+// Stored under the same key the chlorophyll page uses, so a reader who switches
+// here finds the other page already switched. Hebrew turns the page
+// right-to-left; the map and the charts stay left-to-right, because a time axis
+// running backwards would be harder to read rather than easier.
+const LANG_KEY = "coastLang";
+let lang = localStorage.getItem(LANG_KEY) === "he" ? "he" : "en";
+
+const STR = {
+  en: {},                        // English is what the markup already says
+  he: {
+    title: "טמפרטורת פני הים לאורך חופי מזרח הים התיכון",
+    sub: "טמפרטורת ים יומית ב-{0} תחנות חופיות, 1982 ועד היום. כל שנות התיעוד משורטטות; " +
+         "השנה האחרונה מודגשת.",
+    day: "יום",
+    latest: "אחרון",
+    latestTip: "חזרה ליום העדכני ביותר",
+    prevTip: "היום הקודם",
+    nextTip: "היום הבא",
+    crange: "טווח צבע",
+    lowTip: "הקצה התחתון, מעלות צלזיוס",
+    highTip: "הקצה העליון, מעלות צלזיוס",
+    auto: "אוטומטי",
+    autoTip: "התאמת הסקאלה ליום המוצג",
+    field: "שדה",
+    prodTip: "פתיחת דף המוצר באתר קופרניקוס ימי",
+    opacity: "אטימות",
+    chlLink: "מפת כלורופיל ↗",
+    chlLinkTip: "אותו חוף, אותו יום, כלורופיל",
+    homeTip: "כל התרשימים",
+    station: "תחנה",
+    colour: "צבע",
+    schRecord: "תיעוד",
+    schAge: "מישן לחדש",
+    schBase: "טווח בסיס",
+    compare: "השוואה עם",
+    airBtn: "אוויר בית דגן",
+    airTip: "הצגת טמפרטורת האוויר המרבית היומית בבית דגן, 7 ק\"מ מהחוף",
+    airTipOff: "הסתרת קו האוויר והחזרת הציר לטווח הים",
+    airTipOn: "כבר מוצגת תחנת בית דגן",
+    smoothBtn: "החלקה",
+    smoothTipOff: "חזרה לערכים היומיים",
+    smoothTipOn: "ממוצע נע מרוכז של 7 ימים, שלושה ימים מכל צד; שלושת הימים האחרונים " +
+                 "נותרים כנקודות, מאחר שאין אחריהם ימים לממצע איתם",
+    smoothTipNone: "הדליקו תחילה את קו האוויר של בית דגן",
+    modeMin: "מזערי",
+    modeMid: "אמצע-טווח",
+    modeMax: "מרבי",
+    modeTip: "איזו טמפרטורת אוויר יומית בבית דגן: השיא של היום, השפל שלו, או אמצע הטווח ביניהם",
+    dark: "מצב כהה",
+    light: "מצב בהיר",
+    loadingMap: "טוען את המפה…",
+    loading: "טוען…",
+    loadingStation: "טוען {0}…",
+    labelMin: "מזערית", labelMid: "אמצע-טווח", labelMax: "מרבית",
+    shortMin: "מזערי", shortMid: "אמצע-טווח", shortMax: "מרבי",
+    fieldNone: "אין",
+    fieldNoneTip: "אף ניתוח אינו מכסה את {0} עדיין",
+    noData: "לא נמצאו נתונים — נדרשים data/sst_stations.csv ו-data/sst_rep_<תחנה>.csv",
+  },
+};
+
+function t(key, ...args) {
+  const table = STR[lang] || {};
+  let out = table[key];
+  if (out === undefined) return null;          // fall back to the English markup
+  args.forEach((v, i) => { out = out.split("{" + i + "}").join(v); });
+  return out;
+}
+
+// Carries the station count, so it is written rather than swapped by attribute.
+function setSub() {
+  const el = document.getElementById("sub");
+  if (!el || !STATIONS.length) return;
+  el.textContent = t("sub", STATIONS.length)
+    ?? `Daily foundation SST at ${STATIONS.length} coastal stations, 1982–today. `
+     + `Every year of the record is drawn; the newest is picked out.`;
+}
+
+function applyLang() {
+  const he = lang === "he";
+  document.documentElement.lang = he ? "he" : "en";
+  document.documentElement.dir = he ? "rtl" : "ltr";
+  for (const el of document.querySelectorAll("[data-i18n]")) {
+    if (el.dataset.en === undefined) el.dataset.en = el.textContent;
+    const v = t(el.dataset.i18n);
+    el.textContent = v === null ? el.dataset.en : v;
+  }
+  for (const el of document.querySelectorAll("[data-i18n-title]")) {
+    if (el.dataset.enTitle === undefined) el.dataset.enTitle = el.title;
+    const v = t(el.dataset.i18nTitle);
+    el.title = v === null ? el.dataset.enTitle : v;
+  }
+  const b = document.getElementById("lang");
+  if (b) b.textContent = he ? "English" : "עברית";
+  const th = document.getElementById("theme");
+  if (th) th.textContent = isDark()
+    ? (t("light") ?? "Light mode") : (t("dark") ?? "Dark mode");
+  setSub();
+}
 // ---------------------------------------------------------------- config
 const RAW = "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data";
 // GitHub Pages publishes docs/ as the site root, so "../data" resolves outside
@@ -280,12 +385,18 @@ const BD_AT = {lat: 32.0073, lon: 34.8138, order: 3.5};
 // mean of the two - sits between. Mid-range is the closest of the three to a
 // day's mean temperature, which is the quantity the sea is likely to answer to.
 const BD_MODES = {
-  max: {label: "maximum", short: "max", range: [5, 45]},
-  min: {label: "minimum", short: "min", range: [-5, 30]},
-  mid: {label: "mid-range", short: "mid-range", range: [0, 38]},
+  max: {label: "maximum", short: "max", range: [5, 45], k: "Max"},
+  min: {label: "minimum", short: "min", range: [-5, 30], k: "Min"},
+  mid: {label: "mid-range", short: "mid-range", range: [0, 38], k: "Mid"},
 };
 let bdMode = "max";
-const bdCfg = () => BD_MODES[bdMode];
+// The label and the short form both follow the language; the range does not.
+function bdCfg() {
+  const m = BD_MODES[bdMode];
+  return {...m,
+    label: t("label" + m.k) ?? m.label,
+    short: t("short" + m.k) ?? m.short};
+}
 // Mid-range needs both files; the others need one. Only these are held.
 const bdChannels = () => bdMode === "mid" ? ["max", "min"] : [bdMode];
 
@@ -1467,10 +1578,10 @@ function syncSourceControls() {
   const other = key === "rep" ? "nrt" : "rep";
   const btn = document.getElementById("source");
   const none = !have.rep && !have.nrt;
-  btn.textContent = none ? "none" : src.label;
+  btn.textContent = none ? (t("fieldNone") ?? "none") : src.label;
   btn.disabled = !have[other];
   btn.title = none
-    ? `no analysis covers ${date} yet`
+    ? (t("fieldNoneTip", date) ?? `no analysis covers ${date} yet`)
     : have[other]
       ? `showing the ${src.label} field — click for the ${SOURCES[other].label} one`
       : `only the ${src.label} field covers ${date}`;
@@ -1581,7 +1692,8 @@ async function select(name) {
   station = name;
   document.getElementById("station").value = name;
   document.getElementById("status") &&
-    (document.getElementById("status").textContent = "loading " + pretty(name) + "…");
+    (document.getElementById("status").textContent =
+       t("loadingStation", pretty(name)) ?? ("loading " + pretty(name) + "…"));
   if (name !== BUOY_KEY && name !== BD_KEY)
     await loadSeries(chartStream(), name);
   // Its whole record is 29 wide hourly files. That is a real wait on a real
@@ -1666,6 +1778,15 @@ function syncScheme() {
 }
 
 function wire() {
+  document.getElementById("lang").onclick = () => {
+    lang = lang === "he" ? "en" : "he";
+    localStorage.setItem(LANG_KEY, lang);
+    applyLang();
+    syncAir();                  // its titles are written, not marked up
+    syncSourceControls();
+    refreshField();             // the map note and the pins carry prose too
+    draw();
+  };
   document.querySelectorAll("button.sch").forEach(b => b.onclick = () => {
     scheme = b.dataset.sch;
     gridScheme = null;
@@ -1725,8 +1846,9 @@ async function main() {
     await loadFrame();
   } catch (e) {
     document.getElementById("status").textContent =
-      "no data found — expected data/sst_stations.csv and data/sst_rep_<station>.csv "
-      + "(run `python code/sst_stations.py backfill`).";
+      t("noData") ??
+      ("no data found — expected data/sst_stations.csv and data/sst_rep_<station>.csv "
+       + "(run `python code/sst_stations.py backfill`).");
     return;
   }
   document.getElementById("station").innerHTML = STATIONS.map(s =>
@@ -1735,6 +1857,7 @@ async function main() {
   if (!STATIONS.some(s => s.name === station)
       && !(station === BUOY_KEY && BUOY_SST.size)) station = DEFAULT_STATION;
   document.getElementById("station").value = station;
+  applyLang();
   syncScheme();          // also covers arriving on ?station=Sdot_Yam_buoy
   syncAir();
   wire();
@@ -1745,9 +1868,7 @@ async function main() {
   refreshField();
   draw();
   syncUrl();
-  document.getElementById("sub").textContent =
-    `Daily foundation SST at ${STATIONS.length} coastal stations, 1982–today. `
-    + `Every year of the record is drawn; the newest is picked out.`;
+  setSub();
   // Only now go looking for anything newer than the stored files: the page is
   // already usable, and this may add nothing at all.
   // allSettled, not all: these are two unrelated services, and a network
