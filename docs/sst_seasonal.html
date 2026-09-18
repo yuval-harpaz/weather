@@ -561,6 +561,13 @@ async function ensureBD() {
       for (const [d, v] of slot[bdMode]) merged.set(d, v);
     }
   }
+  // Not a size comparison: max and mid-range cover the same days with
+  // different numbers, so comparing counts reports "unchanged" on exactly the
+  // switch the reader just asked for. The signature names what BD was built
+  // from, which is what actually decides whether a redraw is owed.
+  const sig = `${bdMode}|${want.join(",")}`;
+  if (sig !== BD_SIG) changed = true;
+  BD_SIG = sig;
   if (merged.size !== BD.size) changed = true;
   BD = merged;
   BD_SM = null;
@@ -695,6 +702,7 @@ let showAir = false, smoothAir = false;
 const BD_HALF = 3;               // +/- 3 days, a 7-day window
 const BD_MIN_IN_WINDOW = 5;      // of 7; fewer and the mean leans on one side
 let BD_SM = null;                // the smoothed view, rebuilt when BD changes
+let BD_SIG = "";                 // what the merged view was built from
 
 // Centred, so the smoothed line lags nothing: a day is the mean of itself and
 // the three either side. Stepped by calendar date rather than by position in
@@ -1588,9 +1596,17 @@ function wire() {
     bdMode = e.target.value;
     // The axis and the cached smoothing both belong to the old mode.
     userZoomed = false;
-    draw();                       // immediately, with whatever is held
-    if (await ensureBD()) draw(); // again once the other file has arrived
     syncAir();
+    // Mid-range needs the other end of the day, which on the station's full
+    // record is another 29 files. Say so rather than appear to have ignored
+    // the click, then draw once the data is actually the mode asked for.
+    if (onLand() && bdChannels().length > 1) {
+      document.getElementById("foot").textContent =
+        `Reading the other end of the day for ${bdNeeded().length} years — `
+        + `mid-range needs both.`;
+    }
+    await ensureBD();
+    draw();
   };
   document.getElementById("smooth").onclick = () => {
     smoothAir = !smoothAir;
