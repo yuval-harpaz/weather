@@ -237,6 +237,7 @@ const STR = {
     foot: "רב-חיישני 1 ק\"מ, מ\"ג למ\"ק. בסיס {0}, שנה נוכחית {1}, יום אחרון {2}{3}. נטען מ-{4}.",
     mapnote: "כלורופיל-a לתאריך {0}, זרם {1}, מוצג על ידי ה-WMTS של קופרניקוס ימי. " +
              "לבן הוא ענן או יבשה. הסמנים הם תחנות הדגימה, והקווים הם חתכי ה-0–20 ק\"מ שלהן.",
+    behind: "הכלורופיל טרם הגיע ל-{0}; מוצג {1}, היום העדכני ביותר שמוצר זה מכסה. ",
     streamNrt: "זמן אמת",
     streamMy: "מעובד מחדש",
     noData: "לא נמצאו נתונים — נדרש data/chl_transect_{0}_<שנה>.csv במאגר או בתיקייה אחת מעל דף זה",
@@ -484,7 +485,7 @@ function draw() {
     // reach lets the unified tooltip report points up to three weeks from the
     // cursor - the last September dot showed up under a 19 Sep label. Tighten
     // it for the daily view; monthly points are a month apart and need slack.
-    hoverdistance: agg === "raw" ? 2 : 20,
+    hoverdistance: agg === "raw" ? 1 : 20,
     hoverlabel: {bgcolor: c.surface, bordercolor: c.axis, font: {color: c.ink}},
     legend: {orientation: "v", x: 0.02, y: 0.99, xanchor: "left",
              yanchor: "top", bgcolor: c.surface, bordercolor: c.grid,
@@ -515,12 +516,12 @@ function draw() {
       traces.push({x: v.x, y: v.prv, name: String(prevYear),
         mode: v.raw ? "lines" : "lines+markers",
         line: {color: c.prev, width: v.raw ? 1.4 : 2}, marker: {size: 5},
-        connectgaps: v.raw, hovertemplate: prevYear + " %{y:.2f}<extra></extra>",
+        connectgaps: v.raw, hovertemplate: prevYear + " %{y:.2f}  %{x|%-d %b}<extra></extra>",
         legendgroup: "prev", showlegend: i === 0, xaxis: xa, yaxis: ya});
     traces.push({x: v.x, y: v.cur, name: String(CURRENT),
       mode: v.raw ? "lines" : "lines+markers",
       line: {color: c.current, width: v.raw ? 1.8 : 3}, marker: {size: 6},
-      connectgaps: v.raw, hovertemplate: CURRENT + " %{y:.2f}<extra></extra>",
+      connectgaps: v.raw, hovertemplate: CURRENT + " %{y:.2f}  %{x|%-d %b}<extra></extra>",
       legendgroup: "current", showlegend: i === 0, xaxis: xa, yaxis: ya});
     // Hollow, so it reads as an estimate sitting beyond the archive rather
     // than as another measured day on the line.
@@ -528,12 +529,12 @@ function draw() {
       traces.push({x: v.x, y: v.liv, name: CURRENT + " from the map",
         mode: "markers",
         marker: {size: 8, color: "rgba(0,0,0,0)", line: {width: 2, color: c.current}},
-        hovertemplate: CURRENT + " %{y:.2f} (estimated from the map)<extra></extra>",
+        hovertemplate: CURRENT + " %{y:.2f} (from the map)  %{x|%-d %b}<extra></extra>",
         legendgroup: "live", showlegend: i === 0, xaxis: xa, yaxis: ya});
     if (v.raw && v.nrt && v.nrt.some(z => z !== null))
       traces.push({x: v.x, y: v.nrt, name: CURRENT + " near real time",
         mode: "markers", marker: {size: 5, color: c.current},
-        hovertemplate: CURRENT + " %{y:.2f} (near real time)<extra></extra>",
+        hovertemplate: CURRENT + " %{y:.2f} (near real time)  %{x|%-d %b}<extra></extra>",
         legendgroup: "nrt", showlegend: i === 0, xaxis: xa, yaxis: ya});
 
     // Label each month at its middle, with the gridlines still on the month
@@ -617,6 +618,7 @@ let scaleMode = "fixed";
 let cbBar = null, cbMax = null, cbMin = null, cbNote = null;
 let map = null, baseLayer = null, labelLayer = null, chlLayer = null;
 let siteLayer = null, mapDate = null, lastMy = null, SITEGEO = null;
+let wantedDate = null;      // the day asked for, if it was ahead of us
 
 const iso = d => d.toISOString().slice(0, 10);
 
@@ -758,9 +760,21 @@ async function initMap() {
     restyle();
   });
   applyLang();
-  setMapDate(QDATE || latestDate());
+  // The sea temperature page links across carrying its own day, and its record
+  // runs ahead of this one. Land on the newest day this product has rather than
+  // on a blank map of tile errors, and remember what was asked for: the top-up
+  // may reach it a moment later.
+  wantedDate = QDATE || latestDate();
+  setMapDate(clampDate(wantedDate));
   // After the page is usable: this reaches out to Copernicus and may add nothing.
-  topUpFromMap().then(ok => { if (ok) { draw(); } });
+  topUpFromMap().then(ok => {
+    if (!ok) return;
+    // The date move comes first: it repaints the map and the note, and if the
+    // chart redraw below were to fail it must not take this with it.
+    const now = clampDate(wantedDate || mapDate);
+    if (now !== mapDate) setMapDate(now);
+    draw();
+  }).catch(() => { /* the archive still stands on its own */ });
 }
 
 function applyBasemap(dark) {
@@ -954,7 +968,16 @@ function stepDay(n) {
   if (!mapDate) return;
   const d = new Date(mapDate + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + n);
-  setMapDate(iso(d));
+  // Chlorophyll is published a day or two behind the sea temperature, so
+  // walking past its last day asks the server for tiles it will refuse.
+  setMapDate(clampDate(iso(d)));
+}
+
+// The last day the chlorophyll product covers. ROWS grows when the map top-up
+// finds a day newer than the archive, so this moves with it.
+function clampDate(dateStr) {
+  const cap = latestDate();
+  return (cap && dateStr > cap) ? cap : dateStr;
 }
 
 function setMapDate(dateStr) {
@@ -967,22 +990,47 @@ function setMapDate(dateStr) {
   const next = L.tileLayer(chlUrl(dateStr), {
     maxZoom: 12, opacity: +document.getElementById("opacity").value / 100
   });
-  // keep the old tiles underneath until the new ones are painted, otherwise the
-  // map blinks empty on every date step
-  next.on("load", () => { if (previous && previous !== next) map.removeLayer(previous); });
+  // Keep the old tiles underneath until the new ones are painted, otherwise the
+  // map blinks empty on every date step. Leaflet fires "load" once every tile
+  // has settled, and a tile that errored counts as settled - so a day the
+  // server refuses would fire "load" having painted nothing, take the old
+  // layer down with it and leave the map blank. Only stand the new layer in
+  // once it has actually painted something.
+  let painted = 0;
+  next.on("tileload", () => { painted++; });
+  next.on("load", () => {
+    if (painted > 0) {
+      if (previous && previous !== next && map.hasLayer(previous))
+        map.removeLayer(previous);
+    } else if (chlLayer === next) {
+      map.removeLayer(next);          // nothing came back; keep what was there
+      chlLayer = previous;
+    }
+  });
   next.addTo(map);
   chlLayer = next;
-  setTimeout(() => { if (previous && previous !== chlLayer && map.hasLayer(previous))
-                       map.removeLayer(previous); }, 4000);
+  // Safety net for a layer whose "load" never arrives - but it has to respect
+  // the same rule: a new field that painted nothing must not be allowed to take
+  // the old one down with it, or the map is left blank rather than stale.
+  setTimeout(() => {
+    if (painted > 0 && previous && previous !== chlLayer && map.hasLayer(previous))
+      map.removeLayer(previous);
+  }, 4000);
 
   drawSites(dateStr);
   drawColorbar();
   const stream = layerFor(dateStr) === LAYER_NRT
     ? (t("streamNrt") ?? "near real time") : (t("streamMy") ?? "reprocessed");
-  document.getElementById("mapnote").textContent = t("mapnote", dateStr, stream)
+  document.getElementById("mapnote").textContent =
+    ((wantedDate && wantedDate > dateStr)
+      ? (t("behind", wantedDate, dateStr)
+         ?? `Chlorophyll has not reached ${wantedDate}; showing ${dateStr}, `
+            + `the newest day this product covers. `)
+      : "")
+    + (t("mapnote", dateStr, stream)
     ?? `Chlorophyll-a for ${dateStr}, ${stream} stream, rendered by the Copernicus `
     + `Marine WMTS. White is cloud or land. Markers are the sampling stations, `
-    + `lines their 0-20 km transects; hover a marker for that day's value.`;
+    + `lines their 0-20 km transects; hover a marker for that day's value.`);
 }
 
 function valueAt(site, dateStr) {
