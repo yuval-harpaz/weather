@@ -15,18 +15,18 @@
      downwards, so declaring it there leaves body's background unresolved and
      the page stays white while the cards go dark. */
   :root, .viz-root { color-scheme: light;
-    --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e;
+    --surface:#fbfcfd; --page:#f2f5f8; --ink:#0b0b0b; --ink2:#52514e;
     --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10); }
   body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
     font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])),
     :root:where(:not([data-theme="light"])) .viz-root { color-scheme: dark;
-      --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+      --surface:#191a1c; --page:#0c0d0f; --ink:#ffffff; --ink2:#c3c2b7;
       --muted:#898781; --grid:#2c2c2a; --axis:#383835;
       --border:rgba(255,255,255,0.10); } }
   :root[data-theme="dark"], :root[data-theme="dark"] .viz-root { color-scheme: dark;
-    --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+    --surface:#191a1c; --page:#0c0d0f; --ink:#ffffff; --ink2:#c3c2b7;
     --muted:#898781; --grid:#2c2c2a; --axis:#383835;
     --border:rgba(255,255,255,0.10); }
   .wrap { max-width:1400px; margin:0 auto; }
@@ -45,6 +45,13 @@
   button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
   button:hover:not(:disabled), select:hover { color:var(--ink); }
   button:disabled { opacity:.45; cursor:default; }
+  input[type=number] { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:7px; padding:5px 8px; }
+  input[type=number]:disabled { opacity:0.45; }
+  input[type=date] { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:7px; padding:5px 9px; }
   .card { background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:8px 4px 4px; min-height:200px; }
   .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; }
@@ -75,6 +82,11 @@
   .pin.sel { border-color:#0b0b0b; border-width:2.5px;
     box-shadow:0 0 0 2px rgba(255,255,255,.9), 0 1px 4px rgba(0,0,0,.5); }
   .pin.live::after { content:"*"; margin-left:1px; font-size:13px; line-height:0.6; }
+  .pagehead { display:flex; align-items:flex-start; gap:12px; }
+  .pagehead h1 { flex:1; }
+  .homelink { display:inline-flex; align-items:center; color:var(--muted);
+    text-decoration:none; padding:3px; border-radius:6px; flex:none; }
+  .homelink:hover { color:var(--ink); background:var(--surface); }
   .leaflet-container { background:var(--page); }
   /* The IMS logo is a jpg on white, so it keeps a white plate of its own rather
      than sitting as a bright rectangle on the dark surface. */
@@ -85,7 +97,16 @@
 <body>
 <div class="viz-root wrap">
 
+  <div class="pagehead">
   <h1>Sea surface temperature along the SE Mediterranean coast</h1>
+    <a class="homelink" href="index.html" title="All charts" aria-label="Home">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg></a>
+  </div>
   <p class="sub" id="sub">Daily foundation SST, 1982&ndash;today.</p>
 
   <!-- Map controls, in the same order as the chlorophyll page: day, then the
@@ -269,6 +290,13 @@ const bdCfg = () => BD_MODES[bdMode];
 const bdChannels = () => bdMode === "mid" ? ["max", "min"] : [bdMode];
 
 const BD_COL = "BET DAGAN";      // its column in temp_max/min_<year>.csv
+// Today is not in the hourly archive until the day is over, so the badge would
+// sit empty all day. IMS publishes the current observations as XML and
+// observ.html already reads them through this worker, which is CORS-open.
+// Values arrive in tenths of a degree; TX1/TN1 are the hour's extremes.
+const BD_LIVE_URL = "https://ims-observ.yuvharpaz.workers.dev/";
+const BD_LIVE_NAME = "Bet Dagan";
+let BD_TODAY = null;             // {date, max, min, mid, last} or null
 const BD_FIRST = 1998;           // the column is absent from the earlier files
 const BD_MIN_HOURS = 18;         // of 24; fewer and the day's maximum is a guess
 
@@ -572,6 +600,41 @@ async function ensureBD() {
   BD = merged;
   BD_SM = null;
   return changed;
+}
+
+// The day so far, not the day. Read once, after the page is usable.
+async function loadBDToday() {
+  if (BD_TODAY !== null) return BD_TODAY;
+  try {
+    const xml = new DOMParser().parseFromString(
+      await (await fetch(BD_LIVE_URL)).text(), "application/xml");
+    const hi = [], lo = [];
+    let date = null, last = null;
+    for (const ob of xml.getElementsByTagName("Observation")) {
+      const st = ob.getElementsByTagName("StationName")[0];
+      if (!st || st.textContent.trim() !== BD_LIVE_NAME) continue;
+      const when = (ob.getElementsByTagName("DateTime")[0] || {}).textContent;
+      if (!when) continue;
+      const vals = {};
+      for (const par of ob.getElementsByTagName("Parameter")) {
+        const k = par.getElementsByTagName("ParameterShortName")[0];
+        const v = par.getElementsByTagName("ParameterValue")[0];
+        if (k && v && v.textContent !== "") vals[k.textContent] = +v.textContent / 10;
+      }
+      const x = vals.TX1 ?? vals.TT, n = vals.TN1 ?? vals.TT;
+      if (x === undefined && n === undefined) continue;
+      const day = when.slice(0, 10);
+      if (!date || day > date) { date = day; hi.length = 0; lo.length = 0; }
+      if (day !== date) continue;
+      if (x !== undefined) hi.push(x);
+      if (n !== undefined) lo.push(n);
+      last = when;
+    }
+    if (!date || !hi.length || !lo.length) { BD_TODAY = false; return false; }
+    const mx = Math.max(...hi), mn = Math.min(...lo);
+    BD_TODAY = {date, max: mx, min: mn, mid: (mx + mn) / 2, last};
+  } catch (e) { BD_TODAY = false; }
+  return BD_TODAY;
 }
 
 const onLand = () => station === BD_KEY;
@@ -1273,23 +1336,46 @@ function drawPins() {
 // ramp would put most winters and most summer afternoons off the end of the
 // scale while implying the two numbers are the same kind of measurement.
 function drawLand(s) {
-  const c = C(), date = shownDate(), v = BD.get(date);
+  const c = C(), date = shownDate();
+  // The archive first; today only exists in the live observations, and only as
+  // the day so far. Marked with * because it is not the finished day.
+  let v = BD.get(date), live = false;
+  if (v === undefined && BD_TODAY && BD_TODAY.date === date) {
+    v = BD_TODAY[bdMode];
+    live = v !== undefined;
+  }
   if (pins[s.name]) { map.removeLayer(pins[s.name]); delete pins[s.name]; }
-  if (v === undefined) return;
   const sel = s.name === station;
-  const html = `<div style="display:flex;align-items:center;justify-content:center;`
-    + `font:600 11px/1 system-ui,sans-serif;border-radius:3px;padding:2px 5px;`
-    + `background:${c.surface};color:${c.ink};white-space:nowrap;cursor:pointer;`
-    + `border:${sel ? "2.5px solid " + c.ink : "1.5px solid " + c.axis};`
-    + `box-shadow:0 1px 3px rgba(0,0,0,.35)">${v.toFixed(1)}</div>`;
+  const has = v !== undefined;
+  // The box sits to the right of the station rather than on top of it: inland
+  // Bet Dagan and the offshore Tel Aviv pin are 13 km apart and cover each other
+  // at the opening zoom. A dot stays on the true position and the anchor is that
+  // dot, so moving the label aside does not move where it claims to be from.
+  const label = has ? v.toFixed(1) + (live ? "*" : "") : "–";
+  const html = `<svg width="58" height="18" viewBox="0 0 58 18"`
+    + ` style="overflow:visible;cursor:pointer">`
+    + `<circle cx="3.5" cy="9" r="2.5" fill="${c.ink}"/>`
+    + `<rect x="10" y="1" width="46" height="16" rx="3"`
+    + ` fill="${c.surface}" stroke="${sel ? c.ink : c.axis}"`
+    + ` stroke-width="${sel ? 2.5 : 1.5}"/>`
+    + `<text x="33" y="12.6" text-anchor="middle"`
+    + ` font-family="system-ui, sans-serif" font-size="11" font-weight="600"`
+    + ` fill="${has ? c.ink : c.muted}">${label}</text></svg>`;
   pins[s.name] = L.marker([s.lat, s.lon], {
-    icon: L.divIcon({html, className: "", iconSize: [38, 17], iconAnchor: [19, 8]}),
-    // Above the sea pins: inland Bet Dagan and the offshore Tel Aviv station are
-    // only 13 km apart and overlap at the opening zoom, and of the two it is the
-    // one a reader has to be able to find and click.
-    zIndexOffset: sel ? 1100 : 700,
-    title: `${pretty(s.name)} · ${date} · ${v.toFixed(1)} °C · `
-      + `${bdCfg().label} air temperature, 7 km inland`,
+    icon: L.divIcon({html, className: "", iconSize: [58, 18], iconAnchor: [3.5, 9]}),
+    // Above even a selected sea pin: the locator dot sits on the same few
+    // pixels as the Tel Aviv marker, and underneath it the dot disappears and
+    // the box loses the only thing tying it to a place.
+    zIndexOffset: sel ? 1150 : 1050,
+    // Drawn even with nothing to show. An empty box is still a way in to the
+    // record: the station has 28 years behind it, and a reader who lands on a
+    // day it happens to be missing would otherwise have nothing to click.
+    title: has
+      ? `${pretty(s.name)} · ${date} · ${v.toFixed(1)} °C · `
+        + `${bdCfg().label} air temperature, 7 km inland`
+        + (live ? ` · the day so far, to ${BD_TODAY.last}` : "")
+      : `${pretty(s.name)} · no ${bdCfg().label} reading for ${date} — `
+        + `click for the record`,
   }).addTo(map).on("click", () => select(s.name));
 }
 
@@ -1606,6 +1692,7 @@ function wire() {
         + `mid-range needs both.`;
     }
     await ensureBD();
+    drawPins();                   // the badge carries the mode too
     draw();
   };
   document.getElementById("smooth").onclick = () => {
@@ -1665,7 +1752,8 @@ async function main() {
   // already usable, and this may add nothing at all.
   // allSettled, not all: these are two unrelated services, and a network
   // failure at one must not stop the other's result from being painted.
-  await Promise.allSettled([topUp(), topUpBuoy()]);
+  await Promise.allSettled([topUp(), topUpBuoy(),
+    loadBDToday().then(() => drawPins())]);
   if (LIVE.length || BUOY_FRESH.size) { refreshField(); draw(); }
 
   // The other stations, in the background. Until they land the pins can only

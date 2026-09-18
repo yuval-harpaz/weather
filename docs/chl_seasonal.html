@@ -14,15 +14,15 @@
   body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
     font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   .viz-root {
-    --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e;
+    --surface:#fbfcfd; --page:#f2f5f8; --ink:#0b0b0b; --ink2:#52514e;
     --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10); }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .viz-root { color-scheme: dark;
-      --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+      --surface:#191a1c; --page:#0c0d0f; --ink:#ffffff; --ink2:#c3c2b7;
       --muted:#898781; --grid:#2c2c2a; --axis:#383835;
       --border:rgba(255,255,255,0.10); } }
   :root[data-theme="dark"] .viz-root { color-scheme: dark;
-    --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+    --surface:#191a1c; --page:#0c0d0f; --ink:#ffffff; --ink2:#c3c2b7;
     --muted:#898781; --grid:#2c2c2a; --axis:#383835;
     --border:rgba(255,255,255,0.10); }
   .wrap { max-width:1400px; margin:0 auto; }
@@ -58,6 +58,11 @@
   .cbbar { width:13px; height:150px; margin:3px auto; border-radius:3px;
     border:1px solid var(--border); }
   .cbunit { font-size:10px; color:var(--muted); margin-top:2px; }
+  .pagehead { display:flex; align-items:flex-start; gap:12px; }
+  .pagehead h1 { flex:1; }
+  .homelink { display:inline-flex; align-items:center; color:var(--muted);
+    text-decoration:none; padding:3px; border-radius:6px; flex:none; }
+  .homelink:hover { color:var(--ink); background:var(--surface); }
   .leaflet-container { background:var(--surface); font:inherit; }
   input[type=number] { font:inherit; font-size:12.5px; color:var(--ink2);
     background:var(--surface); border:1px solid var(--border);
@@ -74,7 +79,16 @@
 </head>
 <body class="viz-root">
 <div class="wrap">
+  <div class="pagehead">
   <h1>Chlorophyll along the SE Mediterranean coast</h1>
+    <a class="homelink" href="index.html" title="All charts" aria-label="Home">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg></a>
+  </div>
   <p class="sub">Daily satellite chlorophyll-a along the SE Mediterranean coast, from the
      Nile Delta to Haifa. The map shows the selected day's chlorophyll field, image
      sampling points 4 km offshore, and the 20 km transects used for the time series.
@@ -355,7 +369,12 @@ function draw() {
   for (const v of views)
     for (const k of ["lo", "hi", "cur", "nrt", "prv", "liv"])
       for (const val of (v[k] || [])) if (val !== null && val > 0) all.push(val);
-  const vmax = all.length ? Math.max(...all) : 10;
+  // The top of the charts follows the top of the map's colour scale, so a
+  // reader who narrows the colours to read one bloom gets the same ceiling in
+  // both halves of the page and can carry a height from one to the other.
+  const cmaxBox = +document.getElementById("cmax").value;
+  const vmax = isFinite(cmaxBox) && cmaxBox > 0
+    ? cmaxBox : (all.length ? Math.max(...all) : 10);
   const yr = scale === "log" ? [-1, Math.log10(vmax) + 0.05] : [0, vmax * 1.05];
   const span = BASELINE.length ? `${BASELINE[0]}–${BASELINE[BASELINE.length - 1]}` : "";
 
@@ -622,7 +641,7 @@ async function initMap() {
   document.getElementById("opacity").oninput = e => {
     if (chlLayer) chlLayer.setOpacity(+e.target.value / 100);
   };
-  const restyle = () => { setMapDate(mapDate); };
+  const restyle = () => { setMapDate(mapDate); draw(); };
   document.getElementById("cmap").onchange = restyle;
   document.getElementById("cmax").onchange = restyle;
   document.querySelectorAll("button.cscale").forEach(b => b.onclick = () => {
