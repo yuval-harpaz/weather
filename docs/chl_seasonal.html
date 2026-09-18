@@ -79,17 +79,18 @@
      Nile Delta to Haifa. The map shows the selected day's chlorophyll field, image
      sampling points 4 km offshore, and the 20 km transects used for the time series.
      Pick a date below, or click a chart point to jump to that day. White areas are clouds or land.</p>
-  <div class="bar" >
-    <span class="lbl">Map date</span>
+  <!-- Map controls, in the same order as the sea temperature page: day, then
+       the colour of the field, then opacity, then the link across and the theme.
+       The two pages share a ?date= and a reader moves between them, so a control
+       that moves under the cursor is a control they have to hunt for. -->
+  <div class="bar">
+    <span class="lbl">Day</span>
     <button id="dprev" title="previous day">&#9664;</button>
     <input type="date" id="mapdate">
     <button id="dnext" title="next day">&#9654;</button>
-    <button id="dlatest">Latest</button>
+    <button id="dlatest" title="back to the most recent day">Latest</button>
     <span class="lbl" id="maphint">or click any point on a chart</span>
-    <span class="spacer"></span>
-    <a class="btnlink sstlink" href="sst_seasonal.html"
-       title="the same coast, same day, sea temperature">Sea temperature map &#8599;</a>
-    <span class="lbl">Colours</span>
+    <span class="lbl" style="margin-left:14px">Colours</span>
     <select id="cmap">
       <option value="cmap:algae,logScale">algae, log</option>
       <option value="cmap:algae">algae, linear</option>
@@ -102,8 +103,12 @@
     </span>
     <input type="number" id="cmax" value="10" min="0.05" step="1" style="width:74px"
            title="upper end of the colour scale, mg m⁻³">
-    <span class="lbl">Opacity</span>
+    <span class="lbl" style="margin-left:14px">Opacity</span>
     <input type="range" id="opacity" min="20" max="100" value="85" style="width:110px">
+    <span class="spacer"></span>
+    <a class="btnlink sstlink" href="sst_seasonal.html"
+       title="the same coast, same day, sea temperature">Sea temperature map &#8599;</a>
+    <button id="theme">Dark mode</button>
   </div>
   <div class="card"><div id="map"></div></div>
   <p class="note" id="mapnote"></p>
@@ -140,7 +145,6 @@
     <span class="lbl" style="margin-left:14px">Compare with</span>
     <select id="prev"></select>
     <span class="spacer"></span>
-    <button id="theme">Dark mode</button>
   </div>
   <div class="card"><div id="chart"><div class="status" id="status">loading…</div></div></div>
   <p class="note" id="foot"></p>
@@ -304,13 +308,15 @@ function viewFor(site) {
     const byYear = dailyByYear(site);
     const byYearMy = dailyByYear(site, "my");
     const byYearNrt = dailyByYear(site, "nrt");
+    const byYearMap = dailyByYear(site, "map");
     // The band is the spread of the raw daily values across the baseline years,
     // with no smoothing. Building it from smoothed year-curves made it an
     // envelope of medians, which a spiky daily line escapes routinely - 15% of
     // baseline days fell outside their own band. Raw against raw contains every
     // baseline year by construction, and with 11 years there is no day without
     // data, so it does not go blocky either.
-    const x = [], lo = [], hi = [], hiYear = [], cur = [], nrt = [], prv = [];
+    const x = [], lo = [], hi = [], hiYear = [], cur = [], nrt = [], prv = [],
+          liv = [];
     for (let doy = 1; doy <= 366; doy++) {
       const col = BASELINE.map(y => byYear[y][doy]).filter(v => v !== null);
       const top = argmaxYear(BASELINE.map(y => [y, byYear[y][doy]]));
@@ -321,9 +327,10 @@ function viewFor(site) {
       // reprocessed days form the line, near-real-time days are drawn as dots
       cur.push(byYearMy[CURRENT] ? byYearMy[CURRENT][doy] : null);
       nrt.push(byYearNrt[CURRENT] ? byYearNrt[CURRENT][doy] : null);
+      liv.push(byYearMap[CURRENT] ? byYearMap[CURRENT][doy] : null);
       prv.push(prevYear && byYear[prevYear] ? byYear[prevYear][doy] : null);
     }
-    return {x, lo, hi, hiYear, cur, nrt, prv, raw: true};
+    return {x, lo, hi, hiYear, cur, nrt, prv, liv, raw: true};
   }
   const byYear = monthlyByYear(site, agg);
   const x = [], lo = [], hi = [], hiYear = [], cur = [], prv = [];
@@ -346,7 +353,7 @@ function draw() {
   const views = SITES.map(viewFor);
   const all = [];
   for (const v of views)
-    for (const k of ["lo", "hi", "cur", "nrt", "prv"])
+    for (const k of ["lo", "hi", "cur", "nrt", "prv", "liv"])
       for (const val of (v[k] || [])) if (val !== null && val > 0) all.push(val);
   const vmax = all.length ? Math.max(...all) : 10;
   const yr = scale === "log" ? [-1, Math.log10(vmax) + 0.05] : [0, vmax * 1.05];
@@ -401,6 +408,14 @@ function draw() {
       line: {color: c.current, width: v.raw ? 1.8 : 3}, marker: {size: 6},
       connectgaps: v.raw, hovertemplate: CURRENT + " %{y:.2f}<extra></extra>",
       legendgroup: "current", showlegend: i === 0, xaxis: xa, yaxis: ya});
+    // Hollow, so it reads as an estimate sitting beyond the archive rather
+    // than as another measured day on the line.
+    if (v.raw && v.liv && v.liv.some(z => z !== null))
+      traces.push({x: v.x, y: v.liv, name: CURRENT + " from the map",
+        mode: "markers",
+        marker: {size: 8, color: "rgba(0,0,0,0)", line: {width: 2, color: c.current}},
+        hovertemplate: CURRENT + " %{y:.2f} (estimated from the map)<extra></extra>",
+        legendgroup: "live", showlegend: i === 0, xaxis: xa, yaxis: ya});
     if (v.raw && v.nrt && v.nrt.some(z => z !== null))
       traces.push({x: v.x, y: v.nrt, name: CURRENT + " near real time",
         mode: "markers", marker: {size: 5, color: c.current},
@@ -618,6 +633,8 @@ async function initMap() {
     restyle();
   });
   setMapDate(QDATE || latestDate());
+  // After the page is usable: this reaches out to Copernicus and may add nothing.
+  topUpFromMap().then(ok => { if (ok) { draw(); } });
 }
 
 function applyBasemap(dark) {
@@ -629,6 +646,156 @@ function applyBasemap(dark) {
       + '<a href="https://data.marine.copernicus.eu/product/OCEANCOLOUR_MED_BGC_L3_MY_009_143/description" target="_blank" rel="noopener">E.U. Copernicus</a>'
   }).addTo(map);
   labelLayer = L.tileLayer(LABELS(dark), {maxZoom: 12, pane: "shadowPane"}).addTo(map);
+}
+
+// ------------------------------------------- last day, read from the map tiles
+// Copernicus publishes a day before the transect workflow commits it, so for a
+// day or two the map is ahead of these charts. The stored measures are taken
+// over a 20 km line - about 21 pixels a site - so asking the server for them a
+// pixel at a time would be 231 requests. One 256-pixel tile holds a whole
+// transect and neighbouring sites share tiles, so the same numbers come out of
+// about 18 tile fetches instead, read back off a canvas and turned from colour
+// into value through the layer's own legend.
+//
+// It is an estimate, not the stored measure. Two reasons to treat it as one:
+// the ramp is 256 colours, which quantises a value to a percent or two, and the
+// stored p80 counts a pixel as sea if it was valid anywhere that month, which a
+// single day's tile cannot know. Checked against a day the archive also covers,
+// ten of eleven sites landed within 2%; Port Said, at the canal mouth where the
+// sea mask matters most, was 12% out. So these days are drawn as hollow dots
+// and named as estimates rather than folded into the line.
+const TILE_Z = 10;
+const SAMPLE_STYLE = "cmap:algae,logScale,range:0.01/100";  // wide: the display
+      // range clips, and a site in bloom would come back pinned to its ceiling
+// KM_PER_DEG, TRANSECT_KM and OFFSHORE_KM are already declared above, for the
+// transect drawn on the map; the sampler walks the same line.
+const TRANSECT_STEP_KM = 0.1;
+const MAX_TOPUP_DAYS = 3;
+let SAMPLE_CMAP = null;
+const TILES = new Map();
+
+async function sampleLegend() {
+  if (SAMPLE_CMAP) return SAMPLE_CMAP;
+  const url = `${WMTS}?SERVICE=WMTS&REQUEST=GetLegend`
+    + `&LAYER=${encodeURIComponent(LAYER_NRT)}`
+    + `&STYLE=${encodeURIComponent(SAMPLE_STYLE)}`
+    + `&FORMAT=${encodeURIComponent("application/json")}`;
+  const d = (await (await fetch(url)).json()).continuous;
+  SAMPLE_CMAP = {c: d.cmap.colorMap, vmin: d.valueMin, vmax: d.valueMax};
+  return SAMPLE_CMAP;
+}
+
+async function tileData(dateStr, col, row) {
+  const key = `${dateStr}|${col}|${row}`;
+  if (TILES.has(key)) return TILES.get(key);
+  const url = `${WMTS}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
+    + `&LAYER=${encodeURIComponent(LAYER_NRT)}`
+    + `&STYLE=${encodeURIComponent(SAMPLE_STYLE)}`
+    + `&TILEMATRIXSET=EPSG:3857&TILEMATRIX=${TILE_Z}&TILEROW=${row}&TILECOL=${col}`
+    + `&FORMAT=image/png&TIME=${dateStr}T00:00:00.000Z`;
+  const job = (async () => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";      // the tiles allow it; without this the
+    img.src = url;                      // canvas taints and readback throws
+    await img.decode();
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 256;
+    const ctx = cv.getContext("2d", {willReadFrequently: true});
+    ctx.drawImage(img, 0, 0);
+    return ctx.getImageData(0, 0, 256, 256).data;
+  })().catch(() => null);
+  TILES.set(key, job);
+  return job;
+}
+
+function mercPx(lat, lon) {
+  const n = 256 * 2 ** TILE_Z;
+  const s = Math.sin(lat * Math.PI / 180);
+  return {x: (lon + 180) / 360 * n,
+          y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n};
+}
+
+function colourToValue(r, g, b, a, cm) {
+  if (a < 250) return null;                       // transparent: land or cloud
+  let best = Infinity, sum = 0, n = 0;
+  for (let i = 0; i < cm.c.length; i++) {
+    const p = cm.c[i];
+    const d = (p[0] - r) ** 2 + (p[1] - g) ** 2 + (p[2] - b) ** 2;
+    if (d < best) { best = d; sum = i; n = 1; }
+    else if (d === best) { sum += i; n++; }       // the ramp has duplicate
+  }                                               // colours; averaging the tied
+  if (best > 12) return null;                     // indices beats taking the
+  const t = (sum / n) / (cm.c.length - 1);        // lowest every time
+  return cm.vmin * Math.pow(cm.vmax / cm.vmin, t);
+}
+
+// One site's transect on one day, summarised the way the stored table does it.
+async function sampleTransect(site, geo, dateStr, cm) {
+  const az = geo.offshore_azimuth_deg * Math.PI / 180;
+  const vals = [];
+  let atStation = null, best = Infinity;
+  for (let d = 0; d <= TRANSECT_KM + 1e-9; d += TRANSECT_STEP_KM) {
+    const off = d - OFFSHORE_KM;
+    const lat = geo.lat + Math.cos(az) * off / KM_PER_DEG;
+    const lon = geo.lon + Math.sin(az) * off
+      / (KM_PER_DEG * Math.cos(geo.lat * Math.PI / 180));
+    const {x, y} = mercPx(lat, lon);
+    const data = await tileData(dateStr, Math.floor(x / 256), Math.floor(y / 256));
+    if (!data) continue;
+    const i = ((Math.floor(y) % 256) * 256 + (Math.floor(x) % 256)) * 4;
+    const v = colourToValue(data[i], data[i + 1], data[i + 2], data[i + 3], cm);
+    if (v !== null) vals.push(v);
+    const gap = Math.abs(d - OFFSHORE_KM);        // the 4 km station pixel
+    if (gap < best) { best = gap; atStation = v; }
+  }
+  if (vals.length < 20) return null;              // too little sea to summarise
+  const sorted = [...vals].sort((a, b) => a - b);
+  const p = q => sorted[Math.min(sorted.length - 1,
+                                 Math.floor(q * (sorted.length - 1)))];
+  return {
+    at_station: atStation,
+    transect_p80: p(0.8),
+    transect_mean: vals.reduce((a, b) => a + b, 0) / vals.length,
+    transect_max: sorted[sorted.length - 1],
+  };
+}
+
+async function topUpFromMap() {
+  const have = latestDate();
+  if (!have) return false;
+  if (!SITEGEO) {
+    try { SITEGEO = await (await fetch(POINTS_URL)).json(); } catch (e) { return false; }
+  }
+  const today = iso(new Date());
+  let added = false;
+  for (let k = 1; k <= MAX_TOPUP_DAYS; k++) {
+    const day = iso(new Date(Date.parse(have + "T00:00:00Z") + k * 86400000));
+    if (day > today) break;
+    let cm;
+    try { cm = await sampleLegend(); } catch (e) { return added; }
+    // Probe one site: if the day is not published the tile 400s and there is no
+    // point walking the other ten.
+    const first = SITES.find(n => SITEGEO[n] && SITEGEO[n].transect);
+    const probe = await sampleTransect(first, SITEGEO[first], day, cm);
+    if (!probe) break;
+    for (const site of SITES) {
+      const geo = SITEGEO[site];
+      if (!geo || !geo.transect) continue;
+      const got = site === first ? probe
+        : await sampleTransect(site, geo, day, cm);
+      if (!got) continue;
+      const dt = new Date(day + "T00:00:00Z");
+      ROWS.push({
+        site, year: dt.getUTCFullYear(), month: dt.getUTCMonth() + 1,
+        stream: "map", date: day,
+        doy: Math.floor((Date.UTC(2020, dt.getUTCMonth(), dt.getUTCDate())
+                         - Date.UTC(2020, 0, 1)) / 86400000) + 1,
+        ...got,
+      });
+      added = true;
+    }
+  }
+  return added;
 }
 
 function latestDate() {

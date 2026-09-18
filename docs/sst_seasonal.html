@@ -76,6 +76,10 @@
     box-shadow:0 0 0 2px rgba(255,255,255,.9), 0 1px 4px rgba(0,0,0,.5); }
   .pin.live::after { content:"*"; margin-left:1px; font-size:13px; line-height:0.6; }
   .leaflet-container { background:var(--page); }
+  /* The IMS logo is a jpg on white, so it keeps a white plate of its own rather
+     than sitting as a bright rectangle on the dark surface. */
+  .ims-logo { height:16px; width:auto; vertical-align:middle;
+    background:#fff; padding:2px 4px; border-radius:3px; }
 </style>
 </head>
 <body>
@@ -84,9 +88,16 @@
   <h1>Sea surface temperature along the SE Mediterranean coast</h1>
   <p class="sub" id="sub">Daily foundation SST, 1982&ndash;today.</p>
 
+  <!-- Map controls, in the same order as the chlorophyll page: day, then the
+       colour of the field, then opacity, then the link across and the theme.
+       The two pages share a ?date= and a reader moves between them, so a
+       control that moves under the cursor is a control they have to hunt for. -->
   <div class="bar">
-    <span class="lbl">Opacity</span>
-    <input type="range" id="opacity" min="0" max="100" value="80" style="width:110px">
+    <span class="lbl">Day</span>
+    <button id="dprev" title="previous day">&#9664;</button>
+    <input type="date" id="mapdate">
+    <button id="dnext" title="next day">&#9654;</button>
+    <button id="latest" title="back to the most recent day">Latest</button>
     <span class="lbl" style="margin-left:14px">Colour range</span>
     <input type="number" id="cmin" value="17" step="1" style="width:62px" title="low end, C">
     <input type="number" id="cmax" value="31" step="1" style="width:62px" title="high end, C">
@@ -100,11 +111,8 @@
         <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/>
         <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>
       </svg></a>
-    <span class="lbl" style="margin-left:14px">Day</span>
-    <button id="dprev" title="previous day">&#9664;</button>
-    <input type="date" id="mapdate">
-    <button id="dnext" title="next day">&#9654;</button>
-    <button id="latest" title="back to the most recent day">Latest</button>
+    <span class="lbl" style="margin-left:14px">Opacity</span>
+    <input type="range" id="opacity" min="0" max="100" value="80" style="width:110px">
     <span class="spacer"></span>
     <a class="btnlink chllink" href="chl_seasonal.html"
        title="the same coast, same day, chlorophyll">Chlorophyll map &#8599;</a>
@@ -124,6 +132,21 @@
     </span>
     <span class="lbl" style="margin-left:14px">Compare with</span>
     <select id="prev"></select>
+    <span class="grp" style="margin-left:14px">
+      <button id="air"
+        title="overlay the daily maximum air temperature at Bet Dagan, 7 km inland">
+        Bet Dagan air</button>
+      <button id="smooth"
+        title="7-day centred mean of the air temperature, three days either side">
+        Smooth</button>
+    </span>
+    <select id="bdmode" style="margin-left:6px"
+      title="which daily air temperature at Bet Dagan: the day's high, its low,
+             or the mid-range between them">
+      <option value="min">min</option>
+      <option value="mid">mid-range</option>
+      <option value="max" selected>max</option>
+    </select>
   </div>
   <div class="card"><div id="chart"><div class="status" id="status">loading&hellip;</div></div></div>
   <p class="note" id="foot"></p>
@@ -147,6 +170,11 @@
     <a href="https://med-lter.haifa.ac.il/sdot-yam-float-overview/" target="_blank"
     rel="noopener">Morris Kahn Marine Research Station, the School of Marine
     Sciences, and the University of Haifa</a>.
+    Air temperature at Bet Dagan from
+    <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
+       title="Israel Meteorological Service — open data"><img
+       src="https://ims.gov.il/themes/imst/ims/images/logo.jpg" alt="IMS"
+       class="ims-logo"></a>.
     &middot; <a href="chl_seasonal.html" class="chllink">Chlorophyll along the same coast</a>
   </p>
 </div>
@@ -219,6 +247,42 @@ const MEAN_OF = ["Ashkelon_IL", "Ashdod_IL", "Tel_Aviv_IL", "Hadera_IL",
 // distance offshore as the stations it averages, and clear of both pins.
 const MEAN_AT = {lat: 32.2891, lon: 34.7831, order: 2.5};
 
+// The nearest long-running land station to the middle of the sampled coast,
+// 7 km inland of Tel Aviv. Air over land, not sea surface - it is here to be
+// compared against the sea, not mistaken for it, so it is drawn as a square
+// badge in plain ink rather than coloured on the sea ramp, where its winter
+// nights and summer afternoons would both sit off the end of the scale.
+const BD_KEY = "Bet_Dagan";
+const BD_AT = {lat: 32.0073, lon: 34.8138, order: 3.5};
+// Three ways to read a day at the station, each with its own axis: the maxima
+// run 7.6 to 44.4, the minima reach below freezing, and the mid-range - the
+// mean of the two - sits between. Mid-range is the closest of the three to a
+// day's mean temperature, which is the quantity the sea is likely to answer to.
+const BD_MODES = {
+  max: {label: "maximum", short: "max", range: [5, 45]},
+  min: {label: "minimum", short: "min", range: [-5, 30]},
+  mid: {label: "mid-range", short: "mid-range", range: [0, 38]},
+};
+let bdMode = "max";
+const bdCfg = () => BD_MODES[bdMode];
+// Mid-range needs both files; the others need one. Only these are held.
+const bdChannels = () => bdMode === "mid" ? ["max", "min"] : [bdMode];
+
+const BD_COL = "BET DAGAN";      // its column in temp_max/min_<year>.csv
+const BD_FIRST = 1998;           // the column is absent from the earlier files
+const BD_MIN_HOURS = 18;         // of 24; fewer and the day's maximum is a guess
+
+// Read straight from the repository's hourly archive, a year at a time. Those
+// files are wide - 84 stations - so one station costs the whole file, about
+// 3 MB a year and 84 MB for the record. Nothing is derived and committed to
+// avoid that; instead only the years in use are held, as their daily maxima,
+// and the text they came from is dropped on the spot. Two or three hundred
+// numbers a year survive in memory, not three megabytes.
+const BD_YEARS = new Map();      // year -> {max?: Map, min?: Map} of daily values
+const BD_PENDING = new Map();    // "kind|year" -> in-flight promise, so a burst
+                                 // of day-stepping does not fetch one twice
+let BD = new Map();              // the merged view the chart and pins read
+
 const BUOY_KEY = "Sdot_Yam_buoy";
 const BUOY_AT = {name: BUOY_KEY, lat: 32.49463, lon: 34.87989};
 let BUOY_SST = new Map(), BUOY_FRESH = new Map();
@@ -278,6 +342,8 @@ async function loadFrame() {
     if (r.sst !== "" && !isNaN(v)) BUOY_SST.set(r.date, v);
   }
   if (!STATIONS.length) throw new Error("no sst_stations.csv");
+  STATIONS.push({name: BD_KEY, lat: BD_AT.lat, lon: BD_AT.lon,
+                 order: BD_AT.order, land: true});
   if (MEAN_OF.every(n => STATIONS.some(s => s.name === n))) {
     STATIONS.push({name: MEAN_KEY, lat: MEAN_AT.lat, lon: MEAN_AT.lon,
                    order: MEAN_AT.order, mean: true, members: MEAN_OF});
@@ -293,6 +359,7 @@ async function loadSeries(stream, name) {
   const key = `${stream}|${name}`;
   if (SERIES[key]) return SERIES[key];
   if (name === MEAN_KEY) return loadMeanSeries(stream);
+  if (name === BD_KEY) return BD;          // land station, one series
   const rows = await grab(`sst_${stream}_${name}.csv`, d3.csv);
   const out = new Map();
   for (const r of (rows || [])) out.set(r.date, +r.sst);
@@ -401,7 +468,109 @@ async function loadMeanSeries(stream) {
 const chartStream = () => activeSource(shownDate());
 // The buoy is not a pixel in either analysis, so it answers for itself rather
 // than through the stream the map is showing.
-const chartSeries = () => onBuoy() ? BUOY_SST : SERIES[`${chartStream()}|${station}`];
+// ------------------------------------------------- Bet Dagan, a year at a time
+// Parsed by hand rather than with d3.csv: the file is 84 columns wide and
+// d3.csv would build an object per hour with 84 keys each, thousands of times
+// over, to reach one of them. This walks the text once and keeps two numbers
+// per day.
+function bdParse(text, kind) {
+  const keep = kind === "min" ? Math.min : Math.max;
+  const out = new Map();
+  const lines = text.split("\n");
+  if (!lines.length) return out;
+  const col = lines[0].split(",").indexOf(BD_COL);
+  if (col < 0) return out;                  // a year before the station existed
+  const hi = new Map(), hours = new Map();
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i]) continue;
+    const parts = lines[i].split(",");
+    const raw = parts[col];
+    if (raw === undefined || raw === "") continue;
+    const v = +raw;
+    if (!isFinite(v)) continue;
+    const day = parts[0].slice(0, 10);
+    hi.set(day, hi.has(day) ? keep(hi.get(day), v) : v);
+    hours.set(day, (hours.get(day) || 0) + 1);
+  }
+  // A day represented only by its small hours would read as a cold day rather
+  // than a missing one, so a thin day is dropped instead of reported.
+  for (const [day, v] of hi) if (hours.get(day) >= BD_MIN_HOURS) out.set(day, v);
+  return out;
+}
+
+function bdLoadChannel(y, kind) {
+  if (!BD_YEARS.has(y)) BD_YEARS.set(y, {});
+  const slot = BD_YEARS.get(y);
+  if (slot[kind]) return Promise.resolve(slot[kind]);
+  const key = `${kind}|${y}`;
+  if (BD_PENDING.has(key)) return BD_PENDING.get(key);
+  const job = grab(`temp_${kind}_${y}.csv`, d3.text)
+    .then(text => {
+      slot[kind] = text ? bdParse(text, kind) : new Map();
+      BD_PENDING.delete(key);               // the text itself is not kept
+      return slot[kind];
+    })
+    .catch(() => { BD_PENDING.delete(key); return new Map(); });
+  BD_PENDING.set(key, job);
+  return job;
+}
+
+// Which years are actually being drawn. Everything else is released.
+function bdNeeded() {
+  if (onLand()) {
+    const last = +latestDate().slice(0, 4);
+    return Array.from({length: last - BD_FIRST + 1}, (_, i) => BD_FIRST + i);
+  }
+  const ys = new Set([+shownDate().slice(0, 4)]);   // the day the badge shows
+  if (showAir) {
+    ys.add(+latestDate().slice(0, 4));              // the year drawn in colour
+    if (prevYear) ys.add(+prevYear);                // and the compared one
+  }
+  return [...ys].filter(y => y >= BD_FIRST);
+}
+
+// Load what is needed, drop what is not, and rebuild the merged view the rest
+// of the page reads. Returns true when the contents changed, so the caller
+// knows whether a redraw is worth it.
+async function ensureBD() {
+  const want = bdNeeded(), kinds = bdChannels();
+  await Promise.all(want.flatMap(y => kinds.map(k => bdLoadChannel(y, k))));
+  let changed = false;
+  for (const y of [...BD_YEARS.keys()]) {
+    if (!want.includes(y)) { BD_YEARS.delete(y); changed = true; }
+  }
+  // Channels go the same way as years: switching from mid-range back to max
+  // should not leave every year's minima sitting in memory unread.
+  for (const slot of BD_YEARS.values()) {
+    for (const k of ["max", "min"]) {
+      if (slot[k] && !kinds.includes(k)) { delete slot[k]; changed = true; }
+    }
+  }
+  const merged = new Map();
+  for (const y of want) {
+    const slot = BD_YEARS.get(y);
+    if (!slot) continue;
+    if (bdMode === "mid") {
+      // Only where both exist: a mid-range from one end is not a mid-range.
+      const hi = slot.max, lo = slot.min;
+      if (hi && lo) for (const [d, v] of hi) {
+        const w = lo.get(d);
+        if (w !== undefined) merged.set(d, (v + w) / 2);
+      }
+    } else if (slot[bdMode]) {
+      for (const [d, v] of slot[bdMode]) merged.set(d, v);
+    }
+  }
+  if (merged.size !== BD.size) changed = true;
+  BD = merged;
+  BD_SM = null;
+  return changed;
+}
+
+const onLand = () => station === BD_KEY;
+const chartSeries = () => onBuoy() ? BUOY_SST
+  : onLand() ? bdView()
+  : SERIES[`${chartStream()}|${station}`];
 
 // ------------------------------------------------- live top-up (not stored)
 // The updater commits once a day, but the producer publishes around noon UTC,
@@ -480,7 +649,7 @@ async function topUp() {
     const probe = STATIONS.find(s => s.name === DEFAULT_STATION) || STATIONS[0];
     const v0 = await pixel(probe.lat, probe.lon, day);
     if (v0 === null) break;
-    const real = STATIONS.filter(s => !s.mean);
+    const real = STATIONS.filter(s => !s.mean && !s.land);
     const rest = await Promise.all(real.map(s =>
       s.name === probe.name ? Promise.resolve(v0) : pixel(s.lat, s.lon, day)));
     real.forEach((s, k) => {
@@ -520,6 +689,64 @@ function byYear(map) {
 function ramp(t) { return d3.interpolateHcl(C().rampLo, C().rampHi)(t); }
 
 const Y_RANGE = [15, 33];
+// Off by default: the air line is a second measurement in a second medium, and
+// switching it on widens the axis for everything, so it should be a choice.
+let showAir = false, smoothAir = false;
+const BD_HALF = 3;               // +/- 3 days, a 7-day window
+const BD_MIN_IN_WINDOW = 5;      // of 7; fewer and the mean leans on one side
+let BD_SM = null;                // the smoothed view, rebuilt when BD changes
+
+// Centred, so the smoothed line lags nothing: a day is the mean of itself and
+// the three either side. Stepped by calendar date rather than by position in
+// the series, so a missing day leaves a hole in the window instead of quietly
+// pulling in a day from a week away. Smoothed across the whole record, not
+// within each year, or every 31 December would be smoothed against nothing.
+function bdSmooth(src) {
+  const out = new Map();
+  const last = [...src.keys()].sort().pop();
+  const cutoff = last ? Date.parse(last + "T00:00:00Z") - BD_HALF * 86400000 : 0;
+  for (const d of src.keys()) {
+    // Inside three days of the end the window can only reach backwards, which
+    // would bend the last points toward the past. Left to bdTail() to draw raw.
+    if (Date.parse(d + "T00:00:00Z") > cutoff) continue;
+    const t0 = Date.parse(d + "T00:00:00Z");
+    let sum = 0, n = 0;
+    for (let k = -BD_HALF; k <= BD_HALF; k++) {
+      const v = src.get(iso(new Date(t0 + k * 86400000)));
+      if (v !== undefined) { sum += v; n++; }
+    }
+    if (n >= BD_MIN_IN_WINDOW) out.set(d, sum / n);
+  }
+  return out;
+}
+
+// The air series as drawn: smoothed or not. Cached, because the record is
+// 10,000 days and draw() asks for it several times.
+function bdView() {
+  if (!smoothAir) return BD;
+  if (!BD_SM) BD_SM = bdSmooth(BD);
+  return BD_SM;
+}
+
+// The last three days of the record have no days after them, so a centred
+// window cannot reach them. They are drawn as their raw selves, as dots, rather
+// than smoothed against a half-window that would bend them toward the past.
+function bdTail() {
+  return smoothAir ? [...BD.keys()].sort().slice(-BD_HALF) : [];
+}
+
+// The sea sits in 15-33 and the air runs 5-45, so the two cannot share the
+// default frame. With the overlay on the axis opens to hold both, which flattens
+// the sea lines - that is the price of putting them on one honest scale, and it
+// is why this is a button rather than always-on.
+function yRangeNow() {
+  if (onLand()) return bdCfg().range.slice();
+  if (showAir && !onBuoy()) {
+    const r = bdCfg().range;
+    return [Math.min(Y_RANGE[0], r[0]), Math.max(Y_RANGE[1], r[1])];
+  }
+  return Y_RANGE.slice();
+}
 const X_RANGE = ["2020-01-01", "2020-12-31"];
 // Set by the reader dragging or double-clicking, not by our own redraws.
 let userZoomed = false, redrawing = false;
@@ -606,6 +833,19 @@ function draw() {
         : `${years[0]}–${current - 1}`, hoverinfo: "skip"});
   }
 
+  // The three days a centred window cannot reach, drawn raw so the series still
+  // ends where the record ends rather than three days short.
+  function tailTrace(color, year) {
+    const ds = bdTail().filter(d => +d.slice(0, 4) === year);
+    if (!ds.length) return null;
+    return {
+      x: ds.map(d => XDATES[doyOf(d)]), y: ds.map(d => BD.get(d)),
+      type: "scatter", mode: "markers", marker: {color, size: 6},
+      showlegend: false,
+      hovertemplate: "Bet Dagan %{y:.1f} °C, too recent to smooth<extra></extra>",
+    };
+  }
+
   // Under the year ramp the highlighted years step outside it: the newest year
   // is by definition the reddest, which makes it invisible in a red crowd.
   const curColor = scheme === "age" ? c.hiCur : c.cur;
@@ -615,6 +855,33 @@ function draw() {
     traces.push(line(+prevYear, prevColor, 2.2, prevYear, true));
   }
   traces.push(line(current, curColor, 3, String(current), true));
+  if (onLand()) {
+    const t = tailTrace(curColor, current);
+    if (t) traces.push(t);
+  }
+
+  // Bet Dagan in black, for the same years the sea shows in colour - drawing all
+  // 28 of its years would bury the sea under a second spaghetti. Black in light
+  // mode and near-white in dark: "black" here means the ink colour, and an
+  // actually-black line on a near-black surface would not be there at all.
+  if (showAir && !onLand() && BD.size) {
+    const air = byYear(bdView());
+    // One air line, matching the sea year being looked at. With a comparison
+    // year chosen the current year's air is dropped rather than drawn beside
+    // it: two black lines against a red pair is four things to disentangle,
+    // and the question being asked is about the year on screen.
+    const y = (prevYear && air[+prevYear]) ? +prevYear : current;
+    if (air[y]) {
+      traces.push({
+        x, y: air[y], type: "scatter", mode: "lines", connectgaps: false,
+        line: {color: c.ink, width: 1.4},
+        name: `${y} ${bdCfg().short}${smoothAir ? ", 7-day" : ""}`, showlegend: true,
+        hovertemplate: `Bet Dagan ${y} ${bdCfg().short}  %{y:.1f} °C<extra></extra>`,
+      });
+      const t = tailTrace(c.ink, y);
+      if (t) traces.push(t);
+    }
+  }
 
   // Mark the day the map is showing, so the two halves of the page point at the
   // same moment. On the newest day that is the end of the current year's line,
@@ -647,7 +914,7 @@ function draw() {
   // reader was looking at, while an untouched chart still opens on 15-33.
   const gd = document.getElementById("chart");
   const live2 = userZoomed && gd && gd._fullLayout && gd._fullLayout.yaxis;
-  const yRange = live2 ? gd._fullLayout.yaxis.range.slice() : Y_RANGE.slice();
+  const yRange = live2 ? gd._fullLayout.yaxis.range.slice() : yRangeNow();
   const xRange = live2 ? gd._fullLayout.xaxis.range.slice() : X_RANGE.slice();
 
   redrawing = true;
@@ -690,8 +957,13 @@ function draw() {
 
   wireChartClick();
 
-  const src = LIVE.length ? `, of which ${LIVE.length / STATIONS.length | 0} `
-      + "day fetched live from Copernicus and not stored" : "";
+  // Divided by the stations that actually have a pixel: the coast mean and the
+  // land station are in STATIONS but never appear in LIVE, so counting against
+  // the full list rounds a real live day down to "0 day".
+  const sampled = STATIONS.filter(s => !s.mean && !s.land).length || 1;
+  const days = Math.round(LIVE.length / sampled);
+  const src = days ? `, of which ${days} day${days > 1 ? "s" : ""} `
+      + "fetched live from Copernicus and not stored" : "";
   drawnStream = chartStream();
   const cfg = SOURCES[drawnStream];
   const footEl = document.getElementById("foot");
@@ -699,7 +971,21 @@ function draw() {
     ? ` The newest point is marked * on the map and is the buoy's latest `
       + `reading (${[...BUOY_FRESH.values()].sort().pop()}) rather than a `
       + `whole-day median, matching the station's own dashboard.` : "";
-  footEl.textContent = onBuoy()
+  footEl.textContent = onLand()
+    ? `${pretty(station)} · IMS station 54, 32.007 N 34.814 E, `
+      + `${years[0]}–${current}, ${map.size.toLocaleString()} daily values. `
+      + `The ${bdCfg().label} air temperature of each day, 7 km inland — not a `
+      + `sea measurement and not from Copernicus. `
+      + `Read here from the repository's `
+      + `hourly temp_max/min_<year>.csv, a year at a time, keeping only the `
+      + `years `
+      + `on screen; days with under ${BD_MIN_HOURS} hourly readings are dropped `
+      + `rather than reported from a few hours. Note the axis runs `
+      + `${bdCfg().range[0]}–${bdCfg().range[1]} °C here, against 15–33 for the sea.`
+      + (smoothAir ? ` Smoothed to a ${BD_HALF * 2 + 1}-day centred mean, `
+          + `${BD_HALF} days either side; the last ${BD_HALF} days are dots, `
+          + `having no days after them to average with.` : "")
+    : onBuoy()
     ? `${pretty(station)} · thermistor on the mooring, ${years[0]}–${current}, `
       + `${map.size.toLocaleString()} daily values. `
       + `A median of the day's in-water samples, so it is a measurement rather `
@@ -715,7 +1001,17 @@ function draw() {
           : "")
       + `The two analyses are never mixed: this is one of them end to end, and the `
       + `field button swaps both the map and these lines. `
-      + `Foundation SST: one value per day, with the day's solar warming removed.`;
+      + `Foundation SST: one value per day, with the day's solar warming removed.`
+      + (showAir ? ` The black line is the ${bdCfg().label} air temperature at Bet `
+          + `Dagan, 7 km inland, for ${prevYear || current} — one year, matching `
+          + `the sea year being read. The axis is opened to `
+          + `${bdCfg().range[0]}–${bdCfg().range[1]} °C to hold it, which `
+          + `flattens the sea.`
+          + (smoothAir ? ` Smoothed to a ${BD_HALF * 2 + 1}-day centred mean, `
+              + `${BD_HALF} days either side, so it lags nothing; the last `
+              + `${BD_HALF} days are dots, having no days after them to average `
+              + `with.` : "")
+        : "");
   // textContent first so nothing from the data can be read as markup, then the
   // one piece of trusted HTML this line needs.
   if (onBuoy()) footEl.innerHTML = footEl.innerHTML + ` Buoy data: ${MKMRS}.`;
@@ -907,6 +1203,7 @@ function valuesAt(date) {
   for (const r of NRT.concat(LIVE)) tail.set(r.station + "|" + r.date, r.sst);
   const out = new Map();
   for (const s of STATIONS) {
+    if (s.land) continue;                  // air over land, drawn separately
     if (s.mean) continue;                  // derived below, from the rest
     const m = SERIES[`${activeSource(date)}|${s.name}`];
     let v = m ? m.get(date) : undefined;
@@ -945,6 +1242,7 @@ function dateFromX(year, xv) {
 function drawPins() {
   const vals = valuesAt(shownDate());
   for (const s of STATIONS) {
+    if (s.land) { drawLand(s); continue; }
     const rec = vals.get(s.name);
     if (pins[s.name]) { map.removeLayer(pins[s.name]); delete pins[s.name]; }
     if (!rec) continue;              // station not loaded yet, or no such day
@@ -960,6 +1258,31 @@ function drawPins() {
       .addTo(map).on("click", () => select(s.name));
   }
   drawBuoy();
+}
+
+// A square badge in ink, deliberately unlike the sea pins beside it: this is the
+// day's highest air temperature over land, and colouring it on the 17-31 sea
+// ramp would put most winters and most summer afternoons off the end of the
+// scale while implying the two numbers are the same kind of measurement.
+function drawLand(s) {
+  const c = C(), date = shownDate(), v = BD.get(date);
+  if (pins[s.name]) { map.removeLayer(pins[s.name]); delete pins[s.name]; }
+  if (v === undefined) return;
+  const sel = s.name === station;
+  const html = `<div style="display:flex;align-items:center;justify-content:center;`
+    + `font:600 11px/1 system-ui,sans-serif;border-radius:3px;padding:2px 5px;`
+    + `background:${c.surface};color:${c.ink};white-space:nowrap;cursor:pointer;`
+    + `border:${sel ? "2.5px solid " + c.ink : "1.5px solid " + c.axis};`
+    + `box-shadow:0 1px 3px rgba(0,0,0,.35)">${v.toFixed(1)}</div>`;
+  pins[s.name] = L.marker([s.lat, s.lon], {
+    icon: L.divIcon({html, className: "", iconSize: [38, 17], iconAnchor: [19, 8]}),
+    // Above the sea pins: inland Bet Dagan and the offshore Tel Aviv station are
+    // only 13 km apart and overlap at the opening zoom, and of the two it is the
+    // one a reader has to be able to find and click.
+    zIndexOffset: sel ? 1100 : 700,
+    title: `${pretty(s.name)} · ${date} · ${v.toFixed(1)} °C · `
+      + `${bdCfg().label} air temperature, 7 km inland`,
+  }).addTo(map).on("click", () => select(s.name));
 }
 
 // A buoy rather than a label: wide body carrying the reading, tapering to a tip
@@ -999,7 +1322,7 @@ const STREAM_LOADING = {};
 function ensureStream(stream) {
   if (!STREAM_LOADING[stream])
     STREAM_LOADING[stream] = Promise.all(
-      STATIONS.map(s => loadSeries(stream, s.name)))
+      STATIONS.filter(s => !s.land).map(s => loadSeries(stream, s.name)))
       .then(() => { drawPins(); syncSourceControls(); });
   return STREAM_LOADING[stream];
 }
@@ -1013,6 +1336,7 @@ async function setMapDate(date) {
   const stream = activeSource(shownDate());
   await loadSeries(stream, station);
   ensureStream(stream);
+  await ensureBD();
   refreshField();
   if (stream !== drawnStream) fillPrev();
   draw();                       // the marker follows the day, so always redraw
@@ -1164,8 +1488,22 @@ async function select(name) {
   document.getElementById("station").value = name;
   document.getElementById("status") &&
     (document.getElementById("status").textContent = "loading " + pretty(name) + "…");
-  if (name !== BUOY_KEY) await loadSeries(chartStream(), name);
+  if (name !== BUOY_KEY && name !== BD_KEY)
+    await loadSeries(chartStream(), name);
+  // Its whole record is 29 wide hourly files. That is a real wait on a real
+  // connection, so say what is happening rather than leaving the last station's
+  // chart sitting there looking unresponsive.
+  if (name === BD_KEY && BD_YEARS.size < 2) {
+    document.getElementById("foot").textContent =
+      `Reading the Bet Dagan record — ${bdNeeded().length} years of the hourly `
+      + `archive`
+      + (bdChannels().length > 1
+          ? `, both ends of the day, so twice the files` : "")
+      + `. Only the years and channels in use are kept.`;
+  }
+  await ensureBD();
   syncScheme();
+  syncAir();
   fillPrev();
   drawPins();
   draw();
@@ -1189,6 +1527,36 @@ function fillPrev() {
 // ramp of two colours and an empty band. The station's own choice is remembered
 // and handed back on the way out.
 let gridScheme = null;
+// On Bet Dagan itself the overlay would be the same line twice, so the button
+// goes quiet rather than drawing a duplicate.
+function syncAir() {
+  const b = document.getElementById("air");
+  if (!b) return;
+  b.disabled = onLand();
+  b.classList.toggle("on", showAir && !onLand());
+  b.title = onLand()
+    ? "already showing Bet Dagan"
+    : showAir
+      ? "hide the Bet Dagan air line and return the axis to the sea range"
+      : "overlay the daily maximum air temperature at Bet Dagan, 7 km inland";
+
+  // Smoothing has nothing to act on unless some air is being drawn, either as
+  // the overlay or as the station itself.
+  const sm = document.getElementById("smooth");
+  const md = document.getElementById("bdmode");
+  if (!sm || !md) return;
+  const live = onLand() || showAir;
+  md.disabled = !live;
+  sm.disabled = !live;
+  sm.classList.toggle("on", smoothAir && live);
+  sm.title = !live
+    ? "switch on the Bet Dagan air line first"
+    : smoothAir
+      ? "back to the daily values"
+      : "7-day centred mean, three days either side; the last three days stay "
+        + "as dots, having no days after them to average with";
+}
+
 function syncScheme() {
   if (onBuoy()) {
     if (gridScheme === null) gridScheme = scheme;
@@ -1211,7 +1579,34 @@ function wire() {
       o.classList.toggle("on", o === b));
     draw();
   });
-  document.getElementById("prev").onchange = e => { prevYear = e.target.value; draw(); };
+  document.getElementById("prev").onchange = async e => {
+    prevYear = e.target.value;
+    draw();
+    if (showAir && await ensureBD()) draw();
+  };
+  document.getElementById("bdmode").onchange = async e => {
+    bdMode = e.target.value;
+    // The axis and the cached smoothing both belong to the old mode.
+    userZoomed = false;
+    draw();                       // immediately, with whatever is held
+    if (await ensureBD()) draw(); // again once the other file has arrived
+    syncAir();
+  };
+  document.getElementById("smooth").onclick = () => {
+    smoothAir = !smoothAir;
+    syncAir();
+    draw();
+  };
+  const air = document.getElementById("air");
+  air.onclick = async () => {
+    showAir = !showAir;
+    // The reader has a fixed y range; opening the axis for the air line is our
+    // change, not theirs, so a stale manual zoom must not survive it.
+    userZoomed = false;
+    syncAir();
+    draw();                       // immediate, with whatever is already held
+    if (await ensureBD()) draw(); // again once the year has arrived
+  };
   document.getElementById("station").onchange = e => select(e.target.value);
   document.getElementById("theme").onclick = () => {
     document.documentElement.dataset.theme = isDark() ? "light" : "dark";
@@ -1238,9 +1633,11 @@ async function main() {
       && !(station === BUOY_KEY && BUOY_SST.size)) station = DEFAULT_STATION;
   document.getElementById("station").value = station;
   syncScheme();          // also covers arriving on ?station=Sdot_Yam_buoy
+  syncAir();
   wire();
   initMap();
   await loadSeries(activeSource(shownDate()), station);
+  await ensureBD();               // the shown day's year, for the map badge
   fillPrev();
   refreshField();
   draw();
