@@ -27,7 +27,10 @@
     --border:rgba(255,255,255,0.10); }
   .wrap { max-width:1400px; margin:0 auto; }
   h1 { font-size:19px; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
-  .sub { color:var(--ink2); margin:0 0 14px; }
+  .sub { color:var(--ink2); margin:0 0 14px; 
+    /* Two lines reserved whether or not two are used, so the map
+       starts at the same height on this page and its sibling. */
+    min-height:42px; }
   .bar { display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; }
   .grp { display:flex; gap:0; }
   .grp button { border-radius:0; margin-left:-1px; }
@@ -48,7 +51,7 @@
   .credit a:hover { color:var(--ink); }
   .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; }
   .status { color:var(--muted); padding:24px 12px; }
-  #map { height:380px; border-radius:8px; }
+  #map { height:420px; border-radius:8px; }
   .maplegend, .mapcbar { background:var(--surface); border:1px solid var(--border);
     border-radius:7px; padding:6px 8px; font-size:11px; color:var(--ink2);
     box-shadow:0 1px 4px rgba(0,0,0,.12); }
@@ -90,10 +93,10 @@
         <polyline points="9 22 9 12 15 12 15 22"/>
       </svg></a>
   </div>
-  <p class="sub" data-i18n="sub">Daily satellite chlorophyll-a along the SE Mediterranean coast, from the
-     Nile Delta to Haifa. The map shows the selected day's chlorophyll field, image
-     sampling points 4 km offshore, and the 20 km transects used for the time series.
-     Pick a date below, or click a chart point to jump to that day. White areas are clouds or land.</p>
+  <p class="sub" data-i18n="sub">
+    Daily satellite chlorophyll-a along the SE Mediterranean coast, from the
+    Nile Delta to Haifa. White areas are cloud or land, not clean water.
+  </p>
   <!-- Map controls, in the same order as the sea temperature page: day, then
        the colour of the field, then opacity, then the link across and the theme.
        The two pages share a ?date= and a reader moves between them, so a control
@@ -194,10 +197,8 @@ const STR = {
   en: {},                       // English is what the markup already says
   he: {
     title: "כלורופיל לאורך חופי מזרח הים התיכון",
-    sub: "כלורופיל-a יומי מלוויין לאורך חופי מזרח הים התיכון, מדלתת הנילוס ועד חיפה. " +
-         "המפה מציגה את שדה הכלורופיל של היום הנבחר, את נקודות הדגימה 4 ק\"מ מהחוף, " +
-         "ואת חתכי ה-20 ק\"מ המשמשים לסדרות העת. בחרו תאריך למטה, או לחצו על נקודה " +
-         "בגרף כדי לקפוץ לאותו יום. שטחים לבנים הם עננים או יבשה.",
+    sub: "כלורופיל-a יומי מלוויין לאורך חופי מזרח הים התיכון, מדלתת הנילוס ועד " +
+         "חיפה. שטחים לבנים הם עננים או יבשה, לא מים נקיים.",
     tsNote: "הגרפים שלמטה מציגים כלורופיל בכל אתר חופי לפי המדד הנבחר. הרצועה המוצללת " +
             "מציגה את טווח שנות הבסיס, והשנה הנוכחית ושנת ההשוואה מוצגות כקווים. " +
             "האתר הצפוני ביותר נמצא בפינה הימנית העליונה. גררו לצדדים כדי להתקרב; " +
@@ -730,10 +731,17 @@ async function drawColorbar() {
   } catch (e) { /* leave the bar blank */ }
 }
 
+// The opening view, shared with the other map so a snapshot of one frames the
+// same coastline as a snapshot of the other. The centre is the midrange of the
+// chlorophyll sampling points and the zoom is one level closer than the bounds
+// fit, which otherwise leaves a lot of desert in view; both pages now state it
+// outright rather than deriving it, so neither can drift from the other.
+const VIEW_BOUNDS = [[30.7, 29.6], [33.5, 35.5]];   // Alexandria to Sour
+const VIEW_CENTRE = [31.84845, 32.6128];
+
 async function initMap() {
   map = L.map("map", {zoomControl: true, attributionControl: true});
-  // Alexandria in the west to Sour in the north-east
-  map.fitBounds([[30.7, 29.6], [33.5, 35.5]]);
+  map.fitBounds(VIEW_BOUNDS);
   applyBasemap(isDark());
   addMapControls();
 
@@ -741,14 +749,7 @@ async function initMap() {
     SITEGEO = await (await fetch(POINTS_URL)).json();
   } catch (e) { SITEGEO = null; }
 
-  // Centre on the midrange of the stations and go one level closer than the
-  // bounds fit, which otherwise leaves a lot of desert in view.
-  if (SITEGEO) {
-    const la = Object.values(SITEGEO).map(v => v.lat);
-    const lo = Object.values(SITEGEO).map(v => v.lon);
-    map.setView([(Math.min(...la) + Math.max(...la)) / 2,
-                 (Math.min(...lo) + Math.max(...lo)) / 2], map.getZoom() + 1);
-  }
+  map.setView(VIEW_CENTRE, map.getZoom() + 1);
 
   lastMy = lastReprocessed();
   document.getElementById("mapdate").onchange = e => setMapDate(e.target.value);

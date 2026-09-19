@@ -31,7 +31,10 @@
     --border:rgba(255,255,255,0.10); }
   .wrap { max-width:1400px; margin:0 auto; }
   h1 { font-size:19px; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
-  .sub { color:var(--ink2); margin:0 0 14px; }
+  .sub { color:var(--ink2); margin:0 0 14px; 
+    /* Two lines reserved whether or not two are used, so the map
+       starts at the same height on this page and its sibling. */
+    min-height:42px; }
   .bar { display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; }
   .grp { display:flex; gap:0; }
   .grp button { border-radius:0; margin-left:-1px; }
@@ -243,7 +246,7 @@ const STR = {
     schBase: "טווח בסיס",
     compare: "השוואה עם",
     airBtn: "אוויר בית דגן",
-    airTip: "הצגת טמפרטורת האוויר המרבית היומית בבית דגן, 7 ק\"מ מהחוף",
+    airTip: "הצגת טמפרטורת האוויר היומית בבית דגן, 7 ק\"מ מהחוף",
     airTipOff: "הסתרת קו האוויר והחזרת הציר לטווח הים",
     airTipOn: "כבר מוצגת תחנת בית דגן",
     smoothBtn: "החלקה",
@@ -251,17 +254,17 @@ const STR = {
     smoothTipOn: "ממוצע נע מרוכז של 7 ימים, שלושה ימים מכל צד; שלושת הימים האחרונים " +
                  "נותרים כנקודות, מאחר שאין אחריהם ימים לממצע איתם",
     smoothTipNone: "הדליקו תחילה את קו האוויר של בית דגן",
-    modeMin: "מזערי",
+    modeMin: "מינימום",
     modeMid: "אמצע-טווח",
-    modeMax: "מרבי",
+    modeMax: "מקסימום",
     modeTip: "איזו טמפרטורת אוויר יומית בבית דגן: השיא של היום, השפל שלו, או אמצע הטווח ביניהם",
     dark: "מצב כהה",
     light: "מצב בהיר",
     loadingMap: "טוען את המפה…",
     loading: "טוען…",
     loadingStation: "טוען {0}…",
-    labelMin: "מזערית", labelMid: "אמצע-טווח", labelMax: "מרבית",
-    shortMin: "מזערי", shortMid: "אמצע-טווח", shortMax: "מרבי",
+    labelMin: "מינימום", labelMid: "אמצע-טווח", labelMax: "מקסימום",
+    shortMin: "מינימום", shortMid: "אמצע-טווח", shortMax: "מקסימום",
     fieldNone: "אין",
     fieldNoneTip: "אף ניתוח אינו מכסה את {0} עדיין",
     noData: "לא נמצאו נתונים — נדרשים data/sst_stations.csv ו-data/sst_rep_<תחנה>.csv",
@@ -1644,12 +1647,21 @@ function refreshField() {
             + "stored update." : "");
 }
 
+// The opening view, shared with the other map so a snapshot of one frames the
+// same coastline as a snapshot of the other. The centre is the midrange of the
+// chlorophyll sampling points and the zoom is one level closer than the bounds
+// fit, which otherwise leaves a lot of desert in view; both pages now state it
+// outright rather than deriving it, so neither can drift from the other.
+const VIEW_BOUNDS = [[30.7, 29.6], [33.5, 35.5]];   // Alexandria to Sour
+const VIEW_CENTRE = [31.84845, 32.6128];
+
 function initMap() {
   map = L.map("map", {zoomControl: true, attributionControl: true});
   applyBasemap(isDark());
-  const la = STATIONS.map(s => s.lat), lo = STATIONS.map(s => s.lon);
-  map.fitBounds([[Math.min(...la) - 0.3, Math.min(...lo) - 0.3],
-                 [Math.max(...la) + 0.3, Math.max(...lo) + 0.3]]);
+  // Not this page's own stations: they reach further north, and fitting them
+  // would frame a different stretch of coast from the chlorophyll map.
+  map.fitBounds(VIEW_BOUNDS);
+  map.setView(VIEW_CENTRE, map.getZoom() + 1);
 
   const bar = L.control({position: "topright"});
   bar.onAdd = () => {
