@@ -1318,12 +1318,22 @@ function activeSource(date) {
 
 const layerFor = date => SOURCES[activeSource(date)].layer;
 
+// The same thirty-day tile cache that bit the chlorophyll page: a day asked for
+// before its renderer caught up is cached as an empty PNG and served for a
+// month. Vary the key once a day for days young enough to be at risk.
+const CACHE_RISK_DAYS = 6;
+function cacheBust(dateStr) {
+  const age = (Date.now() - Date.parse(dateStr + "T00:00:00Z")) / 86400000;
+  return age <= CACHE_RISK_DAYS ? "&_d=" + iso(new Date()) : "";
+}
+
 function fieldUrl(date) {
   return `${WMTS}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
     + `&LAYER=${encodeURIComponent(layerFor(date))}`
     + `&STYLE=${encodeURIComponent(styleString())}`
     + `&TILEMATRIXSET=EPSG:3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`
-    + `&FORMAT=image/png&TIME=${date}T00:00:00.000Z`;
+    + `&FORMAT=image/png&TIME=${date}T00:00:00.000Z`
+    + cacheBust(date);
 }
 
 async function drawColorbar() {
