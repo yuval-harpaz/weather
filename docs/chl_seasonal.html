@@ -238,7 +238,7 @@ const STR = {
     foot: "רב-חיישני 1 ק\"מ, מ\"ג למ\"ק. בסיס {0}, שנה נוכחית {1}, יום אחרון {2}{3}. נטען מ-{4}.",
     mapnote: "כלורופיל-a לתאריך {0}, זרם {1}, מוצג על ידי ה-WMTS של קופרניקוס ימי. " +
              "לבן הוא ענן או יבשה. הסמנים הם תחנות הדגימה, והקווים הם חתכי ה-0–20 ק\"מ שלהן.",
-    behind: "הכלורופיל טרם הגיע ל-{0}; מוצג {1}, היום העדכני ביותר שמוצר זה מכסה. ",
+    behind: "הכלורופיל טרם הגיע ל-{0}; מוצג {1} במקומו. ",
     streamNrt: "זמן אמת",
     streamMy: "מעובד מחדש",
     noData: "לא נמצאו נתונים — נדרש data/chl_transect_{0}_<שנה>.csv במאגר או בתיקייה אחת מעל דף זה",
@@ -752,7 +752,11 @@ async function initMap() {
   map.setView(VIEW_CENTRE, map.getZoom() + 1);
 
   lastMy = lastReprocessed();
-  document.getElementById("mapdate").onchange = e => setMapDate(e.target.value);
+  document.getElementById("mapdate").onchange = e => {
+    wantedDate = e.target.value;
+    followLatest = false;
+    setMapDate(e.target.value);
+  };
   document.getElementById("dprev").onclick = () => stepDay(-1);
   document.getElementById("dnext").onclick = () => stepDay(1);
   document.getElementById("dlatest").onclick = () => setMapDate(latestDate());
@@ -1007,6 +1011,10 @@ function clampDate(dateStr) {
 
 function setMapDate(dateStr) {
   if (!dateStr) return;
+  // Clamped here, not at the call sites: a date typed into the box used to walk
+  // straight past the check, ask for tiles the product does not have, and leave
+  // the box reading one day while the map still showed another.
+  dateStr = clampDate(dateStr);
   mapDate = dateStr;
   document.getElementById("mapdate").value = dateStr;
   syncUrl();
@@ -1049,9 +1057,13 @@ function setMapDate(dateStr) {
     ? (t("streamNrt") ?? "near real time") : (t("streamMy") ?? "reprocessed");
   document.getElementById("mapnote").textContent =
     ((wantedDate && wantedDate > dateStr)
+      // Not "the newest day this product covers": the sampler may extend the
+      // record a moment after this is written, and then that claim is false.
+      // Say only what is certainly true - which day was asked for, which is
+      // being shown.
       ? (t("behind", wantedDate, dateStr)
-         ?? `Chlorophyll has not reached ${wantedDate}; showing ${dateStr}, `
-            + `the newest day this product covers. `)
+         ?? `Chlorophyll has not reached ${wantedDate}; showing ${dateStr} `
+            + `instead. `)
       : "")
     + (t("mapnote", dateStr, stream)
     ?? `Chlorophyll-a for ${dateStr}, ${stream} stream, rendered by the Copernicus `
