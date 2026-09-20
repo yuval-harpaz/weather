@@ -411,6 +411,7 @@ const BD_COL = "BET DAGAN";      // its column in temp_max/min_<year>.csv
 const BD_LIVE_URL = "https://ims-observ.yuvharpaz.workers.dev/";
 const BD_LIVE_NAME = "Bet Dagan";
 let BD_TODAY = null;             // {date, max, min, mid, last} or null
+const BD_PROV = new Set();       // days holding a live, unfinished value
 const BD_FIRST = 1998;           // the column is absent from the earlier files
 const BD_MIN_HOURS = 18;         // of 24; fewer and the day's maximum is a guess
 
@@ -707,7 +708,16 @@ async function ensureBD() {
   // different numbers, so comparing counts reports "unchanged" on exactly the
   // switch the reader just asked for. The signature names what BD was built
   // from, which is what actually decides whether a redraw is owed.
-  const sig = `${bdMode}|${want.join(",")}`;
+  // Today is not in the hourly archive until the day is over, so without this
+  // the line would stop a day short of the badge on the map beside it. Kept in
+  // a set as well, so both the badge and the chart can still say it is the day
+  // so far rather than a finished day.
+  BD_PROV.clear();
+  if (BD_TODAY && BD_TODAY[bdMode] !== undefined && !merged.has(BD_TODAY.date)) {
+    merged.set(BD_TODAY.date, BD_TODAY[bdMode]);
+    BD_PROV.add(BD_TODAY.date);
+  }
+  const sig = `${bdMode}|${want.join(",")}|${[...BD_PROV].join(",")}`;
   if (sig !== BD_SIG) changed = true;
   BD_SIG = sig;
   if (merged.size !== BD.size) changed = true;
@@ -1021,7 +1031,8 @@ function draw() {
   // The three days a centred window cannot reach, drawn raw so the series still
   // ends where the record ends rather than three days short.
   function tailTrace(color, year) {
-    const ds = bdTail().filter(d => +d.slice(0, 4) === year);
+    const ds = [...new Set([...bdTail(), ...BD_PROV])]
+      .filter(d => +d.slice(0, 4) === year && BD.has(d)).sort();
     if (!ds.length) return null;
     return {
       x: ds.map(d => XDATES[doyOf(d)]), y: ds.map(d => BD.get(d)),
@@ -1167,6 +1178,8 @@ function draw() {
       + `on screen; days with under ${BD_MIN_HOURS} hourly readings are dropped `
       + `rather than reported from a few hours. Note the axis runs `
       + `${bdCfg().range[0]}–${bdCfg().range[1]} °C here, against 15–33 for the sea.`
+      + (BD_PROV.size ? ` The last point is today so far, read live from the `
+          + `station rather than from the finished daily record.` : "")
       + (smoothAir ? ` Smoothed to a ${BD_HALF * 2 + 1}-day centred mean, `
           + `${BD_HALF} days either side; the last ${BD_HALF} days are dots, `
           + `having no days after them to average with.` : "")
@@ -1192,6 +1205,8 @@ function draw() {
           + `the sea year being read. The axis is opened to `
           + `${bdCfg().range[0]}–${bdCfg().range[1]} °C to hold it, which `
           + `flattens the sea.`
+          + (BD_PROV.size ? ` The last point is today so far, read live from the `
+              + `station rather than from the finished daily record.` : "")
           + (smoothAir ? ` Smoothed to a ${BD_HALF * 2 + 1}-day centred mean, `
               + `${BD_HALF} days either side, so it lags nothing; the last `
               + `${BD_HALF} days are dots, having no days after them to average `
@@ -1463,11 +1478,7 @@ function drawLand(s) {
   const c = C(), date = shownDate();
   // The archive first; today only exists in the live observations, and only as
   // the day so far. Marked with * because it is not the finished day.
-  let v = BD.get(date), live = false;
-  if (v === undefined && BD_TODAY && BD_TODAY.date === date) {
-    v = BD_TODAY[bdMode];
-    live = v !== undefined;
-  }
+  const v = BD.get(date), live = BD_PROV.has(date);
   if (pins[s.name]) { map.removeLayer(pins[s.name]); delete pins[s.name]; }
   const sel = s.name === station;
   const has = v !== undefined;
@@ -1550,6 +1561,15 @@ function ensureStream(stream) {
 let drawnStream = null;
 
 async function setMapDate(date) {
+  // Clamped here so every caller obeys one rule. A date typed into the box used
+  // to go straight through, ask for a field outside the record, and leave the
+  // box reading one day while the map showed another. The ceiling is walkEnd(),
+  // which is the buoy's last day when it runs ahead of the analysis.
+  if (date) {
+    const cap = walkEnd(), floor = SOURCES.rep.first;
+    if (cap && date > cap) date = cap;
+    if (floor && date < floor) date = floor;
+  }
   mapDate = (date && date !== latestDate()) ? date : null;
   const stream = activeSource(shownDate());
   await loadSeries(stream, station);
@@ -1896,7 +1916,7 @@ async function main() {
   // allSettled, not all: these are two unrelated services, and a network
   // failure at one must not stop the other's result from being painted.
   await Promise.allSettled([topUp(), topUpBuoy(),
-    loadBDToday().then(() => drawPins())]);
+    loadBDToday().then(async () => { await ensureBD(); drawPins(); draw(); })]);
   if (LIVE.length || BUOY_FRESH.size) { refreshField(); draw(); }
 
   // The other stations, in the background. Until they land the pins can only

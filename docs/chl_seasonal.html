@@ -1006,7 +1006,19 @@ function stepDay(n) {
 // finds a day newer than the archive, so this moves with it.
 function clampDate(dateStr) {
   const cap = latestDate();
-  return (cap && dateStr > cap) ? cap : dateStr;
+  if (cap && dateStr > cap) return cap;
+  // And a floor. Without one, a date typed below the record asked for tiles the
+  // archive has not got either, and left the box and the map disagreeing at the
+  // other end.
+  const floor = earliestDate();
+  if (floor && dateStr < floor) return floor;
+  return dateStr;
+}
+
+function earliestDate() {
+  let best = null;
+  for (const r of ROWS) if (!best || r.date < best) best = r.date;
+  return best;
 }
 
 function setMapDate(dateStr) {
