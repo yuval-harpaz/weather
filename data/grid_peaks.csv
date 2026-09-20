@@ -872,7 +872,7 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2024-05-20,13:58,11413.0,15817.0,4404.0,38.59,2645.0,1888.0,3722.0,0.0,False,False,,False,False,0,,,,,
 2024-05-21,14:42,11011.0,15073.0,4062.0,36.89,2243.0,633.0,3800.0,0.0,False,False,,False,False,0,,,,,
 2024-05-22,16:23,11485.0,15100.0,3615.0,31.48,2717.0,1107.0,2958.0,113.0,False,False,,False,False,0,,,,,
-2024-05-23,15:13,12173.0,15275.0,3102.0,25.48,3405.0,1795.0,3314.0,0.0,False,True,peak spike,False,False,1,BET DAGAN,max,34.2,0.1392,"peak spike of 12,173 MW, standing 3,405 MW above the days around it — Bet Dagan 34.2 °C, hotter than 86% of summer days; not an extreme day"
+2024-05-23,15:13,12173.0,15275.0,3102.0,25.48,3405.0,1795.0,3314.0,0.0,False,True,peak spike,False,False,1,BET DAGAN,max,34.2,0.1393,"peak spike of 12,173 MW, standing 3,405 MW above the days around it — Bet Dagan 34.2 °C, hotter than 86% of summer days; not an extreme day"
 2024-05-24,12:49,9525.0,15969.0,6444.0,67.65,757.0,-853.0,4198.0,0.0,False,False,,False,False,0,,,,,
 2024-05-25,16:29,8768.0,14967.0,6199.0,70.7,-175.0,-1610.0,3060.0,0.0,False,False,,False,False,0,,,,,
 2024-05-26,14:54,10428.0,16324.0,5896.0,56.54,1485.0,0.0,3527.0,0.0,False,False,,False,False,0,,,,,
@@ -890,7 +890,7 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2024-06-07,17:00,12716.0,15601.0,2885.0,22.69,1294.0,-18.0,2660.0,250.0,False,False,,False,False,0,,,,,
 2024-06-08,16:40,12131.0,15543.0,3412.0,28.13,709.0,-635.0,2864.0,253.0,False,False,,False,False,0,,,,,
 2024-06-09,14:43,12803.0,16381.0,3578.0,27.95,1123.0,14.0,3848.0,0.0,False,False,,False,False,0,,,,,
-2024-06-10,15:30,12734.0,16145.0,3411.0,26.79,603.0,-55.0,3661.0,0.0,True,False,demand response,False,False,1,JERUSALEM CENTRE,max,29.4,0.6252,"demand response — Jerusalem Centre 29.4 °C, hotter than 37% of summer days; not an extreme day"
+2024-06-10,15:30,12734.0,16145.0,3411.0,26.79,603.0,-55.0,3661.0,0.0,True,False,demand response,False,False,1,JERUSALEM CENTRE,max,29.4,0.626,"demand response — Jerusalem Centre 29.4 °C, hotter than 37% of summer days; not an extreme day"
 2024-06-11,15:15,12284.0,16362.0,4079.0,33.21,153.0,-505.0,3750.0,87.0,False,False,,False,False,0,,,,,
 2024-06-12,16:58,11422.0,15184.0,3762.0,32.94,-1081.0,-1367.0,2632.0,228.0,False,False,,False,False,0,,,,,
 2024-06-13,16:38,14305.0,15976.0,1671.0,11.68,1802.0,1502.0,2781.0,241.0,False,False,,False,False,0,,,,,
@@ -1240,7 +1240,7 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2025-05-23,15:24,9564.0,16709.0,7145.0,74.71,206.0,-904.0,4387.0,0.0,False,False,,False,False,0,,,,,
 2025-05-24,15:47,9358.0,15731.0,6373.0,68.1,-345.0,-1110.0,3999.0,0.0,False,False,,False,False,0,,,,,
 2025-05-25,14:58,11534.0,17018.0,5484.0,47.55,1831.0,1066.0,4245.0,0.0,False,False,,False,False,0,,,,,
-2025-05-26,13:46,12698.0,16586.0,3888.0,30.62,3340.0,2239.0,3964.0,0.0,False,True,peak spike,True,False,1,BET DAGAN,max,37.2,0.0201,"peak spike of 12,698 MW, standing 3,340 MW above the days around it — Bet Dagan 37.2 °C, hotter than 98% of summer days"
+2025-05-26,13:46,12698.0,16586.0,3888.0,30.62,3340.0,2239.0,3964.0,0.0,False,True,peak spike,True,False,1,BET DAGAN,max,37.2,0.0199,"peak spike of 12,698 MW, standing 3,340 MW above the days around it — Bet Dagan 37.2 °C, hotter than 98% of summer days"
 2025-05-27,13:50,11165.0,17378.0,6213.0,55.65,1807.0,706.0,4529.0,0.0,False,False,,False,False,0,,,,,
 2025-05-28,15:24,10585.0,15931.0,5347.0,50.51,1227.0,31.0,4335.0,0.0,False,False,,False,False,0,,,,,
 2025-05-29,15:09,10459.0,17662.0,7203.0,68.87,1101.0,-126.0,4388.0,0.0,False,False,,False,False,0,,,,,
@@ -1320,7 +1320,7 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2025-08-11,14:56,15954.0,19422.0,3468.0,21.74,2355.0,1646.0,3597.0,381.0,False,False,,False,False,0,,,,,
 2025-08-12,15:06,16906.0,19438.0,2532.0,14.98,3307.0,2598.0,3673.0,418.0,False,True,,False,True,3,JERUSALEM CENTRE,max,41.3,0.0027,"peak spike of 16,906 MW, standing 3,307 MW above the days around it — Jerusalem Centre 41.3 °C, hotter than 100% of summer days"
 2025-08-13,15:26,17270.0,19298.0,2028.0,11.74,3265.0,2962.0,3672.0,510.0,True,True,"demand response, peak spike",True,False,3,JERUSALEM CENTRE,max,40.8,0.004,"demand response, peak spike of 17,270 MW, standing 3,265 MW above the days around it — Jerusalem Centre 40.8 °C, hotter than 100% of summer days · the highest peak of 3 consecutive flagged days, 2025-08-12 to 2025-08-14"
-2025-08-14,15:05,17049.0,19383.0,2333.0,13.68,3044.0,2661.0,4052.0,503.0,True,True,,False,True,3,JERUSALEM CENTRE,max,39.7,0.0067,"demand response, peak spike of 17,049 MW, standing 3,044 MW above the days around it — Jerusalem Centre 39.7 °C, hotter than 99% of summer days"
+2025-08-14,15:05,17049.0,19383.0,2333.0,13.68,3044.0,2661.0,4052.0,503.0,True,True,,False,True,3,JERUSALEM CENTRE,max,39.7,0.0066,"demand response, peak spike of 17,049 MW, standing 3,044 MW above the days around it — Jerusalem Centre 39.7 °C, hotter than 99% of summer days"
 2025-08-15,12:56,15047.0,19840.0,4793.0,31.85,1042.0,659.0,4585.0,0.0,False,False,,False,False,0,,,,,
 2025-08-16,14:30,13566.0,18670.0,5104.0,37.62,-439.0,-822.0,4537.0,0.0,False,False,,False,False,0,,,,,
 2025-08-17,15:39,14388.0,18344.0,3956.0,27.5,822.0,-344.0,4136.0,563.0,False,False,,False,False,0,,,,,
@@ -1621,8 +1621,8 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2026-06-08,14:09,11734.0,17760.0,6026.0,51.36,1383.0,153.0,4934.0,0.0,False,False,,False,False,0,,,,,
 2026-06-09,15:28,12288.0,17619.0,5331.0,43.38,1937.0,554.0,4516.0,0.0,False,False,,False,False,0,,,,,
 2026-06-10,15:08,12470.0,18309.0,5839.0,46.82,2119.0,408.0,4817.0,0.0,False,False,,False,False,0,,,,,
-2026-06-11,20:04,13778.0,18234.0,4455.0,32.33,3427.0,1571.0,3974.0,828.0,False,True,,False,True,2,JERUSALEM CENTRE,max,29.7,0.5904,"peak spike of 13,778 MW, standing 3,427 MW above the days around it — Jerusalem Centre 29.7 °C, hotter than 41% of summer days; not an extreme day"
-2026-06-12,20:04,15629.0,19968.0,4339.0,27.76,5278.0,3422.0,6039.0,690.0,False,True,peak spike,False,False,2,JERUSALEM CENTRE,max,28.4,0.7282,"peak spike of 15,629 MW, standing 5,278 MW above the days around it — Jerusalem Centre 28.4 °C, hotter than 27% of summer days; not an extreme day · the highest peak of 2 consecutive flagged days, 2026-06-11 to 2026-06-12"
+2026-06-11,20:04,13778.0,18234.0,4455.0,32.33,3427.0,1571.0,3974.0,828.0,False,True,,False,True,2,JERUSALEM CENTRE,max,29.7,0.5915,"peak spike of 13,778 MW, standing 3,427 MW above the days around it — Jerusalem Centre 29.7 °C, hotter than 41% of summer days; not an extreme day"
+2026-06-12,20:04,15629.0,19968.0,4339.0,27.76,5278.0,3422.0,6039.0,690.0,False,True,peak spike,False,False,2,JERUSALEM CENTRE,max,28.4,0.7281,"peak spike of 15,629 MW, standing 5,278 MW above the days around it — Jerusalem Centre 28.4 °C, hotter than 27% of summer days; not an extreme day · the highest peak of 2 consecutive flagged days, 2026-06-11 to 2026-06-12"
 2026-06-13,15:33,10351.0,16340.0,5989.0,57.86,-480.0,-1856.0,4667.0,0.0,False,False,,False,False,0,,,,,
 2026-06-14,15:29,12207.0,18077.0,5870.0,48.09,1376.0,-81.0,4651.0,0.0,False,False,,False,False,0,,,,,
 2026-06-15,15:09,12062.0,17879.0,5817.0,48.23,1231.0,-245.0,4646.0,0.0,False,False,,False,False,0,,,,,
@@ -1665,10 +1665,41 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2026-07-22,15:28,15433.0,18677.0,3244.0,21.02,2705.0,1017.0,4467.0,584.0,False,False,,False,False,0,,,,,
 2026-07-23,14:43,15717.0,18761.0,3044.0,19.37,2989.0,1301.0,4860.0,0.0,False,False,,False,False,0,,,,,
 2026-07-24,14:12,14068.0,19647.0,5579.0,39.66,1340.0,-561.0,5035.0,0.0,False,False,,False,False,0,,,,,
-2026-07-25,16:26,12508.0,18162.0,5654.0,45.2,-1503.0,-2204.0,3660.0,576.0,False,False,,False,False,0,,,,,
-2026-07-26,13:21,14011.0,19037.0,5026.0,35.87,-252.0,-784.0,4820.0,0.0,False,False,,False,False,0,,,,,
-2026-07-27,15:32,14263.0,19201.0,4938.0,34.62,-24.0,-492.0,4589.0,536.0,False,False,,False,False,0,,,,,
-2026-07-28,15:18,14287.0,18988.0,4701.0,32.9,-342.0,-342.0,4829.0,422.0,False,False,,False,False,0,,,,,
-2026-07-29,15:03,14882.0,18990.0,4108.0,27.6,253.0,424.0,4709.0,687.0,False,False,,False,False,0,,,,,
-2026-07-30,15:59,15259.0,18805.0,3546.0,23.24,630.0,972.0,4209.0,635.0,False,False,,False,False,0,,,,,
-2026-07-31,14:11,14629.0,19044.0,4416.0,30.19,,354.0,4895.0,0.0,False,False,,False,False,0,,,,,
+2026-07-25,16:26,12508.0,18162.0,5654.0,45.2,-1224.0,-2121.0,3660.0,576.0,False,False,,False,False,0,,,,,
+2026-07-26,13:21,14011.0,19037.0,5026.0,35.87,279.0,-784.0,4820.0,0.0,False,False,,False,False,0,,,,,
+2026-07-27,15:32,14263.0,19201.0,4938.0,34.62,531.0,-619.0,4589.0,536.0,False,False,,False,False,0,,,,,
+2026-07-28,15:18,14287.0,18988.0,4701.0,32.9,555.0,-595.0,4829.0,422.0,False,False,,False,False,0,,,,,
+2026-07-29,15:03,14882.0,18990.0,4108.0,27.6,1150.0,0.0,4709.0,687.0,False,False,,False,False,0,,,,,
+2026-07-30,15:59,15259.0,18805.0,3546.0,23.24,1527.0,377.0,4209.0,635.0,False,False,,False,False,0,,,,,
+2026-07-31,14:11,14629.0,19044.0,4416.0,30.19,897.0,0.0,4895.0,0.0,False,False,,False,False,0,,,,,
+2026-08-01,16:52,13732.0,17957.0,4225.0,30.77,585.0,-897.0,3356.0,721.0,False,False,,False,False,0,,,,,
+2026-08-02,14:43,15842.0,19782.0,3939.0,24.86,2110.0,960.0,4799.0,226.0,False,False,,False,False,0,,,,,
+2026-08-03,13:25,15180.0,19207.0,4027.0,26.53,1448.0,207.0,5018.0,0.0,False,False,,False,False,0,,,,,
+2026-08-04,15:49,15180.0,18655.0,3476.0,22.9,1448.0,55.0,4168.0,422.0,False,False,,False,False,0,,,,,
+2026-08-05,15:38,15125.0,18834.0,3709.0,24.52,1393.0,-55.0,4288.0,418.0,False,False,,False,False,0,,,,,
+2026-08-06,15:08,14973.0,18551.0,3578.0,23.9,1241.0,-207.0,4759.0,367.0,False,False,,False,False,0,,,,,
+2026-08-07,14:42,13736.0,18905.0,5169.0,37.63,4.0,-1444.0,4828.0,155.0,False,False,,False,False,0,,,,,
+2026-08-08,13:48,13147.0,18989.0,5842.0,44.44,-585.0,-2033.0,4906.0,0.0,False,False,,False,False,0,,,,,
+2026-08-09,14:23,15747.0,19458.0,3712.0,23.57,2065.0,567.0,4950.0,0.0,False,False,,False,False,0,,,,,
+2026-08-10,15:28,15422.0,18905.0,3483.0,22.58,1740.0,242.0,4461.0,137.0,False,False,,False,False,0,,,,,
+2026-08-11,14:57,15333.0,19200.0,3867.0,25.22,1651.0,208.0,4690.0,419.0,False,False,,False,False,0,,,,,
+2026-08-12,15:23,15450.0,19026.0,3576.0,23.15,1768.0,477.0,4498.0,366.0,False,False,,False,False,0,,,,,
+2026-08-13,15:44,15680.0,18689.0,3009.0,19.19,1998.0,845.0,4179.0,676.0,False,False,,False,False,0,,,,,
+2026-08-14,14:13,14489.0,19250.0,4761.0,32.86,807.0,-56.0,4763.0,0.0,False,False,,False,False,0,,,,,
+2026-08-15,14:25,13682.0,19196.0,5513.0,40.29,215.0,-863.0,4571.0,0.0,False,False,,False,False,0,,,,,
+2026-08-16,14:49,15253.0,19128.0,3875.0,25.4,1571.0,418.0,4475.0,530.0,False,False,,False,False,0,,,,,
+2026-08-17,13:23,14545.0,19011.0,4465.0,30.7,863.0,-290.0,4662.0,0.0,False,False,,False,False,0,,,,,
+2026-08-18,15:15,14301.0,18812.0,4511.0,31.54,619.0,-483.0,4538.0,285.0,False,False,,False,False,0,,,,,
+2026-08-19,15:13,14392.0,19097.0,4705.0,32.69,710.0,-392.0,4536.0,457.0,False,False,,False,False,0,,,,,
+2026-08-20,16:23,14835.0,18604.0,3769.0,25.41,1153.0,51.0,3488.0,655.0,False,False,,False,False,0,,,,,
+2026-08-21,16:39,14389.0,17815.0,3425.0,23.8,707.0,-156.0,3151.0,675.0,False,False,,False,False,0,,,,,
+2026-08-22,13:41,13467.0,19454.0,5987.0,44.46,-215.0,-1078.0,4797.0,0.0,False,False,,False,False,0,,,,,
+2026-08-23,15:21,15023.0,19339.0,4316.0,28.73,1556.0,478.0,4419.0,461.0,False,False,,False,False,0,,,,,
+2026-08-24,15:24,14887.0,19490.0,4603.0,30.92,1420.0,495.0,4397.0,491.0,False,False,,False,False,0,,,,,
+2026-08-25,16:20,14784.0,18755.0,3971.0,26.86,1317.0,394.0,3747.0,624.0,False,False,,False,False,0,,,,,
+2026-08-26,15:38,15465.0,18622.0,3158.0,20.42,1998.0,1073.0,4281.0,620.0,False,False,,False,False,0,,,,,
+2026-08-27,15:28,15444.0,19063.0,3619.0,23.43,1977.0,858.0,4239.0,638.0,False,False,,False,False,0,,,,,
+2026-08-28,13:43,14251.0,19743.0,5492.0,38.54,784.0,-138.0,4896.0,0.0,False,False,,False,False,0,,,,,
+2026-08-29,13:12,13154.0,19141.0,5987.0,45.51,-885.0,-1364.0,4817.0,0.0,False,False,,False,False,0,,,,,
+2026-08-30,15:31,14039.0,19252.0,5213.0,37.13,-62.0,-745.0,4163.0,347.0,False,False,,False,False,0,,,,,
+2026-08-31,14:37,14101.0,19097.0,4996.0,35.43,,-416.0,4062.0,373.0,False,False,,False,False,0,,,,,
