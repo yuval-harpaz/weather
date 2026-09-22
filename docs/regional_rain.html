@@ -221,6 +221,13 @@
         ]
       };
 
+      // x is months since 1 September at each month's end, so a month's tick
+      // sits where its total is complete; -1 is 1 September, where every
+      // winter starts from zero.
+      const X13 = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+      const MID12 = X13.slice(1).map(x => x - 0.5);   // mid-month, for labels
+      const START_LABEL = `${monthNames[monthOrder[0]]} 1`;
+
       // Helper to get cumulative rain for a specific winter/region
       // Returns array of length 12 (or partial for current) aligned with monthOrder
       function getWinterData(region, winter) {
@@ -303,11 +310,18 @@
           }
         }
 
+        // Every winter starts from zero on 1 September. Early in September this
+        // is also what makes the current line visible at all: on its own it is a
+        // single point, and a one-point line draws nothing.
+        currX.unshift(-1);
+        currY.unshift(0);
+        currText.unshift(START_LABEL);
+
         // ADD TRACES
         // Max (invisible line for fill)
         traces.push({
-          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-          y: maxLine,
+          x: X13,
+          y: [0, ...maxLine],
           mode: 'lines',
           line: { width: 0 },
           showlegend: false,
@@ -318,8 +332,8 @@
 
         // Min (filled to max) - "Range 10 years"
         traces.push({
-          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-          y: minLine,
+          x: X13,
+          y: [0, ...minLine],
           name: `טווח ${histCount} שנים`,
           mode: 'lines',
           line: { width: 0 },
@@ -332,8 +346,8 @@
 
         // Median
         traces.push({
-          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-          y: medLine,
+          x: X13,
+          y: [0, ...medLine],
           name: `חציון ${histCount} שנים`,
           mode: 'lines',
           line: { color: 'gray', dash: 'dash' },
@@ -359,9 +373,9 @@
         // Previous winter (cyan) - hidden until the "חורף קודם" button is pressed
         prevTraceIdx.push(traces.length);
         traces.push({
-          x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-          y: new Array(12).fill(null),
-          text: monthOrder.map(m => monthNames[m]),
+          x: X13,
+          y: new Array(13).fill(null),
+          text: [START_LABEL, ...monthOrder.map(m => monthNames[m])],
           hovertemplate: '%{text}<br>%{y:.1f} mm<extra></extra>',
           name: '',
           mode: 'lines',
@@ -389,8 +403,17 @@
 
         // Axis titles and ticks
         layout[xaxisKey] = {
-          tickvals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+          // Month names sit in the middle of their month and the gridlines on the
+          // boundaries, so the point that closes September (x = 0) is on the line
+          // to the right of the label "Sep", not on the label itself.
+          tickvals: MID12,
           ticktext: monthOrder.map(m => monthNames[m]),
+          ticks: '', showgrid: false,
+          minor: { tickvals: X13, showgrid: true, gridcolor: '#eee', ticks: '' },
+          // From 1 September, so the whole of the first month is on the chart.
+          // No zero line: x = 0 is the end of September, and a line there looks
+          // like the y axis with the first weeks of the winter left of it.
+          range: [-1, 11], zeroline: false,
           // domain is handled by grid
         };
         layout[yaxisKey] = {
@@ -473,12 +496,12 @@
             visible: false,
             showlegend: false,
             name: '',
-            y: prevTraceIdx.map(() => new Array(12).fill(null))
+            y: prevTraceIdx.map(() => new Array(13).fill(null))
           }, prevTraceIdx);
         } else {
           const ys = regions.map(region => {
             let sum = 0;
-            return getWinterData(region, shown).map(v => sum += v);
+            return [0, ...getWinterData(region, shown).map(v => sum += v)];
           });
           Plotly.restyle('plot', {
             visible: true,

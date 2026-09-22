@@ -226,10 +226,9 @@
                 if (idx===currRaw.length-1 && d.Month===currMonth) lbl += ` ${currDay}`;
                 cT.push(lbl);
             });
-            if (currRaw.length>0 && currRaw[currRaw.length-1].Month===currMonth)
-                cX[cX.length-1] = cX[cX.length-1] - 1 + monthFraction;
+            // The month in progress stays on its own label, like every other month.
             traces.push({ x:cX, y:cY, text:cT, hovertemplate:'%{text}<br>%{y:.1f} °C<extra></extra>',
-                name:currentCycle, mode:'lines', line:{color:'blue',width:3}, showlegend:i===0, xaxis:xK, yaxis:yK });
+                name:currentCycle, mode: cY.length===1 ? 'markers' : 'lines', marker:{color:'blue',size:8}, line:{color:'blue',width:3}, showlegend:i===0, xaxis:xK, yaxis:yK });
 
             // Previous year (cyan), shown once "שנה קודמת" has been pressed
             if (prevOffset > 0) {
@@ -242,7 +241,10 @@
             }
 
             const xAx = `xaxis${i===0?'':i+1}`, yAx = `yaxis${i===0?'':i+1}`;
-            layout[xAx] = { tickvals:xs, ticktext:monthOrder.map(m=>monthNames[m]) };
+            layout[xAx] = { tickvals:xs, ticktext:monthOrder.map(m=>monthNames[m]),
+                ticks:'', showgrid:false, zeroline:false, range:[-0.5, 11.5],
+                // each value belongs to its whole month: on the name, gridlines on the boundaries
+                minor:{ tickvals:xs.map(x=>x-0.5).concat(11.5), showgrid:true, gridcolor:'#eee', ticks:'' } };
             layout[yAx] = layout[yAx] || {};
             if (i%cols===0) layout[yAx].title = 'טמפרטורה (C°)';
             const si = i===0 ? '' : String(i+1);

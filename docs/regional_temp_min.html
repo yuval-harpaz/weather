@@ -282,15 +282,8 @@
                     currText.push(label);
                 });
 
-                // Pull a partial (ongoing) month back towards the previous month, but only
-                // when there IS a previous month - otherwise the single point lands before
-                // the first tick and falls off the left edge of the plot.
-                if (currX.length > 1) {
-                    const lastRec = currRaw[currRaw.length - 1];
-                    if (lastRec.Month === currMonth) {
-                        currX[currX.length - 1] = currX[currX.length - 1] - 1 + monthFraction;
-                    }
-                }
+                // The month in progress stays on its own label, like every other
+                // month: its value is that month's so far, and the hover says to when.
 
                 // ADD TRACES
                 // Max
@@ -372,6 +365,11 @@
                 layout[xaxisKey] = {
                     tickvals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
                     ticktext: monthOrder.map(m => monthNames[m]),
+                    ticks: '', showgrid: false, zeroline: false, range: [-0.5, 11.5],
+                    // Each value belongs to its whole month, so it sits on the
+                    // month's name and the gridlines mark the boundaries.
+                    minor: { tickvals: [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5],
+                             showgrid: true, gridcolor: '#eee', ticks: '' },
                 };
 
                 if (!layout[yaxisKey]) layout[yaxisKey] = {};
