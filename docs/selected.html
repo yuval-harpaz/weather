@@ -29,7 +29,12 @@
         label { font-weight:bold; margin-bottom:3px; color:#333; font-size:0.9em; }
         #main { display:flex; flex:1; min-height:0; }
         #map-col { width:33.33%; flex-shrink:0; position:relative; }
-        #map { position:absolute; inset:0; }
+        /* Leaflet positions tooltips by measuring from the left, and under the
+           page's dir="rtl" the measurement runs from the wrong side, which threw
+           the tooltip far to the left. The map itself is laid out left to right;
+           only the text inside the tooltip is Hebrew. */
+        #map { position:absolute; inset:0; direction:ltr; }
+        #map .leaflet-tooltip { direction:rtl; }
         #charts-col { flex:1; display:flex; flex-direction:column; min-height:0; padding:8px; gap:8px; overflow-y:auto; }
         .chart-box { flex:0 0 auto; height:380px; background:white; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
         .hourly-nav {
@@ -289,6 +294,13 @@
         return false;
     }
 
+    // Hebrew name, and which of a station's two rain gauges: the 1-minute gauge
+    // stands beside the 10-minute one and shares its name.
+    function stationLabel(name) {
+        const heb = getHebrewName(name);
+        return /_1m\b|_1m_/.test(name) ? `${heb} (מד 1 דקה)` : heb;
+    }
+
     function markerStyle(stationName, selected) {
         if (selected) {
             return { color:'#b71c1c', fillColor:'#ef5350', weight:2.5, opacity:1, fillOpacity:0.9 };
@@ -315,11 +327,7 @@
             const marker = L.circleMarker([coords.lat, coords.lon], {
                 radius: 7, ...markerStyle(name, false)
             }).addTo(map);
-            const hebrewName = (window.stationTranslations && window.stationTranslations[name]) || name;
-            // direction:'left' avoids Leaflet's translateX(-50%) centering transform used by
-            // 'top'/'auto', which gets mirrored incorrectly under dir="rtl" ancestors and makes
-            // the tooltip render far to the left. See forecast.html for the same workaround.
-            marker.bindTooltip(`${hebrewName} (${name})`, { direction: 'left', offset: [-12, 0] });
+            marker.bindTooltip(stationLabel(name), { direction: 'top', offset: [0, -8] });
             marker.on('click', () => selectStation(name));
             stationMarkers[name] = { marker };
         });
@@ -458,7 +466,7 @@
 
         document.getElementById('btnLast30').addEventListener('click', () => {
             hourlyMode = 'last30'; hourlyYear = DEFAULT_YEAR;
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
 
         document.getElementById('btnPrevMonth').addEventListener('click', () => {
@@ -468,20 +476,20 @@
             hourlyMode = 'month';
             hourlyMonth--;
             if (hourlyMonth < 1) { hourlyMonth = 12; hourlyYear--; }
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
 
         document.getElementById('btnNextMonth').addEventListener('click', () => {
             if (hourlyMode === 'last30') return;
             hourlyMonth++;
             if (hourlyMonth > 12) { hourlyMonth = 1; hourlyYear++; }
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
 
         document.getElementById('hourlyYearSelect').addEventListener('change', function () {
             hourlyYear = +this.value;
             if (hourlyMode === 'last30') { hourlyMode = 'month'; hourlyMonth = NOW.getMonth()+1; }
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
     });
 
@@ -493,12 +501,30 @@
     }
 
     function updatePlot() {
+        drawMonthly();
+        updateHourlyPlot();
+    }
+
+    // The season a given month belongs to, in the Cycle naming of station_monthly.csv:
+    // winters start in September, the max-temperature season in March, the mean is
+    // by calendar year.
+    function cycleOf(year, month) {
+        if (currentMeasure === 'MeanTemp') return String(year);
+        const start = currentMeasure === 'MaxTemp' ? 3 : 9;
+        const y0 = month >= start ? year : year - 1;
+        return `${y0}-${y0 + 1}`;
+    }
+
+    // The season of the month the hourly chart is on, when it is showing one.
+    function hourlyCycle() {
+        return hourlyMode === 'month' ? cycleOf(hourlyYear, hourlyMonth) : null;
+    }
+
+    function drawMonthly() {
         if (!allData.length || !currentStations.length) {
             Plotly.newPlot('plot', [], emptyLayout('בחר תחנה על המפה'), { responsive:true });
-            updateHourlyPlot();
             return;
         }
-        updateHourlyPlot();
 
         let monthOrder;
         if (currentMeasure === 'Rain' || currentMeasure === 'MinTemp') {
@@ -518,7 +544,6 @@
         // If no monthly data for this station/measure, show empty plot
         if (!primaryData.length) {
             Plotly.newPlot('plot', [], emptyLayout('אין נתונים חודשיים לתחנה זו'), { responsive:true });
-            updateHourlyPlot();
             return;
         }
 
@@ -573,9 +598,15 @@
         const daysInMonth   = new Date(NOW.getFullYear(), currMonthReal, 0).getDate();
         const monthFraction = currDayReal / daysInMonth;
 
-        currentStations.forEach((station, si) => {
+        // A month from an earlier season chosen for the hourly chart brings that
+        // season's line in beside the current one, so the month can be read in
+        // its own winter.
+        const pastCycle = hourlyCycle();
+        const shownCycles = pastCycle && pastCycle < currCycle ? [currCycle, pastCycle] : [currCycle];
+
+        currentStations.forEach((station, si) => shownCycles.forEach(stCycle => {
+            const isCurr   = stCycle === currCycle;
             const stData   = allData.filter(d => d.Measure === currentMeasure && d.Station === station);
-            const stCycle  = currCycle;
             const currRaw  = stData.filter(d=>d.Cycle===stCycle)
                 .sort((a,b)=>monthOrder.indexOf(a.Month)-monthOrder.indexOf(b.Month));
 
@@ -588,7 +619,7 @@
                     const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
                     sum += d.Value;
                     let xVal=mIdx, hover=monthNames[d.Month];
-                    if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
+                    if (isCurr && idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
                     currX.push(xVal); currY.push(sum); currText.push(hover);
                 });
                 if (currX.length) {
@@ -601,19 +632,25 @@
                 currRaw.forEach((d,idx)=>{
                     const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
                     let hover=monthNames[d.Month];
-                    if (idx===currRaw.length-1 && d.Month===currMonthReal) hover=`${monthNames[d.Month]} ${currDayReal}`;
+                    if (isCurr && idx===currRaw.length-1 && d.Month===currMonthReal) hover=`${monthNames[d.Month]} ${currDayReal}`;
                     currX.push(mIdx); currY.push(d.Value); currText.push(hover);
                 });
             }
 
-            const lbl = window.stationTranslations?.[station] || station;
+            const lbl = isCurr ? stationLabel(station) : `${stationLabel(station)} ${stCycle}`;
+            // The chosen month is ringed on the past season's line.
+            const hi = isCurr ? -1 : currX.findIndex((x, k) =>
+                k > 0 || !isCumulative ? Math.round(x) === monthOrder.indexOf(hourlyMonth) : false);
             traces.push({
                 x:currX, y:currY, mode:'lines+markers',
-                line:{ color:STATION_COLORS[si % STATION_COLORS.length], width:3 },
-                name: lbl, text:currText,
+                line:{ color:STATION_COLORS[si % STATION_COLORS.length], width: isCurr ? 3 : 2,
+                       dash: isCurr ? 'solid' : 'dot' },
+                marker:{ size: currX.map((_, k) => k === hi ? 12 : 6),
+                         line:{ width: currX.map((_, k) => k === hi ? 2 : 0), color:'#333' } },
+                name: lbl, text:currText, meta: stCycle,
                 hovertemplate: '%{text}<br>%{y:.1f}<extra>'+lbl+'</extra>'
             });
-        });
+        }));
 
         const cycleName = currentMeasure==='MeanTemp' ? 'שנת'
             : currentMeasure==='MaxTemp' ? 'עונה (מרץ-פברואר)' : 'חורף';
@@ -622,8 +659,10 @@
             currentMeasure==='MaxTemp' ? 'טמפרטורת מקסימום' : 'טמפרטורה ממוצעת';
 
         Plotly.newPlot('plot', traces, {
-            // Name the season being drawn - the chart only ever shows the latest one.
-            title: { text:`נתוני ${measureTitle}, ${cycleName} ${currCycle}`, x:0.95, xanchor:'right' },
+            // Name the seasons being drawn: always the latest, and the one the hourly
+            // chart's month belongs to when that is an earlier one.
+            title: { text:`נתוני ${measureTitle}, ${cycleName} ${currCycle}`
+                       + (shownCycles.length > 1 ? ` ו-${shownCycles[1]}` : ''), x:0.95, xanchor:'right' },
             xaxis: isCumulative
                 ? { tickvals:xVals.map(x => x - 0.5), ticktext:xLabels, title:'חודש',
                     ticks:'', showgrid:false, range:[-1, 11], zeroline:false,
@@ -638,7 +677,13 @@
             dir: 'rtl'
         }, { responsive:true });
 
-        document.getElementById('plot').on('plotly_click', (data) => {
+        // Redrawn on every hourly step, so the old listener goes first or clicks
+        // would fire once per redraw. With the shared hover a click reports every
+        // line at that month, so it cannot tell the seasons apart; it opens the
+        // month as seen from the current season, as it always has.
+        const plotEl = document.getElementById('plot');
+        plotEl.removeAllListeners && plotEl.removeAllListeners('plotly_click');
+        plotEl.on('plotly_click', (data) => {
             if (!data.points.length) return;
             const xIdx = Math.round(data.points[0].x);
             if (xIdx < 0 || xIdx >= monthOrder.length) return;
@@ -650,7 +695,7 @@
                 yr = NOW.getFullYear()-1;
             }
             hourlyMode = 'month'; hourlyYear = yr; hourlyMonth = clickedMonth;
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
     }
 
@@ -707,7 +752,7 @@
                     });
                 });
                 const pts=[...dtMap.values()].filter(p=>p.min!==null&&p.max!==null).sort((a,b)=>a.dt-b.dt);
-                const lbl = window.stationTranslations?.[station]||station;
+                const lbl = stationLabel(station);
                 return { x:pts.map(p=>p.dt), y:pts.map(p=>(p.min+p.max)/2),
                     type:'scatter', mode:'lines', line:{color:STATION_COLORS[si%STATION_COLORS.length]}, name:lbl };
             });
@@ -736,11 +781,15 @@
                 val:  (d[station]!==undefined && d[station]!=='') ? +d[station] : null
             })).filter(d => d.date && d.val!==null && !isNaN(d.val) && d.date>=startDate && d.date<=endDate);
             pts.sort((a,b)=>a.date-b.date);
-            const lbl = window.stationTranslations?.[station]||station;
+            const lbl = stationLabel(station);
             const color = STATION_COLORS[si%STATION_COLORS.length];
             return {
                 x: pts.map(d=>d.date), y: pts.map(d=>d.val),
                 type: currentMeasure==='Rain' ? 'bar' : 'scatter', mode:'lines',
+                // One hour wide, always. Left to itself Plotly sizes bars by the
+                // closest two points, so a month with two rainy hours a fortnight
+                // apart gets two bars a fortnight wide.
+                width: currentMeasure==='Rain' ? 3600 * 1000 : undefined,
                 marker:{color}, line:{color}, name: lbl,
                 _pointCount: pts.length
             };
