@@ -621,6 +621,11 @@ const LAYER_NRT = "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
   + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CHL";
 const POINTS_URL =
   "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/code/chl_points.json";
+// In Hebrew the basemap is the Survey of Israel's GovMap, which labels places in
+// Hebrew; it has no dark variant, so it is the same in both themes.
+const GOVMAP = "https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png";
+const GOVMAP_CREDIT = '<a href="https://www.govmap.gov.il/" target="_blank" '
+  + 'rel="noopener">&copy; המרכז למיפוי ישראל</a>';
 // Esri's grey canvas labels places in English, which OSM-derived basemaps do
 // not do in Egypt.
 const BASEMAP = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/"
@@ -783,6 +788,7 @@ async function initMap() {
     lang = lang === "he" ? "en" : "he";
     localStorage.setItem(LANG_KEY, lang);
     applyLang();
+    applyBasemap(isDark());           // GovMap in Hebrew, Esri in English
     // The notes and the charts are written, not marked up, so they have to be
     // rebuilt rather than swapped.
     setMapDate(mapDate);
@@ -819,10 +825,17 @@ async function initMap() {
 function applyBasemap(dark) {
   if (baseLayer) map.removeLayer(baseLayer);
   if (labelLayer) map.removeLayer(labelLayer);
-  baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12,
+  labelLayer = null;
+  const chl = 'chlorophyll &copy; '
+    + '<a href="https://data.marine.copernicus.eu/product/OCEANCOLOUR_MED_BGC_L3_MY_009_143/description" target="_blank" rel="noopener">E.U. Copernicus</a>';
+  if (lang === "he") {
+    baseLayer = L.tileLayer(GOVMAP, {maxZoom: 12, zIndex: 0,
+      attribution: GOVMAP_CREDIT + ' &middot; ' + chl}).addTo(map);
+    return;
+  }
+  baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12, zIndex: 0,
     attribution: 'Powered by <a href="https://www.esri.com/" target="_blank" '
-      + 'rel="noopener">Esri</a> &middot; chlorophyll &copy; '
-      + '<a href="https://data.marine.copernicus.eu/product/OCEANCOLOUR_MED_BGC_L3_MY_009_143/description" target="_blank" rel="noopener">E.U. Copernicus</a>'
+      + 'rel="noopener">Esri</a> &middot; ' + chl
   }).addTo(map);
   labelLayer = L.tileLayer(LABELS(dark), {maxZoom: 12, pane: "shadowPane"}).addTo(map);
 }

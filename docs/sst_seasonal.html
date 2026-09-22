@@ -1259,6 +1259,11 @@ function wireChartClick() {
 }
 
 // ---------------------------------------------------------------- map
+// In Hebrew the basemap is the Survey of Israel's GovMap, which labels places in
+// Hebrew; it has no dark variant, so it is the same in both themes.
+const GOVMAP = "https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png";
+const GOVMAP_CREDIT = '<a href="https://www.govmap.gov.il/" target="_blank" '
+  + 'rel="noopener">&copy; המרכז למיפוי ישראל</a>';
 const BASEMAP = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/"
   + (dark ? "World_Dark_Gray_Base" : "World_Light_Gray_Base") + "/MapServer/tile/{z}/{y}/{x}";
 const LABELS = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/"
@@ -1387,7 +1392,13 @@ async function drawColorbar() {
 function applyBasemap(dark) {
   if (baseLayer) map.removeLayer(baseLayer);
   if (labelLayer) map.removeLayer(labelLayer);
-  baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12,
+  labelLayer = null;
+  if (lang === "he") {
+    baseLayer = L.tileLayer(GOVMAP, {maxZoom: 12, zIndex: 0, attribution: GOVMAP_CREDIT})
+      .addTo(map);
+    return;
+  }
+  baseLayer = L.tileLayer(BASEMAP(dark), {maxZoom: 12, zIndex: 0,
     attribution: 'Powered by <a href="https://www.esri.com/" target="_blank"'
       + ' rel="noopener">Esri</a> &middot; <a href="https://www.openstreetmap.org/'
       + 'copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}).addTo(map);
@@ -1866,6 +1877,7 @@ function wire() {
     lang = lang === "he" ? "en" : "he";
     localStorage.setItem(LANG_KEY, lang);
     applyLang();
+    applyBasemap(isDark());     // GovMap in Hebrew, Esri in English
     syncAir();                  // its titles are written, not marked up
     syncSourceControls();
     refreshField();             // the map note and the pins carry prose too
