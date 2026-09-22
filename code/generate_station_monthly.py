@@ -132,19 +132,51 @@ def temp_reporting(year):
     return out
 
 
+# Months where an empty rain month is filled with 0 (see process_rain_files).
+SUMMER = {6, 7, 8, 9}
+KNOWN_ISSUES = 'data/known_rain_issues.csv'
+
+
+def known_rain_issues():
+    """{station: [(from, to), ...]} of 'YYYY-MM' strings, to '' meaning ongoing.
+
+    Kept by hand: gauges known to have been dead while their station went on
+    reporting, which the rules here cannot see. Nothing is filled inside them."""
+    if not os.path.exists(KNOWN_ISSUES):
+        return {}
+    df = pd.read_csv(KNOWN_ISSUES, dtype=str).fillna('')
+    out = {}
+    for _, r in df.iterrows():
+        out.setdefault(r['Station'].strip(), []).append((r['From'].strip(), r['To'].strip()))
+    return out
+
+
+def known_dead(known, station, year, month):
+    tag = f'{year}-{month:02d}'
+    return any(a <= tag and (not b or tag <= b) for a, b in known.get(station, []))
+
+
 def process_rain_files():
-    """Monthly rain per station, with dry months written as 0.
+    """Monthly rain per station, with empty summer months written as 0.
 
     Summing the hourly files leaves a month with no rain empty, the same as a month
     the gauge was not there. Written out like that, a gauge that has been dry since
     spring has no rows for the new winter at all, and the dashboard shows last winter
-    in its place. So an empty month becomes 0 wherever the station was working:
+    in its place.
+
+    Only summer months (SUMMER) are filled. There an empty month is almost surely
+    dry, so even a dead gauge written as 0 is close to the truth. In the rainy
+    season an empty month stays empty: a gauge can die with its station still
+    reporting temperatures, and a 0 there would pass for a dry month.
+
+    A summer month becomes 0 where the station was working:
     - it reported temperatures that month, or
     - its gauge recorded rain somewhere in the same winter (rain-only stations), or
     - for years before the temperature files, the month is inside the station's
       activity window in data/ims_activity.csv.
     Except when its twin gauge (the 1-minute and 10-minute gauges stand side by
-    side) recorded rain that month: then this one was broken, not dry.
+    side) recorded rain that month: then this one was broken, not dry. And never
+    inside a period listed in data/known_rain_issues.csv.
     """
     print("Processing Rain...")
     frames = []
@@ -169,6 +201,7 @@ def process_rain_files():
     window = {r['name']: (str(r['earliest'])[:7], str(r['latest'])[:7])
               for _, r in activity.iterrows()}
 
+    known = known_rain_issues()
     reporting = {}
     results = []
     for (cycle, year, month), vals in monthly.iterrows():
@@ -187,6 +220,8 @@ def process_rain_files():
             alive = {n for n, (a, b) in window.items() if a <= tag <= b}
         for station, value in vals.items():
             if pd.isna(value):
+                if month not in SUMMER or known_dead(known, station, year, month):
+                    continue
                 twin = station[:-3] if station.endswith('_1m') else station + '_1m'
                 if twin in vals.index and vals[twin] > 0:
                     continue
