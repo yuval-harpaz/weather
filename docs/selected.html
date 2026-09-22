@@ -466,7 +466,7 @@
 
         document.getElementById('btnLast30').addEventListener('click', () => {
             hourlyMode = 'last30'; hourlyYear = DEFAULT_YEAR;
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
 
         document.getElementById('btnPrevMonth').addEventListener('click', () => {
@@ -476,20 +476,20 @@
             hourlyMode = 'month';
             hourlyMonth--;
             if (hourlyMonth < 1) { hourlyMonth = 12; hourlyYear--; }
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
 
         document.getElementById('btnNextMonth').addEventListener('click', () => {
             if (hourlyMode === 'last30') return;
             hourlyMonth++;
             if (hourlyMonth > 12) { hourlyMonth = 1; hourlyYear++; }
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
 
         document.getElementById('hourlyYearSelect').addEventListener('change', function () {
             hourlyYear = +this.value;
             if (hourlyMode === 'last30') { hourlyMode = 'month'; hourlyMonth = NOW.getMonth()+1; }
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
     });
 
@@ -501,12 +501,30 @@
     }
 
     function updatePlot() {
+        drawMonthly();
+        updateHourlyPlot();
+    }
+
+    // The season a given month belongs to, in the Cycle naming of station_monthly.csv:
+    // winters start in September, the max-temperature season in March, the mean is
+    // by calendar year.
+    function cycleOf(year, month) {
+        if (currentMeasure === 'MeanTemp') return String(year);
+        const start = currentMeasure === 'MaxTemp' ? 3 : 9;
+        const y0 = month >= start ? year : year - 1;
+        return `${y0}-${y0 + 1}`;
+    }
+
+    // The season of the month the hourly chart is on, when it is showing one.
+    function hourlyCycle() {
+        return hourlyMode === 'month' ? cycleOf(hourlyYear, hourlyMonth) : null;
+    }
+
+    function drawMonthly() {
         if (!allData.length || !currentStations.length) {
             Plotly.newPlot('plot', [], emptyLayout('בחר תחנה על המפה'), { responsive:true });
-            updateHourlyPlot();
             return;
         }
-        updateHourlyPlot();
 
         let monthOrder;
         if (currentMeasure === 'Rain' || currentMeasure === 'MinTemp') {
@@ -526,7 +544,6 @@
         // If no monthly data for this station/measure, show empty plot
         if (!primaryData.length) {
             Plotly.newPlot('plot', [], emptyLayout('אין נתונים חודשיים לתחנה זו'), { responsive:true });
-            updateHourlyPlot();
             return;
         }
 
@@ -581,9 +598,15 @@
         const daysInMonth   = new Date(NOW.getFullYear(), currMonthReal, 0).getDate();
         const monthFraction = currDayReal / daysInMonth;
 
-        currentStations.forEach((station, si) => {
+        // A month from an earlier season chosen for the hourly chart brings that
+        // season's line in beside the current one, so the month can be read in
+        // its own winter.
+        const pastCycle = hourlyCycle();
+        const shownCycles = pastCycle && pastCycle < currCycle ? [currCycle, pastCycle] : [currCycle];
+
+        currentStations.forEach((station, si) => shownCycles.forEach(stCycle => {
+            const isCurr   = stCycle === currCycle;
             const stData   = allData.filter(d => d.Measure === currentMeasure && d.Station === station);
-            const stCycle  = currCycle;
             const currRaw  = stData.filter(d=>d.Cycle===stCycle)
                 .sort((a,b)=>monthOrder.indexOf(a.Month)-monthOrder.indexOf(b.Month));
 
@@ -596,7 +619,7 @@
                     const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
                     sum += d.Value;
                     let xVal=mIdx, hover=monthNames[d.Month];
-                    if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
+                    if (isCurr && idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
                     currX.push(xVal); currY.push(sum); currText.push(hover);
                 });
                 if (currX.length) {
@@ -609,19 +632,25 @@
                 currRaw.forEach((d,idx)=>{
                     const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
                     let hover=monthNames[d.Month];
-                    if (idx===currRaw.length-1 && d.Month===currMonthReal) hover=`${monthNames[d.Month]} ${currDayReal}`;
+                    if (isCurr && idx===currRaw.length-1 && d.Month===currMonthReal) hover=`${monthNames[d.Month]} ${currDayReal}`;
                     currX.push(mIdx); currY.push(d.Value); currText.push(hover);
                 });
             }
 
-            const lbl = stationLabel(station);
+            const lbl = isCurr ? stationLabel(station) : `${stationLabel(station)} ${stCycle}`;
+            // The chosen month is ringed on the past season's line.
+            const hi = isCurr ? -1 : currX.findIndex((x, k) =>
+                k > 0 || !isCumulative ? Math.round(x) === monthOrder.indexOf(hourlyMonth) : false);
             traces.push({
                 x:currX, y:currY, mode:'lines+markers',
-                line:{ color:STATION_COLORS[si % STATION_COLORS.length], width:3 },
-                name: lbl, text:currText,
+                line:{ color:STATION_COLORS[si % STATION_COLORS.length], width: isCurr ? 3 : 2,
+                       dash: isCurr ? 'solid' : 'dot' },
+                marker:{ size: currX.map((_, k) => k === hi ? 12 : 6),
+                         line:{ width: currX.map((_, k) => k === hi ? 2 : 0), color:'#333' } },
+                name: lbl, text:currText, meta: stCycle,
                 hovertemplate: '%{text}<br>%{y:.1f}<extra>'+lbl+'</extra>'
             });
-        });
+        }));
 
         const cycleName = currentMeasure==='MeanTemp' ? 'שנת'
             : currentMeasure==='MaxTemp' ? 'עונה (מרץ-פברואר)' : 'חורף';
@@ -630,8 +659,10 @@
             currentMeasure==='MaxTemp' ? 'טמפרטורת מקסימום' : 'טמפרטורה ממוצעת';
 
         Plotly.newPlot('plot', traces, {
-            // Name the season being drawn - the chart only ever shows the latest one.
-            title: { text:`נתוני ${measureTitle}, ${cycleName} ${currCycle}`, x:0.95, xanchor:'right' },
+            // Name the seasons being drawn: always the latest, and the one the hourly
+            // chart's month belongs to when that is an earlier one.
+            title: { text:`נתוני ${measureTitle}, ${cycleName} ${currCycle}`
+                       + (shownCycles.length > 1 ? ` ו-${shownCycles[1]}` : ''), x:0.95, xanchor:'right' },
             xaxis: isCumulative
                 ? { tickvals:xVals.map(x => x - 0.5), ticktext:xLabels, title:'חודש',
                     ticks:'', showgrid:false, range:[-1, 11], zeroline:false,
@@ -646,7 +677,13 @@
             dir: 'rtl'
         }, { responsive:true });
 
-        document.getElementById('plot').on('plotly_click', (data) => {
+        // Redrawn on every hourly step, so the old listener goes first or clicks
+        // would fire once per redraw. With the shared hover a click reports every
+        // line at that month, so it cannot tell the seasons apart; it opens the
+        // month as seen from the current season, as it always has.
+        const plotEl = document.getElementById('plot');
+        plotEl.removeAllListeners && plotEl.removeAllListeners('plotly_click');
+        plotEl.on('plotly_click', (data) => {
             if (!data.points.length) return;
             const xIdx = Math.round(data.points[0].x);
             if (xIdx < 0 || xIdx >= monthOrder.length) return;
@@ -658,7 +695,7 @@
                 yr = NOW.getFullYear()-1;
             }
             hourlyMode = 'month'; hourlyYear = yr; hourlyMonth = clickedMonth;
-            updateHourlyNav(); updateHourlyPlot();
+            updateHourlyNav(); updateHourlyPlot(); drawMonthly();
         });
     }
 
