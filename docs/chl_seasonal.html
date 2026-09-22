@@ -45,6 +45,7 @@
   button:hover, select:hover { color:var(--ink); }
   .card { background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:8px 4px 4px; min-height:200px; }
+  .daystep { display:inline-flex; gap:8px; align-items:center; }
   .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; }
   .credit { font-size:12px; line-height:1.6; max-width:900px; }
   .credit a { color:var(--ink2); }
@@ -103,9 +104,13 @@
        that moves under the cursor is a control they have to hunt for. -->
   <div class="bar">
     <span class="lbl" data-i18n="day">Day</span>
+    <!-- Left to right in both languages: earlier is to the left, as on the
+         chart's time axis, even when the rest of the bar runs right to left. -->
+    <span class="daystep" dir="ltr">
     <button id="dprev" data-i18n-title="prevTip" title="previous day">&#9664;</button>
     <input type="date" id="mapdate">
     <button id="dnext" data-i18n-title="nextTip" title="next day">&#9654;</button>
+    </span>
     <button id="dlatest" data-i18n="latest" data-i18n-title="latestTip"
       title="back to the most recent day">Latest</button>
     <span class="lbl" id="maphint" data-i18n="maphint">or click any point on a chart</span>
@@ -492,15 +497,25 @@ function draw() {
              yanchor: "top", bgcolor: c.surface, bordercolor: c.grid,
              borderwidth: 1, font: {size: 11}},
     annotations: [], showlegend: true, dragmode: "zoom",
+    // Keeps the reader's zoom through redraws - a click on a chart moves the
+    // map and redraws, and that should not throw the zoom away. Changing
+    // between daily and monthly changes the x axis, so that starts afresh.
+    uirevision: agg === "raw" ? "daily" : "monthly",
   };
 
   // The legend lives in the top-left cell, so panels skip that slot: filling
   // right to left, it is the third position.
   const LEGEND_SLOT = NCOLS - 1;
-  views.forEach((v, i) => {
+  const cellOf = i => {
     const slot = i >= LEGEND_SLOT ? i + 1 : i;
     const row = Math.floor(slot / NCOLS), col = NCOLS - 1 - (slot % NCOLS);
-    const n = row * NCOLS + col + 1, xa = "x" + n, ya = "y" + n;
+    return row * NCOLS + col + 1;
+  };
+  // Every panel's x axis follows the first site's. Not axis 1: that cell holds
+  // the legend and no traces, and matching an empty axis links nothing.
+  const LEAD = cellOf(0);
+  views.forEach((v, i) => {
+    const n = cellOf(i), xa = "x" + n, ya = "y" + n;
 
     // legendgroup ties the same series across every panel, so a legend click
     // hides it everywhere instead of only in the panel that owns the entry
@@ -546,8 +561,8 @@ function draw() {
       hoverformat: v.raw ? "%d %b" : "%B",
       range: ["2020-01-01", "2020-12-31"], tickfont: {size: 9},
       showgrid: false, linecolor: c.axis, tickangle: 0,
-      // every panel follows panel 1, so a zoom on one zooms them all
-      matches: n === 1 ? undefined : "x",
+      // every panel follows the lead one, so a zoom on one zooms them all
+      matches: n === LEAD ? undefined : "x" + LEAD,
       minor: {dtick: "M1", showgrid: true, gridcolor: c.grid, ticks: ""}};
     layout["yaxis" + n] = {type: scale, dtick: scale === "log" ? 1 : undefined,
       range: fixed ? yr : undefined, autorange: !fixed,

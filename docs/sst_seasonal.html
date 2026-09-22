@@ -57,6 +57,7 @@
     border-radius:7px; padding:5px 9px; }
   .card { background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:8px 4px 4px; min-height:200px; }
+  .daystep { display:inline-flex; gap:8px; align-items:center; }
   .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; }
   .credit { font-size:12px; line-height:1.6; max-width:900px; }
   .credit a { color:var(--ink2); }
@@ -119,9 +120,13 @@
        control that moves under the cursor is a control they have to hunt for. -->
   <div class="bar">
     <span class="lbl" data-i18n="day">Day</span>
+    <!-- Left to right in both languages: earlier is to the left, as on the
+         chart's time axis, even when the rest of the bar runs right to left. -->
+    <span class="daystep" dir="ltr">
     <button id="dprev" data-i18n-title="prevTip" title="previous day">&#9664;</button>
     <input type="date" id="mapdate">
     <button id="dnext" data-i18n-title="nextTip" title="next day">&#9654;</button>
+    </span>
     <button id="latest" data-i18n="latest" data-i18n-title="latestTip"
       title="back to the most recent day">Latest</button>
     <span class="lbl" style="margin-left:14px" data-i18n="crange">Colour range</span>
@@ -265,7 +270,8 @@ const STR = {
     loadingStation: "טוען {0}…",
     labelMin: "מינימום", labelMid: "אמצע-טווח", labelMax: "מקסימום",
     shortMin: "מינימום", shortMid: "אמצע-טווח", shortMax: "מקסימום",
-    fieldNone: "אין",
+    src_nrt: "1 ק\"מ זמן אמת",
+    src_rep: "5 ק\"מ מעובד מחדש",
     fieldNoneTip: "אף ניתוח אינו מכסה את {0} עדיין",
     noData: "לא נמצאו נתונים — נדרשים data/sst_stations.csv ו-data/sst_rep_<תחנה>.csv",
   },
@@ -606,9 +612,13 @@ async function loadMeanSeries(stream) {
   return out;
 }
 
-// The series the chart is currently drawing: the stream chosen for the map, so
-// one button moves both.
-const chartStream = () => activeSource(shownDate());
+// The series the chart is currently drawing. It is the reader's choice and it
+// does not depend on the day: stepping past the archive's end, or on to a day
+// no analysis covers yet, must not swap a 1 km record for a 5 km one under the
+// reader's feet. Until a choice is made it is the finer record, except before
+// 2008, where only the archive reaches.
+const chartStream = () => sourcePref
+  || (shownDate() < SOURCES.nrt.first ? "rep" : "nrt");
 // The buoy is not a pixel in either analysis, so it answers for itself rather
 // than through the stream the map is showing.
 // ------------------------------------------------- Bet Dagan, a year at a time
@@ -1322,16 +1332,18 @@ function sourcesFor(date) {
   };
 }
 
-// Remembered across dates, so choosing the finer field once keeps it wherever
-// it exists rather than snapping back on every click.
+// The record chosen with the field button, remembered across dates. It always
+// decides the chart; the map follows it wherever that field covers the day.
 let sourcePref = null;
 
+// The field the map draws: the chosen record where it covers the day, else the
+// one that does. With neither (a day ahead of the satellite) there is no field
+// to draw and the answer is just the chosen record.
 function activeSource(date) {
-  const have = sourcesFor(date);
-  if (sourcePref && have[sourcePref]) return sourcePref;
-  // Default to the finer field wherever it exists, and drop to the archive only
-  // for the years before 2008, where nothing else covers the day.
-  return have.nrt ? "nrt" : "rep";
+  const have = sourcesFor(date), want = chartStream();
+  if (have[want]) return want;
+  const other = want === "rep" ? "nrt" : "rep";
+  return have[other] ? other : want;
 }
 
 const layerFor = date => SOURCES[activeSource(date)].layer;
@@ -1571,9 +1583,10 @@ async function setMapDate(date) {
     if (floor && date < floor) date = floor;
   }
   mapDate = (date && date !== latestDate()) ? date : null;
-  const stream = activeSource(shownDate());
+  const stream = chartStream();
   await loadSeries(stream, station);
   ensureStream(stream);
+  ensureStream(activeSource(shownDate()));       // the pins' field, if another
   await ensureBD();
   refreshField();
   if (stream !== drawnStream) fillPrev();
@@ -1605,19 +1618,23 @@ function syncUrl() {
 // onto a past date therefore evaluates this before the answer is known, so it
 // has to be cheap enough to run again when the background loads land - which
 // rules out doing it inside refreshField, where it would rebuild the tiles.
+// The button names the chosen record, which is what the chart draws, and is
+// always live: a day where only one field (or none) can be mapped still has
+// both records to plot. The tooltip says what the map is doing meanwhile.
 function syncSourceControls() {
-  const date = shownDate(), key = activeSource(date), src = SOURCES[key];
-  const have = sourcesFor(date);
+  const date = shownDate(), key = chartStream(), src = SOURCES[key];
+  const field = activeSource(date), have = sourcesFor(date);
   const other = key === "rep" ? "nrt" : "rep";
   const btn = document.getElementById("source");
-  const none = !have.rep && !have.nrt;
-  btn.textContent = none ? (t("fieldNone") ?? "none") : src.label;
-  btn.disabled = !have[other];
-  btn.title = none
+  btn.textContent = src.label;
+  btn.disabled = false;
+  const mapNote = !have.rep && !have.nrt
     ? (t("fieldNoneTip", date) ?? `no analysis covers ${date} yet`)
-    : have[other]
-      ? `showing the ${src.label} field — click for the ${SOURCES[other].label} one`
-      : `only the ${src.label} field covers ${date}`;
+    : field !== key
+      ? `the map shows the ${SOURCES[field].label} field, the only one covering ${date}`
+      : `the map shows the ${src.label} field`;
+  btn.title = `chart: ${src.label} record; ${mapNote} — click for the `
+    + `${SOURCES[other].label} record`;
   const link = document.getElementById("srclink");
   link.href = src.url;
   link.title = `${src.label}: open this product's page at Copernicus Marine`;
@@ -1650,7 +1667,28 @@ function refreshField() {
   syncSourceControls();
 
   const live = [...vals.values()].some(r => r.live);
-  document.getElementById("mapnote").textContent = bare
+  const noteEl = document.getElementById("mapnote");
+  // Wrapped in an isolate so the date reads left to right inside Hebrew prose.
+  const d = `\u2066${date}\u2069`, fieldName = t("src_" + key) ?? src.label;
+  const he = lang === "he" && {
+    bare: `${d} — מעבר ללוויין, שפרסם עד \u2066${latestDate()}\u2069. אין שדה ואין `
+      + `נעצים של תחנות ליום זה; מה שמוצג במפה הוא המצוף, שמדווח בעצמו. `
+      + `"אחרון" חוזר ליום המנותח העדכני ביותר.`,
+    main: `טמפרטורת יסוד של פני הים ל-${d}, ניתוח ${fieldName}. הנעצים מציגים את `
+      + `הקריאה בכל תחנה; לחצו על אחד כדי לשרטט את התיעוד שלו למטה, או לחצו על `
+      + `יום בגרף כדי להביא את המפה לתאריך זה.`,
+    buoy: ` צורת המצוף מול קיסריה היא עגינת שדות ים — מדחום במים ולא קריאת `
+      + `לוויין, באותה סקאלת צבע. היא חסרה בימים שבהם המצוף היה מחוץ למים.`,
+    live: ` ערכים המסומנים ב-* נקראו ישירות מקופרניקוס, אחרי העדכון השמור האחרון.`,
+  };
+  // A day ahead of the satellite has a one-line note where the other days have
+  // several, and the chart below would jump up by the difference. Hold the
+  // height the note had on the last analysed day so the gap stays put.
+  if (!bare) noteEl.style.minHeight = "";
+  noteEl.textContent = he
+    ? (bare ? he.bare
+        : he.main + (BUOY_SST.has(date) ? he.buoy : "") + (live ? he.live : ""))
+    : bare
     ? `${date} — ahead of the satellite, which has published up to `
       + `${latestDate()}. No field and no station pins for this day; what is `
       + `on the map is the buoy, which reports for itself. Latest goes back to `
@@ -1665,7 +1703,10 @@ function refreshField() {
         : "")
     + (live ? " Values marked * were read live from Copernicus, after the last "
             + "stored update." : "");
+  if (bare) noteEl.style.minHeight = noteH ? noteH + "px" : "";
+  else noteH = noteEl.offsetHeight;
 }
+let noteH = 0;          // the map note's height on the last analysed day
 
 // The opening view, shared with the other map so a snapshot of one frames the
 // same coastline as a snapshot of the other. The centre is the midrange of the
@@ -1720,9 +1761,10 @@ function initMap() {
   document.getElementById("mapdate").onchange = e => e.target.value
     && setMapDate(e.target.value);
   document.getElementById("source").onclick = async () => {
-    sourcePref = activeSource(shownDate()) === "rep" ? "nrt" : "rep";
+    sourcePref = chartStream() === "rep" ? "nrt" : "rep";
     await loadSeries(sourcePref, station);
     ensureStream(sourcePref);
+    ensureStream(activeSource(shownDate()));
     refreshField();
     fillPrev();
     draw();
@@ -1904,7 +1946,7 @@ async function main() {
   syncAir();
   wire();
   initMap();
-  await loadSeries(activeSource(shownDate()), station);
+  await loadSeries(chartStream(), station);
   await ensureBD();               // the shown day's year, for the map badge
   fillPrev();
   refreshField();
@@ -1922,10 +1964,10 @@ async function main() {
   // The other stations, in the background. Until they land the pins can only
   // show days the trailing file covers, so a click on 1994 would leave twelve
   // of them blank. About 0.9 MB gzipped for the lot, after the page is usable.
-  await ensureStream(activeSource(shownDate()));
+  await ensureStream(chartStream());
   // The other analysis too, so pressing the field button is instant and so is a
   // jump back before 2008, where only the archive reaches.
-  await ensureStream(activeSource(shownDate()) === "rep" ? "nrt" : "rep");
+  await ensureStream(chartStream() === "rep" ? "nrt" : "rep");
 }
 
 main();
