@@ -133,12 +133,14 @@
     const stationsUrl = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/ims_stations.csv';
     const rawDataBase = 'https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data';
 
-    // Available years per measure (based on data files in the repo)
+    // Available years per measure (based on data files in the repo), up to the
+    // current calendar year - the hourly files are one per calendar year.
+    const LAST_YEAR = new Date().getFullYear();
     const AVAILABLE_YEARS = {
-        Rain:     d3.range(1989, 2027),
-        MinTemp:  d3.range(1994, 2027),
-        MaxTemp:  d3.range(1994, 2027),
-        MeanTemp: d3.range(1994, 2027),
+        Rain:     d3.range(1989, LAST_YEAR + 1),
+        MinTemp:  d3.range(1994, LAST_YEAR + 1),
+        MaxTemp:  d3.range(1994, LAST_YEAR + 1),
+        MeanTemp: d3.range(1994, LAST_YEAR + 1),
     };
 
     // Approximate Israeli sunrise/sunset (decimal hours) per month index 0=Jan
@@ -520,9 +522,16 @@
             return;
         }
 
-        const cycles     = [...new Set(primaryData.map(d => d.Cycle))].sort();
-        const currCycle  = cycles[cycles.length - 1];
-        const histCycles = cycles.slice(Math.max(0, cycles.length-11), cycles.length-1);
+        // The season being drawn is the newest one in the file across all stations,
+        // not this station's newest: a station with nothing yet this season (a
+        // closed gauge, or one whose data is late) must not show last winter as if
+        // it were this one.
+        const allCycles  = [...new Set(allData.filter(d => d.Measure === currentMeasure)
+                                              .map(d => d.Cycle))].sort();
+        const currCycle  = allCycles[allCycles.length - 1];
+        const cycles     = [...new Set(primaryData.map(d => d.Cycle))].sort()
+                               .filter(c => c < currCycle);
+        const histCycles = cycles.slice(-10);
 
         function getCycleVec(station, cycle) {
             const cData = allData.filter(d => d.Measure === currentMeasure && d.Station === station && d.Cycle === cycle);
@@ -548,10 +557,17 @@
             }
         }
 
+        // Cumulative rain starts from zero on 1 September (x = -1): each month's
+        // total sits at its month's end, and the name is written mid-month.
+        let bandX = xVals;
+        if (isCumulative) {
+            bandX = [-1, ...xVals];
+            [maxLine, minLine, medianLine].forEach(l => l.unshift(0));
+        }
         const traces = [];
-        traces.push({ x:xVals, y:maxLine, mode:'lines', line:{width:0}, showlegend:false, hoverinfo:'skip' });
-        traces.push({ x:xVals, y:minLine, mode:'lines', line:{width:0}, fill:'tonexty', fillcolor:'rgba(200,200,200,0.3)', name:'טווח 10 שנים' });
-        traces.push({ x:xVals, y:medianLine, mode:'lines', line:{color:'gray',dash:'dash'}, name:'חציון 10 שנים' });
+        traces.push({ x:bandX, y:maxLine, mode:'lines', line:{width:0}, showlegend:false, hoverinfo:'skip' });
+        traces.push({ x:bandX, y:minLine, mode:'lines', line:{width:0}, fill:'tonexty', fillcolor:'rgba(200,200,200,0.3)', name:'טווח 10 שנים' });
+        traces.push({ x:bandX, y:medianLine, mode:'lines', line:{color:'gray',dash:'dash'}, name:'חציון 10 שנים' });
 
         const currMonthReal = NOW.getMonth()+1, currDayReal = NOW.getDate();
         const daysInMonth   = new Date(NOW.getFullYear(), currMonthReal, 0).getDate();
@@ -559,13 +575,14 @@
 
         currentStations.forEach((station, si) => {
             const stData   = allData.filter(d => d.Measure === currentMeasure && d.Station === station);
-            const stCycles = [...new Set(stData.map(d=>d.Cycle))].sort();
-            const stCycle  = stCycles[stCycles.length-1];
+            const stCycle  = currCycle;
             const currRaw  = stData.filter(d=>d.Cycle===stCycle)
                 .sort((a,b)=>monthOrder.indexOf(a.Month)-monthOrder.indexOf(b.Month));
 
             let currX=[], currY=[], currText=[];
             if (isCumulative) {
+                // Dry months are stored as 0 (generate_station_monthly.py), so a
+                // missing month is one the gauge did not measure, and is skipped.
                 let sum=0;
                 currRaw.forEach((d,idx)=>{
                     const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
@@ -574,12 +591,18 @@
                     if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
                     currX.push(xVal); currY.push(sum); currText.push(hover);
                 });
+                if (currX.length) {
+                    currX.unshift(-1); currY.unshift(0);
+                    currText.unshift(`${monthNames[monthOrder[0]]} 1`);
+                }
             } else {
+                // A monthly temperature belongs to its whole month, so the month in
+                // progress stays on its own label; the hover says how far it runs.
                 currRaw.forEach((d,idx)=>{
                     const mIdx=monthOrder.indexOf(d.Month); if(mIdx===-1) return;
-                    let xVal=mIdx, hover=monthNames[d.Month];
-                    if (idx===currRaw.length-1 && d.Month===currMonthReal) { xVal=mIdx-1+monthFraction; hover=`${monthNames[d.Month]} ${currDayReal}`; }
-                    currX.push(xVal); currY.push(d.Value); currText.push(hover);
+                    let hover=monthNames[d.Month];
+                    if (idx===currRaw.length-1 && d.Month===currMonthReal) hover=`${monthNames[d.Month]} ${currDayReal}`;
+                    currX.push(mIdx); currY.push(d.Value); currText.push(hover);
                 });
             }
 
@@ -592,13 +615,22 @@
             });
         });
 
+        const cycleName = currentMeasure==='MeanTemp' ? 'שנת'
+            : currentMeasure==='MaxTemp' ? 'עונה (מרץ-פברואר)' : 'חורף';
         const measureTitle = currentMeasure==='Rain' ? 'גשם מצטבר' :
             currentMeasure==='MinTemp' ? 'טמפרטורת מינימום' :
             currentMeasure==='MaxTemp' ? 'טמפרטורת מקסימום' : 'טמפרטורה ממוצעת';
 
         Plotly.newPlot('plot', traces, {
-            title: { text:`נתוני ${measureTitle}`, x:0.95, xanchor:'right' },
-            xaxis: { tickvals:xVals, ticktext:xLabels, title:'חודש' },
+            // Name the season being drawn - the chart only ever shows the latest one.
+            title: { text:`נתוני ${measureTitle}, ${cycleName} ${currCycle}`, x:0.95, xanchor:'right' },
+            xaxis: isCumulative
+                ? { tickvals:xVals.map(x => x - 0.5), ticktext:xLabels, title:'חודש',
+                    ticks:'', showgrid:false, range:[-1, 11], zeroline:false,
+                    minor:{ tickvals:[-1, ...xVals], showgrid:true, gridcolor:'#eee', ticks:'' } }
+                : { tickvals:xVals, ticktext:xLabels, title:'חודש',
+                    ticks:'', showgrid:false, range:[-0.5, 11.5], zeroline:false,
+                    minor:{ tickvals:xVals.map(x => x - 0.5).concat(11.5), showgrid:true, gridcolor:'#eee', ticks:'' } },
             yaxis: { title: currentMeasure==='Rain' ? 'מ"מ' : '°C' },
             hovermode: 'x unified',
             paper_bgcolor:'white', plot_bgcolor:'#fafafa',
