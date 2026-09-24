@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>דפדוף במפות לוויין</title>
+<link rel="icon" href="logo.jpg">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root { --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --surface:#ffffff;
+          --border:rgba(0,0,0,0.13); --head:96px; }
+  /* Room for the floating bar; the map begins under it. */
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; height:100%; overflow:hidden;
+    font-family:Arial, Helvetica, sans-serif; color:var(--ink); background:#e9e7e1; }
+
+  /* Two rows of furniture at the top, the map below it. Nothing floats over the
+     map except leaflet's own controls, so the zoom buttons and the credit line
+     stay reachable. */
+  /* The bar floats over the map rather than sitting above it, so the map fills
+     the window and shows either side of the bar instead of a grey margin. Only
+     the card itself takes the mouse; the map can be dragged around it. */
+  header { position:absolute; top:0; right:0; left:0; z-index:600;
+    display:flex; justify-content:center; padding:6px 10px 0; pointer-events:none; }
+  .bar { pointer-events:auto; }
+  /* The bar is a card of its own, never wider than half a 1920 screen, so on a
+     wide monitor it sits in the middle instead of stretching across it. */
+  .bar { width:100%; max-width:960px; background:var(--surface);
+    border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.14); }
+  .row { padding:0 10px; height:42px; display:flex; align-items:center; gap:8px; }
+  .row.second { border-top:1px solid rgba(0,0,0,.07); }
+  #map { position:absolute; inset:0; direction:ltr; }
+  /* Wide enough and the bar is an island in the middle, with the corners free.
+     Narrow enough and it spans the window, so the controls move down below it. */
+  @media (max-width:1180px) {
+    .leaflet-top { margin-top:var(--head); }
+  }
+  #map .leaflet-control-attribution { direction:rtl; font-size:11px; }
+
+  a.home { color:var(--ink2); display:inline-flex; align-items:center;
+    text-decoration:none; padding:2px; }
+  a.home:hover { color:var(--ink); }
+  .chip { font-size:12px; color:var(--ink2); background:#f2f1ec;
+    border:1px solid var(--border); border-radius:20px; padding:3px 10px;
+    white-space:nowrap; }
+  select, button, input[type=date], input[type=number] {
+    font:inherit; font-size:13px; color:var(--ink2); background:var(--surface);
+    border:1px solid var(--border); border-radius:7px; padding:4px 8px; cursor:pointer; }
+  select { flex:1 1 220px; min-width:120px; }
+  input[type=number] { width:68px; cursor:text; }
+  button:hover:not(:disabled), select:hover { color:var(--ink); border-color:var(--muted); }
+  button:disabled, input:disabled, select:disabled { opacity:.4; cursor:default; }
+  button.on { color:var(--ink); border-color:var(--muted); font-weight:600; }
+  .grp { display:flex; gap:0; }
+  .grp button { border-radius:0; margin-right:-1px; }
+  .grp button:first-child { border-radius:0 7px 7px 0; }
+  .grp button:last-child { border-radius:7px 0 0 7px; margin-right:0; }
+  /* Left to right in both languages: earlier is on the left, later on the right,
+     the way a time axis runs, even though the bar around it reads right to left. */
+  .daystep { display:inline-flex; gap:3px; align-items:center; direction:ltr; }
+  .lbl { font-size:12px; color:var(--muted); white-space:nowrap; }
+  label.check { font-size:12px; color:var(--ink2); display:inline-flex;
+    align-items:center; gap:4px; cursor:pointer; white-space:nowrap; }
+  #about { font-size:12px; color:var(--ink2); overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; flex:1 1 auto; }
+  #about a { color:#0b6; color:var(--ink); }
+  #status { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .spacer { flex:1 1 auto; }
+
+  /* Place names over imagery that covers the land. Text on the ground, no dot,
+     and never in the way of a click - the same treatment as the alarms map. */
+  .map-label { font:600 12px/1 Arial, sans-serif; color:#fff; white-space:nowrap;
+    text-shadow:-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+                0 -1px 0 #000, 0 1px 0 #000, -1px 0 0 #000, 1px 0 0 #000;
+    transform:translate(-50%, -50%); position:absolute; pointer-events:none; }
+  .map-label.city { font-size:14px; }
+
+  /* The colour bar, and the palettes behind it. Clicking the bar opens every
+     ramp the service knows, drawn from the service's own numbers. */
+  .cbox { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 1px 5px rgba(0,0,0,.18); padding:6px 8px; font-size:11px;
+    color:var(--ink2); }
+  .cbar { cursor:pointer; }
+  .cbar .grad { height:12px; border-radius:3px; border:1px solid rgba(0,0,0,.2);
+    width:180px; margin-bottom:3px; }
+  .cbar .ends { display:flex; justify-content:space-between; direction:ltr; }
+  .cbar .hint { color:var(--muted); font-size:10px; text-align:center; }
+  #palette { display:none; margin-top:6px; max-height:44vh; overflow:auto; }
+  #palette.open { display:block; }
+  #palette .opt { display:flex; align-items:center; gap:6px; padding:2px 3px;
+    border-radius:5px; cursor:pointer; }
+  #palette .opt:hover { background:#f2f1ec; }
+  #palette .opt.on { font-weight:700; color:var(--ink); }
+  #palette .swatch { width:96px; height:11px; border-radius:2px;
+    border:1px solid rgba(0,0,0,.2); }
+  .imgonly { display:none; }
+  body.imagery .imgonly { display:inline-block; }
+
+  @media (max-width:820px) {
+    :root { --head:132px; }
+    header .row { flex-wrap:wrap; height:auto; padding:6px 10px; }
+    .row.second { padding-bottom:8px; }
+    #about { white-space:normal; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+ <div class="bar">
+  <div class="row">
+    <a class="home" href="index.html" title="כל התרשימים" aria-label="דף הבית">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg></a>
+    <span class="chip" id="group">—</span>
+    <select id="layer"></select>
+    <span class="daystep">
+      <button id="prevAvail" title="אחורה ליום שיש בו נתונים">&#171;</button>
+      <button id="prev" title="יום אחורה">&#8249;</button>
+      <input type="date" id="date">
+      <button id="next" title="יום קדימה">&#8250;</button>
+      <button id="nextAvail" title="קדימה ליום שיש בו נתונים">&#187;</button>
+    </span>
+    <button id="latest" title="היום העדכני ביותר">אחרון</button>
+  </div>
+
+  <div class="row second">
+    <span class="lbl">סקאלה</span>
+    <span class="grp">
+      <button id="log" data-scale="log">לוג</button>
+      <button id="linear" data-scale="linear">ליניארי</button>
+    </span>
+    <input type="number" id="vmin" step="any" title="הקצה התחתון של סקאלת הצבע">
+    <input type="number" id="vmax" step="any" title="הקצה העליון של סקאלת הצבע">
+    <span class="lbl" id="unit"></span>
+    <span class="lbl">אטימות</span>
+    <input type="range" id="opacity" min="0" max="100" value="85" style="width:88px">
+    <span class="lbl imgonly">בהירות</span>
+    <input type="range" id="bright" class="imgonly" min="50" max="180" value="100"
+           style="width:70px" title="בהירות התמונה">
+    <span class="lbl imgonly">ניגודיות</span>
+    <input type="range" id="contrast" class="imgonly" min="50" max="200" value="100"
+           style="width:70px" title="ניגודיות התמונה">
+    <label class="check"><input type="checkbox" id="names"> שמות יישובים</label>
+    <span id="about"></span>
+    <span id="status"></span>
+  </div>
+ </div>
+</header>
+
+<div id="map"></div>
+
+<script>
+// A browser for every satellite field this project reads, one day at a time.
+//
+// What a day means differs by product, and it is the whole of the navigation:
+//  - analysed fields (SST L4) have a value in every sea pixel every day;
+//  - L3 observations (chlorophyll, pigments, clarity) are what the satellite saw
+//    that day, so cloud and swath gaps leave holes;
+//  - the 100 m Sentinel-2 mosaic exists only on overpass days, every few days.
+// Hence two pairs of arrows: one day at a time, and on to the next day that
+// actually carries data, which is greyed out where every day has some.
+const CM = "https://wmts.marine.copernicus.eu/teroWmts";
+const GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best";
+const CM_HOME = "https://data.marine.copernicus.eu/product/";
+const GOVMAP = "https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png";
+const GOVMAP_CREDIT = '<a href="https://www.govmap.gov.il/" target="_blank" '
+  + 'rel="noopener">&copy; המרכז למיפוי ישראל</a>';
+const OSM_CREDIT = '<a href="https://www.openstreetmap.org/copyright" target="_blank" '
+  + 'rel="noopener">&copy; OpenStreetMap</a>';
+// Kept in the alarms repo, where code/fetch_places.py builds it from Overpass;
+// read from there rather than copied, so both maps name places the same way.
+const PLACES_URL = "https://raw.githubusercontent.com/yuval-harpaz/alarms/"
+  + "refs/heads/master/data/coord_place.csv";
+
+const KELVIN = 273.15;
+const TODAY = new Date().toISOString().slice(0, 10);
+
+// Sorted by kind, then by source: the order of the menu.
+//   scale  'log' | 'linear' | null   null means the field carries no colour scale
+//   logOK  false where a log axis makes no sense (temperature, anomaly)
+//   kelvin true where the product's numbers are kelvin and the boxes are °C
+//   probe  true where a day can come back empty, which is what « » look for
+//   lag    days the archive runs behind today
+//   cover  'sea' sits on the GovMap basemap; 'all' is imagery that replaces it
+//   product  the Copernicus product page, or the GIBS layer description
+const LAYERS = [
+  // ---------------------------------------------------------- sea temperature
+  {id:"sst_nrt", group:"טמפרטורת פני הים", name:"ניתוח יומי 1 ק\"מ · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31,
+   scale:"linear", logOK:false, cmap:"thermal", kelvin:true,
+   layer:"SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
+     + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004_c_V2_202311/analysed_sst",
+   product:CM_HOME + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/description",
+   about:"טמפרטורת יסוד של פני הים, ניתוח יומי ללא חסרים - מיזוג של כמה לוויינים ומדידות ים."},
+  {id:"sst_rep", group:"טמפרטורת פני הים", name:"ניתוח יומי 5 ק\"מ · קופרניקוס (מעובד מחדש)",
+   src:"cm", cover:"sea", first:"1982-01-01", unit:"°C", vmin:17, vmax:31,
+   scale:"linear", logOK:false, cmap:"thermal", kelvin:true, lag:31,
+   layer:"SST_MED_SST_L4_REP_OBSERVATIONS_010_021/"
+     + "cmems_SST_MED_SST_L4_REP_OBSERVATIONS_010_021_202411/analysed_sst",
+   product:CM_HOME + "SST_MED_SST_L4_REP_OBSERVATIONS_010_021/description",
+   about:"אותה טמפרטורה בניתוח גס יותר אך אחיד לאורך זמן, מ-1982. מפגר כחודש אחרי היום."},
+  {id:"sst_anom", group:"טמפרטורת פני הים", name:"חריגה מהממוצע · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:-3, vmax:3,
+   scale:"linear", logOK:false, cmap:"balance",
+   layer:"SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
+     + "SST_MED_SSTA_L4_NRT_OBSERVATIONS_010_004_d_202607/sst_anomaly",
+   product:CM_HOME + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/description",
+   about:"כמה חם או קר היום לעומת הממוצע הרב-שנתי לאותו תאריך: אדום חם מהרגיל, כחול קר."},
+  {id:"sst_l3", group:"טמפרטורת פני הים", name:"מדידה יומית 1 ק\"מ · קופרניקוס (L3, עם חסרים)",
+   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31,
+   scale:"linear", logOK:false, cmap:"thermal", kelvin:true, probe:true,
+   layer:"SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012/"
+     + "SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012_b_202311/sea_surface_temperature",
+   product:CM_HOME + "SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012/description",
+   about:"המדידה עצמה ולא ניתוח: מה שהלוויין ראה, ולכן עננים משאירים חסרים. "
+     + "חדה יותר מהניתוח ביום בהיר."},
+
+  // ----------------------------------------------------------- chlorophyll
+  {id:"chl_1km_nrt", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CHL",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"כלורופיל-a, מדד לכמות האצות החד-תאיות. לבן הוא ענן או יבשה, לא מים נקיים."},
+  {id:"chl_1km_my", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (מעובד מחדש)",
+   src:"cm", cover:"sea", first:"1997-09-04", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
+   scale:"log", cmap:"algae", probe:true, lag:9,
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/CHL",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"אותו כלורופיל בעיבוד אחיד לאורך כל התיעוד, מ-1997."},
+  {id:"chl_300m_nrt", group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-olci-300m_P1D_202207/CHL",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"פי שלושה חד יותר מהמפה הרב-חיישנית: פלומות הנילוס ותעלות החוף נראות בנפרד. "
+     + "מחיישן אחד, ולכן יותר ימים חסרים."},
+  {id:"chl_300m_my", group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס (מעובד מחדש)",
+   src:"cm", cover:"sea", first:"2016-04-25", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
+   scale:"log", cmap:"algae", probe:true, lag:9,
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l3-olci-300m_P1D_202211/CHL",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"OLCI בעיבוד אחיד, מאז 2016."},
+  {id:"chl_100m", group:"כלורופיל", name:"סנטינל-2 100 מ' · קופרניקוס (מוזאיקת חוף)",
+   src:"cm", cover:"sea", first:"2021-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
+     + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/CHL",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
+   about:"החדה ביותר כאן, ברצועת החוף בלבד ורק בימים שסנטינל-2 עבר מעל האזור - "
+     + "אחת לכמה ימים. « ו-» יקפצו ליום כזה."},
+  {id:"chl_gapfree", group:"כלורופיל", name:"מפה מלאה ללא חסרים 1 ק\"מ · קופרניקוס (L4)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
+   scale:"log", cmap:"algae",
+   layer:"OCEANCOLOUR_MED_BGC_L4_NRT_009_142/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l4-gapfree-multi-1km_P1D_202207/CHL",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L4_NRT_009_142/description",
+   about:"כלורופיל שהושלם באינטרפולציה לכל פיקסל, גם מתחת לעננים: חלק מהערכים הערכה ולא מדידה."},
+
+  // ------------------------------------------------- pigments / algae groups
+  {id:"prokar", group:"קבוצות אצות ופיגמנטים", name:"ציאנובקטריה (פרוקריוטים) · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/PROKAR",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"חלק הכלורופיל השייך לציאנובקטריה כמו Synechococcus, הנושאות פיקוציאנין "
+     + "ופיקואריתרין - הפיגמנטים הכחולים. הקרוב ביותר ל\"פיגמנט הכחול\" מלוויין."},
+  {id:"crypto", group:"קבוצות אצות ופיגמנטים", name:"קריפטופיטים · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CRYPTO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"אצות שגם הן נושאות פיקואריתרין; קבוצה קטנה יחסית במים האלה."},
+  {id:"diato", group:"קבוצות אצות ופיגמנטים", name:"דיאטומיות · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/DIATO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"האצות הגדולות שמובילות את פריחות החורף והאביב."},
+  {id:"dino", group:"קבוצות אצות ופיגמנטים", name:"דינופלגלטים · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/DINO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"הקבוצה שאליה שייכות פריחות ה\"גאות האדומה\"."},
+  {id:"pico", group:"קבוצות אצות ופיגמנטים", name:"פיקופלנקטון · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/PICO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"התאים הקטנים מ-2 מיקרון, רוב הייצור הראשוני במים העניים של מזרח הים התיכון בקיץ."},
+
+  // ------------------------------------------------------------ water clarity
+  {id:"kd490", group:"שקיפות ועכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"1/מ'", vmin:0.02, vmax:1,
+   scale:"log", cmap:"turbid", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-transp_nrt_l3-multi-1km_P1D_202207/KD490",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"כמה מהר נבלע אור כחול-ירוק במים: ערך גבוה הוא מים עכורים מפלומה, סערה או פריחה."},
+  {id:"tur_hr", group:"שקיפות ועכירות", name:"עכירות 100 מ' · קופרניקוס (סנטינל-2)",
+   src:"cm", cover:"sea", first:"2021-01-01", unit:"FNU", vmin:0, vmax:10,
+   scale:"linear", cmap:"turbid", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
+     + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/TUR",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
+   about:"עכירות ברזולוציה גבוהה ברצועת החוף, רק בימי מעבר של סנטינל-2."},
+  {id:"spm_hr", group:"שקיפות ועכירות", name:"חומר מרחף 100 מ' · קופרניקוס (סנטינל-2)",
+   src:"cm", cover:"sea", first:"2021-01-01", unit:"ג/מ\"ק", vmin:0, vmax:20,
+   scale:"linear", cmap:"turbid", probe:true,
+   layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
+     + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/SPM",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
+   about:"ריכוז החול והסחף המרחפים במים, ברצועת החוף ובימי מעבר בלבד."},
+
+  // -------------------------------------------------------------- true colour
+  {id:"tc_noaa20", group:"צבע טבעי", name:"VIIRS NOAA-20 250 מ' · נאס\"א GIBS",
+   src:"gibs", cover:"all", first:"2018-01-01", maxZoom:9, ext:"jpg", scale:null,
+   layer:"VIIRS_NOAA20_CorrectedReflectance_TrueColor",
+   product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
+   about:"התמונה כפי שהעין הייתה רואה מהחלל, כולל עננים ואבק, בצילום של 13:30 בערך. "
+     + "אין ערך מספרי, אבל אפשר לראות אם חור במפת הכלורופיל היה ענן."},
+  {id:"tc_snpp", group:"צבע טבעי", name:"VIIRS Suomi-NPP 250 מ' · נאס\"א GIBS",
+   src:"gibs", cover:"all", first:"2012-01-01", maxZoom:9, ext:"jpg", scale:null,
+   layer:"VIIRS_SNPP_CorrectedReflectance_TrueColor",
+   product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
+   about:"כמו NOAA-20, מלוויין ותיק יותר, מאז 2012."},
+  {id:"tc_terra", group:"צבע טבעי", name:"MODIS Terra 250 מ' · נאס\"א GIBS",
+   src:"gibs", cover:"all", first:"2000-02-24", maxZoom:9, ext:"jpg", scale:null,
+   layer:"MODIS_Terra_CorrectedReflectance_TrueColor",
+   product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
+   about:"התיעוד הארוך ביותר בצבע טבעי, מאז 2000, בצילום בוקר (10:30 בערך)."},
+  {id:"tc_aqua", group:"צבע טבעי", name:"MODIS Aqua 250 מ' · נאס\"א GIBS",
+   src:"gibs", cover:"all", first:"2002-07-04", maxZoom:9, ext:"jpg", scale:null,
+   layer:"MODIS_Aqua_CorrectedReflectance_TrueColor",
+   product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
+   about:"צילום צהריים מאז 2002, שעת המעבר של רוב מפות הכלורופיל."},
+];
+
+// The frame the sea-temperature and chlorophyll maps open on, one notch wider
+// so more of the basin is in view.
+const VIEW_BOUNDS = [[30.7, 29.6], [33.5, 35.5]];
+
+// Every ramp the service can draw. Any of them works on any layer - the
+// capabilities only advertise a product's default.
+const CMAPS = ["algae", "amp", "balance", "cyclic", "delta", "dense", "haline",
+               "ice", "matter", "plasma", "rainbow", "solar", "speed", "tempo",
+               "thermal", "viridis"];
+const LEGENDS = {};                    // style string -> {colorMap, min, max}
+
+let map = null, baseLayer = null, fieldLayer = null, labelLayer = null;
+let cbox = null, paletteOpen = false;
+let current = LAYERS[0], date = TODAY, busy = false, PLACES = [];
+let namesOn = false, namesTouched = false;
+
+const byId = id => LAYERS.find(l => l.id === id) || LAYERS[0];
+const iso = d => d.toISOString().slice(0, 10);
+const shift = (day, n) => iso(new Date(Date.parse(day + "T00:00:00Z") + n * 86400000));
+const lastDay = l => l.lag ? shift(TODAY, -l.lag) : TODAY;
+const clamp = d => d < current.first ? current.first
+  : d > lastDay(current) ? lastDay(current) : d;
+const el = id => document.getElementById(id);
+
+// ------------------------------------------------------------------ tile urls
+// The colour scale as the WMTS wants it: the product's own units, which for the
+// absolute temperature fields are kelvin while the boxes here are °C.
+function styleString() {
+  const lo = +el("vmin").value, hi = +el("vmax").value;
+  const k = current.kelvin ? KELVIN : 0;
+  return `cmap:${current.cmap}`
+    + (current.scale === "log" ? ",logScale" : "")
+    + `,range:${(lo + k).toFixed(2)}/${(hi + k).toFixed(2)}`;
+}
+
+function tileUrl(lyr, day) {
+  if (lyr.src === "gibs")
+    return `${GIBS}/${lyr.layer}/default/${day}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.${lyr.ext}`;
+  return `${CM}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
+    + `&LAYER=${encodeURIComponent(lyr.layer)}`
+    + `&STYLE=${encodeURIComponent(styleString())}`
+    + `&TILEMATRIXSET=EPSG:3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`
+    + `&FORMAT=image/png&TIME=${day}T00:00:00.000Z`
+    + cacheBust(day);
+}
+
+// A day asked for before its renderer caught up is cached as an empty tile and
+// served that way for a month. Vary the key once a day for days young enough to
+// be at risk - the same guard the chlorophyll page needs.
+function cacheBust(day) {
+  const age = (Date.now() - Date.parse(day + "T00:00:00Z")) / 86400000;
+  return age <= 6 ? "&_d=" + TODAY : "";
+}
+
+// One tile at the middle of the view, as a URL a canvas can read.
+function probeUrl(lyr, day) {
+  const z = Math.min(map.getZoom(), lyr.maxZoom || 12);
+  const p = map.project(map.getCenter(), z).divideBy(256).floor();
+  return tileUrl(lyr, day).replace("{z}", z).replace("{x}", p.x).replace("{y}", p.y);
+}
+
+// How much of that tile was painted. Copernicus and GIBS both serve tiles with
+// access-control-allow-origin: *, so the canvas stays readable.
+function painted(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext("2d", {willReadFrequently: true});
+      ctx.drawImage(img, 0, 0);
+      let px;
+      try { px = ctx.getImageData(0, 0, c.width, c.height).data; }
+      catch (e) { return resolve(1); }        // tainted: assume there is something
+      let on = 0;
+      // A JPEG has no transparency, so true colour is judged on darkness: an
+      // empty GIBS tile is solid black, a real one never is.
+      for (let i = 0; i < px.length; i += 4)
+        if (px[i + 3] > 10 && (px[i] > 12 || px[i + 1] > 12 || px[i + 2] > 12)) on++;
+      resolve(on / (px.length / 4));
+    };
+    img.onerror = () => resolve(0);
+    img.src = url;
+  });
+}
+
+// ---------------------------------------------------------------- colour bar
+// The ramp comes from the service itself, so the bar is the colours the tiles
+// were actually painted with rather than a guess at them.
+async function legendFor(style) {
+  if (LEGENDS[style]) return LEGENDS[style];
+  const url = `${CM}?SERVICE=WMTS&REQUEST=GetLegend`
+    + `&LAYER=${encodeURIComponent(current.layer)}`
+    + `&STYLE=${encodeURIComponent(style)}`
+    + `&FORMAT=${encodeURIComponent("application/json")}`;
+  const d = (await (await fetch(url)).json()).continuous;
+  LEGENDS[style] = {colorMap: d.cmap.colorMap, min: d.valueMin, max: d.valueMax};
+  return LEGENDS[style];
+}
+
+const gradient = cmap => "linear-gradient(to right, "
+  + cmap.map((c, i) => `rgb(${c[0]},${c[1]},${c[2]}) ${(100 * i / (cmap.length - 1)).toFixed(1)}%`)
+        .join(",") + ")";
+
+async function drawColorbar() {
+  if (!cbox) return;
+  // True colour is a photograph: there is no scale to put a bar on.
+  cbox.style.display = current.scale ? "" : "none";
+  if (!current.scale) return;
+  const k = current.kelvin ? KELVIN : 0;
+  cbox.querySelector(".cmin").textContent = (+el("vmin").value).toString();
+  cbox.querySelector(".cmax").textContent = (+el("vmax").value).toString();
+  cbox.querySelector(".cunit").textContent = current.unit || "";
+  try {
+    const lg = await legendFor(styleString());
+    cbox.querySelector(".grad").style.background = gradient(lg.colorMap);
+  } catch (e) { /* leave the bar as it was */ }
+  if (paletteOpen) fillPalette();
+}
+
+async function fillPalette() {
+  const box = el("palette");
+  box.innerHTML = "";
+  for (const cmap of CMAPS) {
+    const row = document.createElement("div");
+    row.className = "opt" + (cmap === current.cmap ? " on" : "");
+    row.innerHTML = `<span class="swatch"></span><span>${cmap}</span>`;
+    row.onclick = () => {
+      // Picking a ramp closes the picker: the bar goes back to showing the one
+      // scale the map is drawn with.
+      current.cmap = cmap;
+      paletteOpen = false;
+      el("palette").classList.remove("open");
+      draw();
+    };
+    box.appendChild(row);
+    const style = `cmap:${cmap}` + (current.scale === "log" ? ",logScale" : "")
+      + `,range:${LEGEND_RANGE()}`;
+    legendFor(style).then(lg => {
+      row.querySelector(".swatch").style.background = gradient(lg.colorMap);
+    }).catch(() => {});
+  }
+}
+
+function LEGEND_RANGE() {
+  const k = current.kelvin ? KELVIN : 0;
+  return `${(+el("vmin").value + k).toFixed(2)}/${(+el("vmax").value + k).toFixed(2)}`;
+}
+
+function addColorbar() {
+  const ctl = L.control({position: "topleft"});
+  ctl.onAdd = () => {
+    const d = L.DomUtil.create("div", "cbox");
+    d.innerHTML = '<div class="cbar"><div class="grad"></div>'
+      + '<div class="ends"><span class="cmin"></span><span class="cunit"></span>'
+      + '<span class="cmax"></span></div>'
+      + '<div class="hint">לחצו לבחירת צבעים</div></div>'
+      + '<div id="palette"></div>';
+    L.DomEvent.disableClickPropagation(d);
+    d.querySelector(".cbar").onclick = () => {
+      paletteOpen = !paletteOpen;
+      el("palette").classList.toggle("open", paletteOpen);
+      if (paletteOpen) fillPalette();
+    };
+    cbox = d;
+    return d;
+  };
+  ctl.addTo(map);
+}
+
+// ------------------------------------------------------------------- painting
+function draw() {
+  if (baseLayer) { map.removeLayer(baseLayer); baseLayer = null; }
+  if (fieldLayer) { map.removeLayer(fieldLayer); fieldLayer = null; }
+  // Imagery that covers the land is the basemap; a sea field lies over GovMap.
+  if (current.cover !== "all")
+    baseLayer = L.tileLayer(GOVMAP, {maxZoom: 12, zIndex: 0,
+      attribution: GOVMAP_CREDIT}).addTo(map);
+  fieldLayer = L.tileLayer(tileUrl(current, date), {
+    maxZoom: 12, maxNativeZoom: current.maxZoom || 12,
+    opacity: current.cover === "all" ? 1 : +el("opacity").value / 100,
+    zIndex: current.cover === "all" ? 0 : 5,
+    attribution: credit(),
+  }).addTo(map);
+  applyFilter();
+  drawNames();
+  drawColorbar();
+  syncControls();
+}
+
+// Imagery is a photograph and sometimes a flat one: haze over the sea, or a
+// winter scene that is all mid-grey. Brightness and contrast are applied to the
+// tiles in the browser, so nothing is re-fetched while the sliders move.
+function applyFilter() {
+  if (!fieldLayer || !fieldLayer.getContainer()) return;
+  const b = +el("bright").value / 100, c = +el("contrast").value / 100;
+  fieldLayer.getContainer().style.filter =
+    current.cover === "all" ? `brightness(${b}) contrast(${c})` : "";
+}
+
+// The credit points at the product this map is showing, not at the service's
+// front page: a reader who wants to know what they are looking at lands on the
+// page that says so.
+function credit() {
+  const who = current.src === "gibs" ? "NASA EOSDIS GIBS" : "E.U. Copernicus Marine";
+  return `<a href="${current.product}" target="_blank" rel="noopener">${who}</a>`;
+}
+
+function drawNames() {
+  if (labelLayer) { map.removeLayer(labelLayer); labelLayer = null; }
+  if (!namesOn || !PLACES.length) return;
+  const z = map.getZoom(), b = map.getBounds();
+  labelLayer = L.layerGroup([], {attribution: OSM_CREDIT}).addTo(map);
+  for (const p of PLACES) {
+    if (p.place !== "city" && z < 9) continue;        // towns only once close in
+    if (!b.pad(0.15).contains([p.lat, p.lon])) continue;
+    L.marker([p.lat, p.lon], {
+      interactive: false, pane: "shadowPane",
+      icon: L.divIcon({className: "", iconSize: [0, 0],
+        html: `<span class="map-label ${p.place}">${p.name}</span>`}),
+    }).addTo(labelLayer);
+  }
+}
+
+function syncControls() {
+  document.body.classList.toggle("imagery", current.cover === "all");
+  el("group").textContent = current.group;
+  el("layer").value = current.id;
+  const d = el("date");
+  d.value = date; d.min = current.first; d.max = lastDay(current);
+  const atStart = date <= current.first, atEnd = date >= lastDay(current);
+  el("prev").disabled = atStart || busy;
+  el("next").disabled = atEnd || busy;
+  // Greyed out rather than hidden where every day carries data, so the pair of
+  // arrows stays in the same place whatever map is on.
+  el("prevAvail").disabled = atStart || busy || !current.probe;
+  el("nextAvail").disabled = atEnd || busy || !current.probe;
+  el("latest").disabled = atEnd;
+
+  const scaled = !!current.scale;
+  el("log").disabled = !scaled || current.logOK === false;
+  el("linear").disabled = !scaled || current.logOK === false;
+  el("log").classList.toggle("on", scaled && current.scale === "log");
+  el("linear").classList.toggle("on", scaled && current.scale === "linear");
+  el("vmin").disabled = !scaled;
+  el("vmax").disabled = !scaled;
+  el("unit").textContent = current.unit || "";
+  el("opacity").disabled = current.cover === "all";
+
+  el("about").textContent = current.about;
+  el("about").title = current.about;
+}
+
+// ------------------------------------------------------------------ stepping
+function setDate(d) { date = clamp(d); draw(); }
+
+// "אחרון" means the newest day with something on it, not merely the newest day
+// the product covers: on a field with gaps the last day or two are often empty.
+async function goLatest() {
+  const end = lastDay(current);
+  date = end; draw();
+  if (!current.probe || busy) return;
+  busy = true;
+  let day = end, found = null;
+  for (let k = 0; k < 30; k++) {
+    el("status").textContent = `מחפש… ${day}`;
+    syncControls();
+    if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
+    day = shift(day, -1);
+    if (day < current.first) break;
+  }
+  busy = false;
+  el("status").textContent = "";
+  if (found) { date = found; }
+  draw();
+}
+
+// The next day the field actually has something at the middle of the view. One
+// small tile per day, stopping at the first day with more than a trace.
+async function stepAvailable(dir) {
+  if (busy) return;
+  busy = true;
+  const floor = current.first, ceil = lastDay(current);
+  let day = date, found = null;
+  for (let k = 1; k <= 45; k++) {
+    day = shift(day, dir);
+    if (day < floor || day > ceil) break;
+    el("status").textContent = `מחפש… ${day}`;
+    syncControls();
+    if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
+  }
+  busy = false;
+  el("status").textContent = found ? "" : "לא נמצא יום עם נתונים ב-45 הימים האלה";
+  if (found) { date = found; draw(); } else { syncControls(); }
+  if (!found) setTimeout(() => { el("status").textContent = ""; }, 4000);
+}
+
+// ---------------------------------------------------------------------- setup
+function buildMenu() {
+  const sel = el("layer");
+  let group = null, optg = null;
+  for (const l of LAYERS) {
+    if (l.group !== group) {
+      group = l.group;
+      optg = document.createElement("optgroup");
+      optg.label = group;
+      sel.appendChild(optg);
+    }
+    const o = document.createElement("option");
+    o.value = l.id; o.textContent = l.name.split(" · ")[0]
+      + (l.name.includes(" · ") ? " — " + l.name.split(" · ").slice(1).join(" · ") : "");
+    optg.appendChild(o);
+  }
+  sel.value = current.id;
+  sel.onchange = () => {
+    const was = current;
+    current = byId(sel.value);
+    el("vmin").value = current.vmin ?? "";
+    el("vmax").value = current.vmax ?? "";
+    // True colour is worth nothing without the names of the places under it, so
+    // it brings them on by itself until the reader says otherwise.
+    if (!namesTouched) namesOn = current.cover === "all";
+    el("names").checked = namesOn;
+    date = clamp(date);
+    draw();
+  };
+}
+
+function initMap() {
+  // Zoom to the right, so the left corner is the colour bar's and the scale
+  // bar's: the ramp and the kilometres read down one column.
+  map = L.map("map", {zoomControl: false, attributionControl: true});
+  map.fitBounds(VIEW_BOUNDS);          // no extra notch: more of the basin in view
+  L.control.zoom({position: "topright"}).addTo(map);
+  map.on("moveend zoomend", drawNames);
+}
+
+function wire() {
+  el("prev").onclick = () => setDate(shift(date, -1));
+  el("next").onclick = () => setDate(shift(date, 1));
+  el("prevAvail").onclick = () => stepAvailable(-1);
+  el("nextAvail").onclick = () => stepAvailable(1);
+  el("latest").onclick = goLatest;
+  for (const id of ["bright", "contrast"]) el(id).oninput = applyFilter;
+  el("date").onchange = e => e.target.value && setDate(e.target.value);
+  el("opacity").oninput = () => {
+    if (fieldLayer && current.cover !== "all")
+      fieldLayer.setOpacity(+el("opacity").value / 100);
+  };
+  for (const b of [el("log"), el("linear")])
+    b.onclick = () => { current.scale = b.dataset.scale; draw(); };
+  for (const id of ["vmin", "vmax"]) el(id).onchange = () => {
+    current.vmin = +el("vmin").value; current.vmax = +el("vmax").value; draw();
+  };
+  el("names").onchange = e => {
+    namesOn = e.target.checked; namesTouched = true; drawNames();
+  };
+}
+
+initMap();
+addColorbar();
+L.control.scale({imperial: false, position: "topleft"}).addTo(map);
+buildMenu();
+el("vmin").value = current.vmin;
+el("vmax").value = current.vmax;
+el("names").checked = namesOn;
+wire();
+draw();
+
+// The place names, for the maps that cover land. The committed copy on GitHub
+// first, so the page works the same opened from a checkout as from the site.
+(async () => {
+  for (const url of [PLACES_URL]) {
+    try {
+      const rows = await d3.csv(url);
+      if (rows && rows.length) {
+        PLACES = rows.filter(r => r.name_he && r.lat && r.lon)
+          .map(r => ({name: r.name_he, place: r.place, lat: +r.lat, lon: +r.lon}));
+        drawNames();
+        return;
+      }
+    } catch (e) { /* try the next one */ }
+  }
+})();
+</script>
+</body>
+</html>
