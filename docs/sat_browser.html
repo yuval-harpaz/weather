@@ -221,6 +221,26 @@ const LAYERS = [
    product:CM_HOME + "SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012/description",
    about:"המדידה עצמה ולא ניתוח: מה שהלוויין ראה, ולכן עננים משאירים חסרים. "
      + "חדה יותר מהניתוח ביום בהיר."},
+  {id:"mur", group:"טמפרטורת פני הים", name:"ניתוח יומי MUR 1 ק\"מ · נאס\"א GIBS",
+   src:"gibs", cover:"sea", first:"2002-06-01", maxZoom:7, ext:"png", scale:null,
+   tms:"GoogleMapsCompatible_Level7",
+   layer:"GHRSST_L4_MUR_Sea_Surface_Temperature",
+   product:"''' + GIBS_DOC + '''",
+   about:"ניתוח MUR של נאס\"א: אותה שאלה כמו המפה של קופרניקוס, במיזוג אחר של "
+     + "אותם לוויינים. נוח להשוות ביניהן באותו יום. הסקאלה קבועה ואינה ניתנת לשינוי."},
+  {id:"mur_anom", group:"טמפרטורת פני הים", name:"חריגה מהממוצע MUR · נאס\"א GIBS",
+   src:"gibs", cover:"sea", first:"2019-07-23", maxZoom:7, ext:"png", scale:null,
+   tms:"GoogleMapsCompatible_Level7",
+   layer:"GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies",
+   product:"''' + GIBS_DOC + '''",
+   about:"חריגת MUR מהממוצע הרב-שנתי, כגרסה האמריקאית של מפת החריגה של קופרניקוס."},
+  {id:"sst_viirs_night", group:"טמפרטורת פני הים", name:"מדידת לילה VIIRS · נאס\"א GIBS",
+   src:"gibs", cover:"sea", first:"2012-01-02", maxZoom:7, ext:"png", scale:null,
+   tms:"GoogleMapsCompatible_Level7", probe:true,
+   layer:"VIIRS_SNPP_L2_Sea_Surface_Temp_Night",
+   product:"''' + GIBS_DOC + '''",
+   about:"מדידת מעבר לילית, לא ניתוח: רצועות הלוויין נראות והעננים משאירים חסרים. "
+     + "בלילה השכבה העליונה אינה מחוממת מהשמש, ולכן היא קרובה יותר לטמפרטורת הים."},
 
   // ----------------------------------------------------------- chlorophyll
   {id:"chl_1km_nrt", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (זמן אמת)",
@@ -267,6 +287,26 @@ const LAYERS = [
      + "cmems_obs-oc_med_bgc-plankton_nrt_l4-gapfree-multi-1km_P1D_202207/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L4_NRT_009_142/description",
    about:"כלורופיל שהושלם באינטרפולציה לכל פיקסל, גם מתחת לעננים: חלק מהערכים הערכה ולא מדידה."},
+  {id:"chl_pace", group:"כלורופיל", name:"PACE OCI · נאס\"א GIBS (2024 ואילך)",
+   src:"gibs", cover:"sea", first:"2024-02-25", maxZoom:7, ext:"png", scale:null,
+   tms:"GoogleMapsCompatible_Level7", probe:true,
+   layer:"OCI_PACE_Chlorophyll_a",
+   product:"''' + GIBS_DOC + '''",
+   about:"החיישן החדש ביותר לצבע הים, PACE, שמודד במאה צבעים ולא בשישה. "
+     + "מ-2024 בלבד. הסקאלה קבועה ואינה ניתנת לשינוי."},
+  {id:"chl_noaa20", group:"כלורופיל", name:"VIIRS NOAA-20 · נאס\"א GIBS",
+   src:"gibs", cover:"sea", first:"2017-12-13", maxZoom:7, ext:"png", scale:null,
+   tms:"GoogleMapsCompatible_Level7", probe:true,
+   layer:"VIIRS_NOAA20_Chlorophyll_a",
+   product:"''' + GIBS_DOC + '''",
+   about:"כלורופיל יומי מ-VIIRS, בעיבוד של נאס\"א ולא של קופרניקוס - השוואה טובה "
+     + "לאותו יום במפה האירופית."},
+  {id:"chl_modis", group:"כלורופיל", name:"MODIS Aqua · נאס\"א GIBS (2002 ואילך)",
+   src:"gibs", cover:"sea", first:"2002-07-04", maxZoom:7, ext:"png", scale:null,
+   tms:"GoogleMapsCompatible_Level7", probe:true,
+   layer:"MODIS_Aqua_L2_Chlorophyll_A",
+   product:"''' + GIBS_DOC + '''",
+   about:"מעברי MODIS עצמם: רצועות הלוויין נראות, וימים שלמים יכולים לחסור."},
 
   // ------------------------------------------------- pigments / algae groups
   {id:"prokar", group:"קבוצות אצות ופיגמנטים", name:"ציאנובקטריה (פרוקריוטים) · קופרניקוס",
@@ -372,6 +412,8 @@ let namesOn = false, namesTouched = false;
 const byId = id => LAYERS.find(l => l.id === id) || LAYERS[0];
 const iso = d => d.toISOString().slice(0, 10);
 const shift = (day, n) => iso(new Date(Date.parse(day + "T00:00:00Z") + n * 86400000));
+// lag: an archive that trails today by a few days. Every map here reaches the
+// present; one that had stopped would need an end date as well.
 const lastDay = l => l.lag ? shift(TODAY, -l.lag) : TODAY;
 const clamp = d => d < current.first ? current.first
   : d > lastDay(current) ? lastDay(current) : d;
@@ -390,7 +432,8 @@ function styleString() {
 
 function tileUrl(lyr, day) {
   if (lyr.src === "gibs")
-    return `${GIBS}/${lyr.layer}/default/${day}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.${lyr.ext}`;
+    return `${GIBS}/${lyr.layer}/default/${day}/`
+      + `${lyr.tms || "GoogleMapsCompatible_Level9"}/{z}/{y}/{x}.${lyr.ext}`;
   return `${CM}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile`
     + `&LAYER=${encodeURIComponent(lyr.layer)}`
     + `&STYLE=${encodeURIComponent(styleString())}`
