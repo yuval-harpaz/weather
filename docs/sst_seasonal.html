@@ -146,6 +146,8 @@
     <span class="lbl" style="margin-left:14px" data-i18n="opacity">Opacity</span>
     <input type="range" id="opacity" min="0" max="100" value="80" style="width:110px">
     <span class="spacer"></span>
+    <a class="btnlink satlink" href="sat_browser.html"
+       title="אותה מפה בדפדפן המפות: כל השדות, יום אחר יום">הגדל מפה &#8599;</a>
     <a class="btnlink chllink" href="chl_seasonal.html"
        data-i18n="chlLink" data-i18n-title="chlLinkTip"
        title="the same coast, same day, chlorophyll">Chlorophyll map &#8599;</a>
@@ -1622,6 +1624,22 @@ function syncUrl() {
   history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
   for (const a of document.querySelectorAll("a.chllink"))
     a.href = "chl_seasonal.html" + (mapDate ? "?date=" + mapDate : "");
+  syncSatLink();
+}
+
+// The same field, the same day, the same frame, in the browser that carries
+// every other field beside it. Everything it needs rides in the link.
+function syncSatLink() {
+  const a = document.querySelector("a.satlink");
+  if (!a || !map) return;
+  const c = map.getCenter(), [mn, mx] = range();
+  const q = new URLSearchParams({
+    l: activeSource(shownDate()) === "rep" ? "sst_rep" : "sst_nrt",
+    d: shownDate(), z: map.getZoom(),
+    c: `${c.lat.toFixed(4)},${c.lng.toFixed(4)}`,
+    cmap: CMAP, sc: "linear", min: mn, max: mx,
+  });
+  a.href = "sat_browser.html?" + q.toString();
 }
 
 // Whether a day has a second field to offer depends on where the archive ends,
@@ -1747,6 +1765,7 @@ function initMap() {
     return d;
   };
   bar.addTo(map);
+  map.on("moveend zoomend", syncSatLink);
 
   document.getElementById("opacity").oninput = e => {
     if (sstLayer) sstLayer.setOpacity(+e.target.value / 100);

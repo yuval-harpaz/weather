@@ -1,0 +1,89 @@
+{
+ "generated": "2026-09-26",
+ "layers": {
+  "sst_nrt": {
+   "first": "2008-01-02"
+  },
+  "sst_rep": {
+   "first": "1982-01-02"
+  },
+  "sst_anom": {
+   "first": "2008-01-02"
+  },
+  "sst_l3": {
+   "first": "2008-01-02"
+  },
+  "mur": {
+   "first": "2002-06-01"
+  },
+  "mur_anom": {
+   "first": "2019-07-23"
+  },
+  "sst_viirs_night": {
+   "first": "2012-01-19"
+  },
+  "chl_1km_nrt": {
+   "rolling": 13
+  },
+  "chl_1km_my": {
+   "first": "1997-11-01"
+  },
+  "chl_300m_nrt": {
+   "rolling": 13
+  },
+  "chl_300m_my": {
+   "first": "2016-04-27"
+  },
+  "chl_100m": {
+   "first": "2020-01-11"
+  },
+  "chl_gapfree": {
+   "rolling": 13
+  },
+  "chl_pace": {
+   "first": "2024-03-05"
+  },
+  "chl_noaa20": {
+   "first": "2017-12-13"
+  },
+  "chl_modis": {
+   "first": "2002-07-04"
+  },
+  "prokar": {
+   "rolling": 13
+  },
+  "crypto": {
+   "rolling": 13
+  },
+  "diato": {
+   "rolling": 13
+  },
+  "dino": {
+   "rolling": 13
+  },
+  "pico": {
+   "rolling": 13
+  },
+  "kd490": {
+   "rolling": 13
+  },
+  "tur_hr": {
+   "first": "2020-01-11"
+  },
+  "spm_hr": {
+   "first": "2020-01-11"
+  },
+  "tc_noaa20": {
+   "first": "2018-01-05"
+  },
+  "tc_snpp": {
+   "first": "2015-11-24"
+  },
+  "tc_terra": {
+   "first": "2000-02-26"
+  },
+  "tc_aqua": {
+   "first": "2002-07-04"
+  }
+ }
+}

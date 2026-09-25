@@ -130,6 +130,8 @@
     <span class="lbl" style="margin-left:14px" data-i18n="opacity">Opacity</span>
     <input type="range" id="opacity" min="20" max="100" value="85" style="width:110px">
     <span class="spacer"></span>
+    <a class="btnlink satlink" href="sat_browser.html"
+       title="אותה מפה בדפדפן המפות: כל השדות, יום אחר יום">הגדל מפה &#8599;</a>
     <a class="btnlink sstlink" href="sst_seasonal.html" data-i18n="sstLink"
        data-i18n-title="sstLinkTip"
        title="the same coast, same day, sea temperature">Sea temperature map &#8599;</a>
@@ -761,6 +763,7 @@ const VIEW_CENTRE = [31.84845, 32.6128];
 
 async function initMap() {
   map = L.map("map", {zoomControl: true, attributionControl: true});
+  map.on("moveend zoomend", syncSatLink);
   map.fitBounds(VIEW_BOUNDS);
   applyBasemap(isDark());
   addMapControls();
@@ -1019,6 +1022,27 @@ function syncUrl() {
   history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
   for (const a of document.querySelectorAll("a.sstlink"))
     a.href = "sst_seasonal.html" + (atLatest ? "" : "?date=" + mapDate);
+  syncSatLink();
+}
+
+// The same field, the same day, the same frame, in the browser that carries
+// every other field beside it. Everything it needs rides in the link.
+function syncSatLink() {
+  const a = document.querySelector("a.satlink");
+  if (!a || !map) return;
+  const c = map.getCenter();
+  const chosen = document.getElementById("cmap").value;      // "cmap:x[,logScale]"
+  const log = chosen.includes("logScale");
+  const q = new URLSearchParams({
+    l: layerFor(mapDate || latestDate()) === LAYER_NRT ? "chl_1km_nrt" : "chl_1km_my",
+    d: mapDate || latestDate(), z: map.getZoom(),
+    c: `${c.lat.toFixed(4)},${c.lng.toFixed(4)}`,
+    cmap: chosen.split(":")[1].split(",")[0],
+    sc: log ? "log" : "linear",
+    min: log ? 0.01 : 0,
+    max: +document.getElementById("cmax").value || 10,
+  });
+  a.href = "sat_browser.html?" + q.toString();
 }
 
 function stepDay(n) {

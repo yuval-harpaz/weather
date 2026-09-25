@@ -25,6 +25,13 @@
   header { position:absolute; top:0; right:0; left:0; z-index:600;
     display:flex; justify-content:center; padding:6px 10px 0; pointer-events:none; }
   .bar { pointer-events:auto; }
+  #mini { position:absolute; top:6px; right:10px; z-index:601; display:none;
+    gap:6px; align-items:center; background:var(--surface); padding:4px 6px;
+    border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.14); }
+  body.collapsed header { display:none; }
+  body.collapsed #mini { display:flex; }
+  body.collapsed .leaflet-top { margin-top:0; }
   /* The bar is a card of its own, never wider than half a 1920 screen, so on a
      wide monitor it sits in the middle instead of stretching across it. */
   .bar { width:100%; max-width:960px; background:var(--surface);
@@ -84,6 +91,7 @@
     box-shadow:0 1px 5px rgba(0,0,0,.18); padding:6px 8px; font-size:11px;
     color:var(--ink2); }
   .cbar { cursor:pointer; }
+  .cbox .leg { display:block; width:230px; height:auto; }
   .cbar .grad { height:12px; border-radius:3px; border:1px solid rgba(0,0,0,.2);
     width:180px; margin-bottom:3px; }
   .cbar .ends { display:flex; justify-content:space-between; direction:ltr; }
@@ -127,7 +135,10 @@
       <button id="next" title="יום קדימה">&#8250;</button>
       <button id="nextAvail" title="קדימה ליום שיש בו נתונים">&#187;</button>
     </span>
+    <button id="start" title="היום הראשון שיש בו נתונים למפה הזו">התחלה</button>
     <button id="latest" title="היום העדכני ביותר">אחרון</button>
+    <button id="reset" title="חזרה להגדרות ברירת המחדל">איפוס</button>
+    <button id="collapse" title="הסתרת הסרגל">&#9650;</button>
   </div>
 
   <div class="row second">
@@ -154,6 +165,18 @@
  </div>
 </header>
 
+<!-- What is left of the bar once it is folded away: the way home, and the way
+     back to the controls. -->
+<div id="mini">
+  <a class="home" href="index.html" title="כל התרשימים" aria-label="דף הבית">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg></a>
+  <button id="expand" title="הצגת הסרגל">&#9664;</button>
+</div>
+
 <div id="map"></div>
 
 <script>
@@ -169,13 +192,29 @@
 const CM = "https://wmts.marine.copernicus.eu/teroWmts";
 const GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best";
 const CM_HOME = "https://data.marine.copernicus.eu/product/";
+// Worldview opens on the layer itself, which is a better answer to "what am I
+// looking at" than the catalogue of every layer NASA publishes.
+const WORLDVIEW = "https://worldview.earthdata.nasa.gov/?l=";
 const GOVMAP = "https://cdnil.govmap.gov.il/xyz/heb/{z}/{x}/{y}.png";
+// GovMap stops at the country's edge and at the wider zooms, and a map that
+// ends in grey is worse than a coarser one that does not. Google lies under it
+// everywhere, in Hebrew, and shows through wherever GovMap has nothing.
+const GOOGLE = "https://mt1.google.com/vt/lyrs=m&hl=iw&x={x}&y={y}&z={z}";
+const GOOGLE_CREDIT = '<a href="https://www.google.com/maps" target="_blank" '
+  + 'rel="noopener">מפות Google</a>';
 const GOVMAP_CREDIT = '<a href="https://www.govmap.gov.il/" target="_blank" '
   + 'rel="noopener">&copy; המרכז למיפוי ישראל</a>';
 const OSM_CREDIT = '<a href="https://www.openstreetmap.org/copyright" target="_blank" '
   + 'rel="noopener">&copy; OpenStreetMap</a>';
 // Kept in the alarms repo, where code/fetch_places.py builds it from Overpass;
 // read from there rather than copied, so both maps name places the same way.
+// Where each record begins, read from the two services' capabilities by
+// code/sat_first_dates.py. A near-real-time ocean-colour product keeps about a
+// fortnight and drops the rest, so its start is written as days back from today
+// rather than as a date that would be wrong tomorrow.
+const FIRST_URL = "https://raw.githubusercontent.com/yuval-harpaz/weather/"
+  + "refs/heads/main/data/sat_first_dates.json";
+
 const PLACES_URL = "https://raw.githubusercontent.com/yuval-harpaz/alarms/"
   + "refs/heads/master/data/coord_place.csv";
 
@@ -194,14 +233,14 @@ const LAYERS = [
   // ---------------------------------------------------------- sea temperature
   {id:"sst_nrt", group:"טמפרטורת פני הים", name:"ניתוח יומי 1 ק\"מ · קופרניקוס (זמן אמת)",
    src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31,
-   scale:"linear", logOK:false, cmap:"thermal", kelvin:true,
+   scale:"linear", logOK:false, cmap:"balance", kelvin:true,
    layer:"SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
      + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004_c_V2_202311/analysed_sst",
    product:CM_HOME + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/description",
    about:"טמפרטורת יסוד של פני הים, ניתוח יומי ללא חסרים - מיזוג של כמה לוויינים ומדידות ים."},
   {id:"sst_rep", group:"טמפרטורת פני הים", name:"ניתוח יומי 5 ק\"מ · קופרניקוס (מעובד מחדש)",
    src:"cm", cover:"sea", first:"1982-01-01", unit:"°C", vmin:17, vmax:31,
-   scale:"linear", logOK:false, cmap:"thermal", kelvin:true, lag:31,
+   scale:"linear", logOK:false, cmap:"balance", kelvin:true, lag:31,
    layer:"SST_MED_SST_L4_REP_OBSERVATIONS_010_021/"
      + "cmems_SST_MED_SST_L4_REP_OBSERVATIONS_010_021_202411/analysed_sst",
    product:CM_HOME + "SST_MED_SST_L4_REP_OBSERVATIONS_010_021/description",
@@ -215,7 +254,7 @@ const LAYERS = [
    about:"כמה חם או קר היום לעומת הממוצע הרב-שנתי לאותו תאריך: אדום חם מהרגיל, כחול קר."},
   {id:"sst_l3", group:"טמפרטורת פני הים", name:"מדידה יומית 1 ק\"מ · קופרניקוס (L3, עם חסרים)",
    src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31,
-   scale:"linear", logOK:false, cmap:"thermal", kelvin:true, probe:true,
+   scale:"linear", logOK:false, cmap:"balance", kelvin:true, probe:true,
    layer:"SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012/"
      + "SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012_b_202311/sea_surface_temperature",
    product:CM_HOME + "SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012/description",
@@ -225,64 +264,64 @@ const LAYERS = [
    src:"gibs", cover:"sea", first:"2002-06-01", maxZoom:7, ext:"png", scale:null,
    tms:"GoogleMapsCompatible_Level7",
    layer:"GHRSST_L4_MUR_Sea_Surface_Temperature",
-   product:"''' + GIBS_DOC + '''",
+   product:WORLDVIEW + "GHRSST_L4_MUR_Sea_Surface_Temperature", legend:"https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
    about:"ניתוח MUR של נאס\"א: אותה שאלה כמו המפה של קופרניקוס, במיזוג אחר של "
      + "אותם לוויינים. נוח להשוות ביניהן באותו יום. הסקאלה קבועה ואינה ניתנת לשינוי."},
   {id:"mur_anom", group:"טמפרטורת פני הים", name:"חריגה מהממוצע MUR · נאס\"א GIBS",
    src:"gibs", cover:"sea", first:"2019-07-23", maxZoom:7, ext:"png", scale:null,
    tms:"GoogleMapsCompatible_Level7",
    layer:"GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies",
-   product:"''' + GIBS_DOC + '''",
+   product:WORLDVIEW + "GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies", legend:"https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_Anomalies_H.svg",
    about:"חריגת MUR מהממוצע הרב-שנתי, כגרסה האמריקאית של מפת החריגה של קופרניקוס."},
   {id:"sst_viirs_night", group:"טמפרטורת פני הים", name:"מדידת לילה VIIRS · נאס\"א GIBS",
    src:"gibs", cover:"sea", first:"2012-01-02", maxZoom:7, ext:"png", scale:null,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"VIIRS_SNPP_L2_Sea_Surface_Temp_Night",
-   product:"''' + GIBS_DOC + '''",
+   product:WORLDVIEW + "VIIRS_SNPP_L2_Sea_Surface_Temp_Night", legend:"https://gibs.earthdata.nasa.gov/legends/VIIRS_Sea_Surface_Temperature_H.svg",
    about:"מדידת מעבר לילית, לא ניתוח: רצועות הלוויין נראות והעננים משאירים חסרים. "
      + "בלילה השכבה העליונה אינה מחוממת מהשמש, ולכן היא קרובה יותר לטמפרטורת הים."},
 
   // ----------------------------------------------------------- chlorophyll
   {id:"chl_1km_nrt", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (זמן אמת)",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
-   scale:"log", cmap:"algae", probe:true,
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   scale:"log", cmap:"viridis", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"כלורופיל-a, מדד לכמות האצות החד-תאיות. לבן הוא ענן או יבשה, לא מים נקיים."},
   {id:"chl_1km_my", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (מעובד מחדש)",
-   src:"cm", cover:"sea", first:"1997-09-04", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
-   scale:"log", cmap:"algae", probe:true, lag:9,
+   src:"cm", cover:"sea", first:"1997-09-04", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   scale:"log", cmap:"viridis", probe:true, lag:9,
    layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
      + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
    about:"אותו כלורופיל בעיבוד אחיד לאורך כל התיעוד, מ-1997."},
   {id:"chl_300m_nrt", group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס (זמן אמת)",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
-   scale:"log", cmap:"algae", probe:true,
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   scale:"log", cmap:"viridis", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-olci-300m_P1D_202207/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"פי שלושה חד יותר מהמפה הרב-חיישנית: פלומות הנילוס ותעלות החוף נראות בנפרד. "
      + "מחיישן אחד, ולכן יותר ימים חסרים."},
   {id:"chl_300m_my", group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס (מעובד מחדש)",
-   src:"cm", cover:"sea", first:"2016-04-25", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
-   scale:"log", cmap:"algae", probe:true, lag:9,
+   src:"cm", cover:"sea", first:"2016-04-25", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   scale:"log", cmap:"viridis", probe:true, lag:9,
    layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
      + "cmems_obs-oc_med_bgc-plankton_my_l3-olci-300m_P1D_202211/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
    about:"OLCI בעיבוד אחיד, מאז 2016."},
-  {id:"chl_100m", group:"כלורופיל", name:"סנטינל-2 100 מ' · קופרניקוס (מוזאיקת חוף)",
-   src:"cm", cover:"sea", first:"2021-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
-   scale:"log", cmap:"algae", probe:true,
+  {id:"chl_100m", group:"כלורופיל", name:"סנטינל-2 100 מ' · קופרניקוס (פסיפס חוף)",
+   src:"cm", cover:"sea", first:"2021-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   scale:"log", cmap:"viridis", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
      + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
    about:"החדה ביותר כאן, ברצועת החוף בלבד ורק בימים שסנטינל-2 עבר מעל האזור - "
      + "אחת לכמה ימים. « ו-» יקפצו ליום כזה."},
   {id:"chl_gapfree", group:"כלורופיל", name:"מפה מלאה ללא חסרים 1 ק\"מ · קופרניקוס (L4)",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.03, vmax:3,
-   scale:"log", cmap:"algae",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   scale:"log", cmap:"viridis",
    layer:"OCEANCOLOUR_MED_BGC_L4_NRT_009_142/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l4-gapfree-multi-1km_P1D_202207/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L4_NRT_009_142/description",
@@ -291,21 +330,21 @@ const LAYERS = [
    src:"gibs", cover:"sea", first:"2024-02-25", maxZoom:7, ext:"png", scale:null,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"OCI_PACE_Chlorophyll_a",
-   product:"''' + GIBS_DOC + '''",
+   product:WORLDVIEW + "OCI_PACE_Chlorophyll_a", legend:"https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
    about:"החיישן החדש ביותר לצבע הים, PACE, שמודד במאה צבעים ולא בשישה. "
      + "מ-2024 בלבד. הסקאלה קבועה ואינה ניתנת לשינוי."},
   {id:"chl_noaa20", group:"כלורופיל", name:"VIIRS NOAA-20 · נאס\"א GIBS",
    src:"gibs", cover:"sea", first:"2017-12-13", maxZoom:7, ext:"png", scale:null,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"VIIRS_NOAA20_Chlorophyll_a",
-   product:"''' + GIBS_DOC + '''",
+   product:WORLDVIEW + "VIIRS_NOAA20_Chlorophyll_a", legend:"https://gibs.earthdata.nasa.gov/legends/VIIRS_Chlorophyll_H.svg",
    about:"כלורופיל יומי מ-VIIRS, בעיבוד של נאס\"א ולא של קופרניקוס - השוואה טובה "
      + "לאותו יום במפה האירופית."},
   {id:"chl_modis", group:"כלורופיל", name:"MODIS Aqua · נאס\"א GIBS (2002 ואילך)",
    src:"gibs", cover:"sea", first:"2002-07-04", maxZoom:7, ext:"png", scale:null,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"MODIS_Aqua_L2_Chlorophyll_A",
-   product:"''' + GIBS_DOC + '''",
+   product:WORLDVIEW + "MODIS_Aqua_L2_Chlorophyll_A", legend:"https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
    about:"מעברי MODIS עצמם: רצועות הלוויין נראות, וימים שלמים יכולים לחסור."},
 
   // ------------------------------------------------- pigments / algae groups
@@ -404,7 +443,13 @@ const CMAPS = ["algae", "amp", "balance", "cyclic", "delta", "dense", "haline",
                "thermal", "viridis"];
 const LEGENDS = {};                    // style string -> {colorMap, min, max}
 
-let map = null, baseLayer = null, fieldLayer = null, labelLayer = null;
+// What each layer looks like untouched, so the reset knows where to go back to
+// and the link can leave out everything still at its default.
+const DEFAULTS = Object.fromEntries(LAYERS.map(l =>
+  [l.id, {cmap: l.cmap, scale: l.scale, vmin: l.vmin, vmax: l.vmax}]));
+const DEFAULT_LAYER = LAYERS[0].id;
+
+let map = null, baseLayer = null, govLayer = null, fieldLayer = null, labelLayer = null;
 let cbox = null, paletteOpen = false;
 let current = LAYERS[0], date = TODAY, busy = false, PLACES = [];
 let namesOn = false, namesTouched = false;
@@ -415,7 +460,9 @@ const shift = (day, n) => iso(new Date(Date.parse(day + "T00:00:00Z") + n * 8640
 // lag: an archive that trails today by a few days. Every map here reaches the
 // present; one that had stopped would need an end date as well.
 const lastDay = l => l.lag ? shift(TODAY, -l.lag) : TODAY;
-const clamp = d => d < current.first ? current.first
+// first is what the page was written with; a loaded record replaces it.
+const firstDay = l => l.rolling ? shift(TODAY, -l.rolling) : l.first;
+const clamp = d => d < firstDay(current) ? firstDay(current)
   : d > lastDay(current) ? lastDay(current) : d;
 const el = id => document.getElementById(id);
 
@@ -503,8 +550,14 @@ const gradient = cmap => "linear-gradient(to right, "
 
 async function drawColorbar() {
   if (!cbox) return;
-  // True colour is a photograph: there is no scale to put a bar on.
-  cbox.style.display = current.scale ? "" : "none";
+  // True colour is a photograph: there is no scale to put a bar on. A NASA field
+  // is painted with a ramp baked into the tiles, so its own published legend is
+  // the only honest bar - and there is nothing to pick.
+  const leg = cbox.querySelector(".leg"), bar = cbox.querySelector(".cbar");
+  cbox.style.display = (current.scale || current.legend) ? "" : "none";
+  leg.style.display = current.legend ? "" : "none";
+  bar.style.display = current.scale ? "" : "none";
+  if (current.legend) { if (leg.src !== current.legend) leg.src = current.legend; }
   if (!current.scale) return;
   const k = current.kelvin ? KELVIN : 0;
   cbox.querySelector(".cmin").textContent = (+el("vmin").value).toString();
@@ -550,7 +603,8 @@ function addColorbar() {
   const ctl = L.control({position: "topleft"});
   ctl.onAdd = () => {
     const d = L.DomUtil.create("div", "cbox");
-    d.innerHTML = '<div class="cbar"><div class="grad"></div>'
+    d.innerHTML = '<img class="leg" alt="">'
+      + '<div class="cbar"><div class="grad"></div>'
       + '<div class="ends"><span class="cmin"></span><span class="cunit"></span>'
       + '<span class="cmax"></span></div>'
       + '<div class="hint">לחצו לבחירת צבעים</div></div>'
@@ -570,11 +624,17 @@ function addColorbar() {
 // ------------------------------------------------------------------- painting
 function draw() {
   if (baseLayer) { map.removeLayer(baseLayer); baseLayer = null; }
+  if (govLayer) { map.removeLayer(govLayer); govLayer = null; }
   if (fieldLayer) { map.removeLayer(fieldLayer); fieldLayer = null; }
-  // Imagery that covers the land is the basemap; a sea field lies over GovMap.
-  if (current.cover !== "all")
-    baseLayer = L.tileLayer(GOVMAP, {maxZoom: 12, zIndex: 0,
-      attribution: GOVMAP_CREDIT}).addTo(map);
+  // Imagery that covers the land is the basemap of its own; a sea field lies on
+  // GovMap where GovMap reaches, and on Google where it does not.
+  if (current.cover !== "all") {
+    baseLayer = L.tileLayer(GOOGLE, {maxZoom: 18, zIndex: 0,
+      attribution: GOOGLE_CREDIT}).addTo(map);
+    govLayer = L.tileLayer(GOVMAP, {maxZoom: 12, minZoom: 7, zIndex: 1,
+      attribution: GOVMAP_CREDIT, errorTileUrl:
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}).addTo(map);
+  }
   fieldLayer = L.tileLayer(tileUrl(current, date), {
     maxZoom: 12, maxNativeZoom: current.maxZoom || 12,
     opacity: current.cover === "all" ? 1 : +el("opacity").value / 100,
@@ -585,6 +645,7 @@ function draw() {
   drawNames();
   drawColorbar();
   syncControls();
+  writeUrl();
 }
 
 // Imagery is a photograph and sometimes a flat one: haze over the sea, or a
@@ -626,8 +687,11 @@ function syncControls() {
   el("group").textContent = current.group;
   el("layer").value = current.id;
   const d = el("date");
-  d.value = date; d.min = current.first; d.max = lastDay(current);
-  const atStart = date <= current.first, atEnd = date >= lastDay(current);
+  d.min = firstDay(current); d.max = lastDay(current);
+  // Not while it is being typed into: rewriting the box mid-entry is what made
+  // a four digit year impossible to type.
+  if (document.activeElement !== d) d.value = date;
+  const atStart = date <= firstDay(current), atEnd = date >= lastDay(current);
   el("prev").disabled = atStart || busy;
   el("next").disabled = atEnd || busy;
   // Greyed out rather than hidden where every day carries data, so the pair of
@@ -666,11 +730,56 @@ async function goLatest() {
     syncControls();
     if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
     day = shift(day, -1);
-    if (day < current.first) break;
+    if (day < firstDay(current)) break;
   }
   busy = false;
   el("status").textContent = "";
   if (found) { date = found; }
+  draw();
+}
+
+// The first day this map has anything, which for a near-real-time product is
+// only a fortnight ago and for the reprocessed archives is the 1980s or 90s.
+async function goStart() {
+  const start = firstDay(current);
+  date = start; draw();
+  // Always walk forward, whatever the product: the first day of a record is
+  // often a day the service declares and cannot draw, and the early years of
+  // ocean colour are thin enough that the first days can be empty.
+  if (busy) return;
+  busy = true;
+  let day = start, found = null;
+  for (let k = 0; k < 60; k++) {
+    el("status").textContent = `מחפש… ${day}`;
+    syncControls();
+    if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
+    day = shift(day, 1);
+    if (day > lastDay(current)) break;
+  }
+  busy = false;
+  el("status").textContent = "";
+  if (found) date = found;
+  draw();
+}
+
+// Back to how the page opens: the first map, its own colours, today, and the
+// frame both sea maps share. The link empties out with it.
+function resetAll() {
+  current = byId(DEFAULT_LAYER);
+  for (const l of LAYERS) Object.assign(l, DEFAULTS[l.id]);
+  date = lastDay(current);
+  el("opacity").value = 85;
+  el("bright").value = 100;
+  el("contrast").value = 100;
+  el("vmin").value = current.vmin ?? "";
+  el("vmax").value = current.vmax ?? "";
+  namesTouched = false;
+  namesOn = current.cover === "all";
+  el("names").checked = namesOn;
+  document.body.classList.remove("collapsed");
+  paletteOpen = false;
+  el("palette").classList.remove("open");
+  map.fitBounds(VIEW_BOUNDS);
   draw();
 }
 
@@ -679,7 +788,7 @@ async function goLatest() {
 async function stepAvailable(dir) {
   if (busy) return;
   busy = true;
-  const floor = current.first, ceil = lastDay(current);
+  const floor = firstDay(current), ceil = lastDay(current);
   let day = date, found = null;
   for (let k = 1; k <= 45; k++) {
     day = shift(day, dir);
@@ -692,6 +801,69 @@ async function stepAvailable(dir) {
   el("status").textContent = found ? "" : "לא נמצא יום עם נתונים ב-45 הימים האלה";
   if (found) { date = found; draw(); } else { syncControls(); }
   if (!found) setTimeout(() => { el("status").textContent = ""; }, 4000);
+}
+
+// ------------------------------------------------------------------ the link
+// Everything the reader chose lives in the address bar, so the link they copy
+// opens on the same map, day, frame and colours. Written with replaceState: the
+// back button is for leaving the page, not for undoing a pan.
+function writeUrl() {
+  if (!map) return;
+  const q = new URLSearchParams(), d0 = DEFAULTS[current.id];
+  if (current.id !== DEFAULT_LAYER) q.set("l", current.id);
+  if (date !== lastDay(current)) q.set("d", date);
+  // The opening frame is not stored: only a view the reader moved to is.
+  if (!atHomeView()) {
+    const c = map.getCenter();
+    q.set("z", map.getZoom());
+    q.set("c", `${c.lat.toFixed(4)},${c.lng.toFixed(4)}`);
+  }
+  if (current.scale) {
+    if (current.cmap !== d0.cmap) q.set("cmap", current.cmap);
+    if (current.scale !== d0.scale) q.set("sc", current.scale);
+    if (+el("vmin").value !== d0.vmin) q.set("min", el("vmin").value);
+    if (+el("vmax").value !== d0.vmax) q.set("max", el("vmax").value);
+  }
+  if (el("opacity").value !== "85") q.set("op", el("opacity").value);
+  if (namesOn !== (current.cover === "all")) q.set("nm", namesOn ? "1" : "0");
+  if (el("bright").value !== "100") q.set("br", el("bright").value);
+  if (el("contrast").value !== "100") q.set("ct", el("contrast").value);
+  if (document.body.classList.contains("collapsed")) q.set("bar", "0");
+  const qs = q.toString();
+  history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+}
+
+// Whether the map is still on the frame it opens with, within a pixel or two of
+// pan and the same zoom - a fitBounds does not land on round numbers.
+function atHomeView() {
+  const home = map.getBoundsZoom(L.latLngBounds(VIEW_BOUNDS));
+  if (map.getZoom() !== home) return false;
+  const c = map.getCenter(), h = L.latLngBounds(VIEW_BOUNDS).getCenter();
+  return Math.abs(c.lat - h.lat) < 0.02 && Math.abs(c.lng - h.lng) < 0.02;
+}
+
+// The same in reverse, before anything is drawn. Returns the view to open on,
+// when the link carried one.
+function readUrl() {
+  const q = new URLSearchParams(location.search);
+  const l = q.get("l") && LAYERS.find(x => x.id === q.get("l"));
+  if (l) current = l;
+  const d = q.get("d");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d || "")) date = d;
+  if (q.get("cmap") && CMAPS.includes(q.get("cmap"))) current.cmap = q.get("cmap");
+  if (["log", "linear"].includes(q.get("sc")) && current.scale) current.scale = q.get("sc");
+  if (q.get("min") !== null && isFinite(+q.get("min"))) current.vmin = +q.get("min");
+  if (q.get("max") !== null && isFinite(+q.get("max"))) current.vmax = +q.get("max");
+  if (q.get("op")) el("opacity").value = q.get("op");
+  if (q.get("br")) el("bright").value = q.get("br");
+  if (q.get("ct")) el("contrast").value = q.get("ct");
+  namesOn = q.get("nm") === "1" || (q.get("nm") === null && current.cover === "all");
+  if (q.get("nm") !== null) namesTouched = true;
+  if (q.get("bar") === "0") document.body.classList.add("collapsed");
+  const c = (q.get("c") || "").split(",").map(Number);
+  const z = +q.get("z");
+  return (c.length === 2 && c.every(isFinite) && isFinite(z) && z > 0)
+    ? {centre: c, zoom: z} : null;
 }
 
 // ---------------------------------------------------------------------- setup
@@ -725,11 +897,13 @@ function buildMenu() {
   };
 }
 
-function initMap() {
+function initMap(view) {
   // Zoom to the right, so the left corner is the colour bar's and the scale
   // bar's: the ramp and the kilometres read down one column.
   map = L.map("map", {zoomControl: false, attributionControl: true});
-  map.fitBounds(VIEW_BOUNDS);          // no extra notch: more of the basin in view
+  if (view) map.setView(view.centre, view.zoom);
+  else map.fitBounds(VIEW_BOUNDS);     // no extra notch: more of the basin in view
+  map.on("moveend zoomend", writeUrl);
   L.control.zoom({position: "topright"}).addTo(map);
   map.on("moveend zoomend", drawNames);
 }
@@ -740,8 +914,18 @@ function wire() {
   el("prevAvail").onclick = () => stepAvailable(-1);
   el("nextAvail").onclick = () => stepAvailable(1);
   el("latest").onclick = goLatest;
+  el("start").onclick = goStart;
+  el("reset").onclick = resetAll;
   for (const id of ["bright", "contrast"]) el(id).oninput = applyFilter;
-  el("date").onchange = e => e.target.value && setDate(e.target.value);
+  // A date is typed a field at a time, and until the year has four digits the
+  // value is a real but wrong date - 0002-09-25 on the way to 2026. Clamping
+  // that would rewrite the box under the cursor and make a year impossible to
+  // type, so anything outside the record is simply left alone.
+  el("date").onchange = e => {
+    const v = e.target.value;
+    if (!v) return;
+    if (v >= firstDay(current) && v <= lastDay(current)) setDate(v);
+  };
   el("opacity").oninput = () => {
     if (fieldLayer && current.cover !== "all")
       fieldLayer.setOpacity(+el("opacity").value / 100);
@@ -752,19 +936,48 @@ function wire() {
     current.vmin = +el("vmin").value; current.vmax = +el("vmax").value; draw();
   };
   el("names").onchange = e => {
-    namesOn = e.target.checked; namesTouched = true; drawNames();
+    namesOn = e.target.checked; namesTouched = true; drawNames(); writeUrl();
   };
+  el("collapse").onclick = () => {
+    document.body.classList.add("collapsed"); writeUrl();
+  };
+  el("expand").onclick = () => {
+    document.body.classList.remove("collapsed"); writeUrl();
+  };
+  for (const id of ["opacity", "bright", "contrast"]) el(id).onchange = writeUrl;
 }
 
-initMap();
+const opening = readUrl();
+initMap(opening);
 addColorbar();
 L.control.scale({imperial: false, position: "topleft"}).addTo(map);
 buildMenu();
-el("vmin").value = current.vmin;
-el("vmax").value = current.vmax;
+el("vmin").value = current.vmin ?? "";
+el("vmax").value = current.vmax ?? "";
 el("names").checked = namesOn;
 wire();
 draw();
+
+// Where each record begins. Until it lands the page uses the dates it was
+// written with, which are never later than the real ones.
+(async () => {
+  // The committed copy first, so the site is served one file; the checkout's own
+  // copy second, for a page opened from disk before it has been pushed.
+  for (const url of [FIRST_URL, "../data/sat_first_dates.json"]) {
+    try {
+      const d = await d3.json(url);
+      if (!d || !d.layers) continue;
+      for (const l of LAYERS) {
+        const rec = d.layers[l.id];
+        if (!rec) continue;
+        if (rec.rolling) l.rolling = rec.rolling; else l.first = rec.first;
+      }
+      date = clamp(date);
+      syncControls();
+      return;
+    } catch (e) { /* try the next one */ }
+  }
+})();
 
 // The place names, for the maps that cover land. The committed copy on GitHub
 // first, so the page works the same opened from a checkout as from the site.
