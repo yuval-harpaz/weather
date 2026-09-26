@@ -232,7 +232,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const LAYERS = [
   // ---------------------------------------------------------- sea temperature
   {id:"sst_nrt", group:"טמפרטורת פני הים", name:"ניתוח יומי 1 ק\"מ · קופרניקוס (זמן אמת)",
-   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31,
+   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31, lag:1,
    scale:"linear", logOK:false, cmap:"balance", kelvin:true,
    layer:"SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
      + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004_c_V2_202311/analysed_sst",
@@ -246,14 +246,14 @@ const LAYERS = [
    product:CM_HOME + "SST_MED_SST_L4_REP_OBSERVATIONS_010_021/description",
    about:"אותה טמפרטורה בניתוח גס יותר אך אחיד לאורך זמן, מ-1982. מפגר כחודש אחרי היום."},
   {id:"sst_anom", group:"טמפרטורת פני הים", name:"חריגה מהממוצע · קופרניקוס (זמן אמת)",
-   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:-3, vmax:3,
+   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:-3, vmax:3, lag:1,
    scale:"linear", logOK:false, cmap:"balance",
    layer:"SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/"
      + "SST_MED_SSTA_L4_NRT_OBSERVATIONS_010_004_d_202607/sst_anomaly",
    product:CM_HOME + "SST_MED_SST_L4_NRT_OBSERVATIONS_010_004/description",
    about:"כמה חם או קר היום לעומת הממוצע הרב-שנתי לאותו תאריך: אדום חם מהרגיל, כחול קר."},
   {id:"sst_l3", group:"טמפרטורת פני הים", name:"מדידה יומית 1 ק\"מ · קופרניקוס (L3, עם חסרים)",
-   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31,
+   src:"cm", cover:"sea", first:"2008-01-01", unit:"°C", vmin:17, vmax:31, lag:1,
    scale:"linear", logOK:false, cmap:"balance", kelvin:true, probe:true,
    layer:"SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012/"
      + "SST_MED_SST_L3S_NRT_OBSERVATIONS_010_012_b_202311/sea_surface_temperature",
@@ -261,20 +261,20 @@ const LAYERS = [
    about:"המדידה עצמה ולא ניתוח: מה שהלוויין ראה, ולכן עננים משאירים חסרים. "
      + "חדה יותר מהניתוח ביום בהיר."},
   {id:"mur", group:"טמפרטורת פני הים", name:"ניתוח יומי MUR 1 ק\"מ · נאס\"א GIBS",
-   src:"gibs", cover:"sea", first:"2002-06-01", maxZoom:7, ext:"png", scale:null,
+   src:"gibs", cover:"sea", first:"2002-06-01", maxZoom:7, ext:"png", scale:null, lag:2,
    tms:"GoogleMapsCompatible_Level7",
    layer:"GHRSST_L4_MUR_Sea_Surface_Temperature",
    product:WORLDVIEW + "GHRSST_L4_MUR_Sea_Surface_Temperature", legend:"https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
    about:"ניתוח MUR של נאס\"א: אותה שאלה כמו המפה של קופרניקוס, במיזוג אחר של "
      + "אותם לוויינים. נוח להשוות ביניהן באותו יום. הסקאלה קבועה ואינה ניתנת לשינוי."},
   {id:"mur_anom", group:"טמפרטורת פני הים", name:"חריגה מהממוצע MUR · נאס\"א GIBS",
-   src:"gibs", cover:"sea", first:"2019-07-23", maxZoom:7, ext:"png", scale:null,
+   src:"gibs", cover:"sea", first:"2019-07-23", maxZoom:7, ext:"png", scale:null, lag:2,
    tms:"GoogleMapsCompatible_Level7",
    layer:"GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies",
    product:WORLDVIEW + "GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies", legend:"https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_Anomalies_H.svg",
    about:"חריגת MUR מהממוצע הרב-שנתי, כגרסה האמריקאית של מפת החריגה של קופרניקוס."},
   {id:"sst_viirs_night", group:"טמפרטורת פני הים", name:"מדידת לילה VIIRS · נאס\"א GIBS",
-   src:"gibs", cover:"sea", first:"2012-01-02", maxZoom:7, ext:"png", scale:null,
+   src:"gibs", cover:"sea", first:"2012-01-02", maxZoom:7, ext:"png", scale:null, lag:1,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"VIIRS_SNPP_L2_Sea_Surface_Temp_Night",
    product:WORLDVIEW + "VIIRS_SNPP_L2_Sea_Surface_Temp_Night", legend:"https://gibs.earthdata.nasa.gov/legends/VIIRS_Sea_Surface_Temperature_H.svg",
@@ -282,126 +282,181 @@ const LAYERS = [
      + "בלילה השכבה העליונה אינה מחוממת מהשמש, ולכן היא קרובה יותר לטמפרטורת הים."},
 
   // ----------------------------------------------------------- chlorophyll
-  {id:"chl_1km_nrt", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (זמן אמת)",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+  {id:"chl_1km_nrt", hidden:true, group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10, lag:2,
    scale:"log", cmap:"viridis", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"כלורופיל-a, מדד לכמות האצות החד-תאיות. לבן הוא ענן או יבשה, לא מים נקיים."},
-  {id:"chl_1km_my", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס (מעובד מחדש)",
+  {id:"chl_1km_my", group:"כלורופיל", name:"רב-חיישני 1 ק\"מ · קופרניקוס",
    src:"cm", cover:"sea", first:"1997-09-04", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
-   scale:"log", cmap:"viridis", probe:true, lag:9,
+   scale:"log", cmap:"viridis", probe:true, lag:9, pair:"chl_1km_nrt", pair:"chl_1km_nrt",
    layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
      + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
    about:"אותו כלורופיל בעיבוד אחיד לאורך כל התיעוד, מ-1997."},
-  {id:"chl_300m_nrt", group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס (זמן אמת)",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+  {id:"chl_300m_nrt", hidden:true, group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10, lag:2,
    scale:"log", cmap:"viridis", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-olci-300m_P1D_202207/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"פי שלושה חד יותר מהמפה הרב-חיישנית: פלומות הנילוס ותעלות החוף נראות בנפרד. "
      + "מחיישן אחד, ולכן יותר ימים חסרים."},
-  {id:"chl_300m_my", group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס (מעובד מחדש)",
+  {id:"chl_300m_my", group:"כלורופיל", name:"סנטינל-3 OLCI 300 מ' · קופרניקוס",
    src:"cm", cover:"sea", first:"2016-04-25", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
-   scale:"log", cmap:"viridis", probe:true, lag:9,
+   scale:"log", cmap:"viridis", probe:true, lag:9, pair:"chl_300m_nrt", pair:"chl_300m_nrt",
    layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
      + "cmems_obs-oc_med_bgc-plankton_my_l3-olci-300m_P1D_202211/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
    about:"OLCI בעיבוד אחיד, מאז 2016."},
   {id:"chl_100m", group:"כלורופיל", name:"סנטינל-2 100 מ' · קופרניקוס (פסיפס חוף)",
-   src:"cm", cover:"sea", first:"2021-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   src:"cm", cover:"sea", first:"2021-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10, lag:2,
    scale:"log", cmap:"viridis", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
      + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
    about:"החדה ביותר כאן, ברצועת החוף בלבד ורק בימים שסנטינל-2 עבר מעל האזור - "
      + "אחת לכמה ימים. « ו-» יקפצו ליום כזה."},
-  {id:"chl_gapfree", group:"כלורופיל", name:"מפה מלאה ללא חסרים 1 ק\"מ · קופרניקוס (L4)",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+  {id:"chl_gapfree_my", group:"כלורופיל", name:"מפה מלאה ללא חסרים 1 ק\"מ · קופרניקוס (L4)",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
+   scale:"log", cmap:"viridis", lag:13, pair:"chl_gapfree",
+   layer:"OCEANCOLOUR_MED_BGC_L4_MY_009_144/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l4-gapfree-multi-1km_P1D_202311/CHL",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L4_MY_009_144/description",
+   about:"כלורופיל שהושלם באינטרפולציה לכל פיקסל, גם מתחת לעננים: חלק מהערכים הערכה ולא מדידה."},
+  {id:"chl_gapfree", group:"כלורופיל", hidden:true, name:"מפה מלאה ללא חסרים 1 ק\"מ · קופרניקוס (L4, זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10, lag:2,
    scale:"log", cmap:"viridis",
    layer:"OCEANCOLOUR_MED_BGC_L4_NRT_009_142/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l4-gapfree-multi-1km_P1D_202207/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L4_NRT_009_142/description",
    about:"כלורופיל שהושלם באינטרפולציה לכל פיקסל, גם מתחת לעננים: חלק מהערכים הערכה ולא מדידה."},
   {id:"chl_pace", group:"כלורופיל", name:"PACE OCI · נאס\"א GIBS (2024 ואילך)",
-   src:"gibs", cover:"sea", first:"2024-02-25", maxZoom:7, ext:"png", scale:null,
+   src:"gibs", cover:"sea", first:"2024-02-25", maxZoom:7, ext:"png", scale:null, lag:1,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"OCI_PACE_Chlorophyll_a",
    product:WORLDVIEW + "OCI_PACE_Chlorophyll_a", legend:"https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
    about:"החיישן החדש ביותר לצבע הים, PACE, שמודד במאה צבעים ולא בשישה. "
      + "מ-2024 בלבד. הסקאלה קבועה ואינה ניתנת לשינוי."},
   {id:"chl_noaa20", group:"כלורופיל", name:"VIIRS NOAA-20 · נאס\"א GIBS",
-   src:"gibs", cover:"sea", first:"2017-12-13", maxZoom:7, ext:"png", scale:null,
+   src:"gibs", cover:"sea", first:"2017-12-13", maxZoom:7, ext:"png", scale:null, lag:1,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"VIIRS_NOAA20_Chlorophyll_a",
    product:WORLDVIEW + "VIIRS_NOAA20_Chlorophyll_a", legend:"https://gibs.earthdata.nasa.gov/legends/VIIRS_Chlorophyll_H.svg",
    about:"כלורופיל יומי מ-VIIRS, בעיבוד של נאס\"א ולא של קופרניקוס - השוואה טובה "
      + "לאותו יום במפה האירופית."},
   {id:"chl_modis", group:"כלורופיל", name:"MODIS Aqua · נאס\"א GIBS (2002 ואילך)",
-   src:"gibs", cover:"sea", first:"2002-07-04", maxZoom:7, ext:"png", scale:null,
+   src:"gibs", cover:"sea", first:"2002-07-04", maxZoom:7, ext:"png", scale:null, lag:1,
    tms:"GoogleMapsCompatible_Level7", probe:true,
    layer:"MODIS_Aqua_L2_Chlorophyll_A",
    product:WORLDVIEW + "MODIS_Aqua_L2_Chlorophyll_A", legend:"https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
    about:"מעברי MODIS עצמם: רצועות הלוויין נראות, וימים שלמים יכולים לחסור."},
 
   // ------------------------------------------------- pigments / algae groups
-  {id:"prokar", group:"קבוצות אצות ופיגמנטים", name:"ציאנובקטריה (פרוקריוטים) · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+  {id:"prokar", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"ציאנובקטריה (פרוקריוטים) · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
    scale:"log", cmap:"algae", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/PROKAR",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"חלק הכלורופיל השייך לציאנובקטריה כמו Synechococcus, הנושאות פיקוציאנין "
      + "ופיקואריתרין - הפיגמנטים הכחולים. הקרוב ביותר ל\"פיגמנט הכחול\" מלוויין."},
-  {id:"crypto", group:"קבוצות אצות ופיגמנטים", name:"קריפטופיטים · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+  {id:"crypto", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"קריפטופיטים · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
    scale:"log", cmap:"algae", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CRYPTO",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"אצות שגם הן נושאות פיקואריתרין; קבוצה קטנה יחסית במים האלה."},
-  {id:"diato", group:"קבוצות אצות ופיגמנטים", name:"דיאטומיות · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+  {id:"diato", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"דיאטומיות · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
    scale:"log", cmap:"algae", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/DIATO",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"האצות הגדולות שמובילות את פריחות החורף והאביב."},
-  {id:"dino", group:"קבוצות אצות ופיגמנטים", name:"דינופלגלטים · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+  {id:"dino", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"דינופלגלטים · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
    scale:"log", cmap:"algae", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/DINO",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"הקבוצה שאליה שייכות פריחות ה\"גאות האדומה\"."},
-  {id:"pico", group:"קבוצות אצות ופיגמנטים", name:"פיקופלנקטון · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+  {id:"pico", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"פיקופלנקטון · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
    scale:"log", cmap:"algae", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/PICO",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"התאים הקטנים מ-2 מיקרון, רוב הייצור הראשוני במים העניים של מזרח הים התיכון בקיץ."},
 
+  {id:"prokar_my", group:"קבוצות אצות ופיגמנטים", name:"ציאנובקטריה (פרוקריוטים) · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true, lag:9, pair:"prokar",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/PROKAR",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
+     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
+  {id:"crypto_my", group:"קבוצות אצות ופיגמנטים", name:"קריפטופיטים · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true, lag:9, pair:"crypto",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/CRYPTO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
+     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
+  {id:"diato_my", group:"קבוצות אצות ופיגמנטים", name:"דיאטומיות · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true, lag:9, pair:"diato",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/DIATO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
+     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
+  {id:"dino_my", group:"קבוצות אצות ופיגמנטים", name:"דינופלגלטים · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true, lag:9, pair:"dino",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/DINO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
+     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
+  {id:"pico_my", group:"קבוצות אצות ופיגמנטים", name:"פיקופלנקטון · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
+   scale:"log", cmap:"algae", probe:true, lag:9, pair:"pico",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/PICO",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
+     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
+
   // ------------------------------------------------------------ water clarity
-  {id:"kd490", group:"שקיפות ועכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"1/מ'", vmin:0.02, vmax:1,
+  {id:"kd490", hidden:true, group:"שקיפות ועכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"1/מ'", vmin:0.02, vmax:1, lag:2,
    scale:"log", cmap:"turbid", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-transp_nrt_l3-multi-1km_P1D_202207/KD490",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"כמה מהר נבלע אור כחול-ירוק במים: ערך גבוה הוא מים עכורים מפלומה, סערה או פריחה."},
+  {id:"kd490_my", group:"שקיפות ועכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"1/מ'", vmin:0.02, vmax:1,
+   scale:"log", cmap:"turbid", probe:true, lag:9, pair:"kd490",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-transp_my_l3-multi-1km_P1D_202311/KD490",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"עכירות המים בעיבוד אחיד לאורך כל התיעוד, מ-1997."},
   {id:"tur_hr", group:"שקיפות ועכירות", name:"עכירות 100 מ' · קופרניקוס (סנטינל-2)",
-   src:"cm", cover:"sea", first:"2021-01-01", unit:"FNU", vmin:0, vmax:10,
+   src:"cm", cover:"sea", first:"2021-01-01", unit:"FNU", vmin:0, vmax:10, lag:2,
    scale:"linear", cmap:"turbid", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
      + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/TUR",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
    about:"עכירות ברזולוציה גבוהה ברצועת החוף, רק בימי מעבר של סנטינל-2."},
   {id:"spm_hr", group:"שקיפות ועכירות", name:"חומר מרחף 100 מ' · קופרניקוס (סנטינל-2)",
-   src:"cm", cover:"sea", first:"2021-01-01", unit:"ג/מ\"ק", vmin:0, vmax:20,
+   src:"cm", cover:"sea", first:"2021-01-01", unit:"ג/מ\"ק", vmin:0, vmax:20, lag:2,
    scale:"linear", cmap:"turbid", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
      + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/SPM",
@@ -410,31 +465,32 @@ const LAYERS = [
 
   // -------------------------------------------------------------- true colour
   {id:"tc_noaa20", group:"צבע טבעי", name:"VIIRS NOAA-20 250 מ' · נאס\"א GIBS",
-   src:"gibs", cover:"all", first:"2018-01-01", maxZoom:9, ext:"jpg", scale:null,
+   src:"gibs", cover:"all", first:"2018-01-01", maxZoom:9, ext:"jpg", scale:null, lag:1,
    layer:"VIIRS_NOAA20_CorrectedReflectance_TrueColor",
    product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
    about:"התמונה כפי שהעין הייתה רואה מהחלל, כולל עננים ואבק, בצילום של 13:30 בערך. "
      + "אין ערך מספרי, אבל אפשר לראות אם חור במפת הכלורופיל היה ענן."},
   {id:"tc_snpp", group:"צבע טבעי", name:"VIIRS Suomi-NPP 250 מ' · נאס\"א GIBS",
-   src:"gibs", cover:"all", first:"2012-01-01", maxZoom:9, ext:"jpg", scale:null,
+   src:"gibs", cover:"all", first:"2012-01-01", maxZoom:9, ext:"jpg", scale:null, lag:1,
    layer:"VIIRS_SNPP_CorrectedReflectance_TrueColor",
    product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
    about:"כמו NOAA-20, מלוויין ותיק יותר, מאז 2012."},
   {id:"tc_terra", group:"צבע טבעי", name:"MODIS Terra 250 מ' · נאס\"א GIBS",
-   src:"gibs", cover:"all", first:"2000-02-24", maxZoom:9, ext:"jpg", scale:null,
+   src:"gibs", cover:"all", first:"2000-02-24", maxZoom:9, ext:"jpg", scale:null, lag:1,
    layer:"MODIS_Terra_CorrectedReflectance_TrueColor",
    product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
    about:"התיעוד הארוך ביותר בצבע טבעי, מאז 2000, בצילום בוקר (10:30 בערך)."},
   {id:"tc_aqua", group:"צבע טבעי", name:"MODIS Aqua 250 מ' · נאס\"א GIBS",
-   src:"gibs", cover:"all", first:"2002-07-04", maxZoom:9, ext:"jpg", scale:null,
+   src:"gibs", cover:"all", first:"2002-07-04", maxZoom:9, ext:"jpg", scale:null, lag:1,
    layer:"MODIS_Aqua_CorrectedReflectance_TrueColor",
    product:"https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/",
    about:"צילום צהריים מאז 2002, שעת המעבר של רוב מפות הכלורופיל."},
 ];
 
 // The frame the sea-temperature and chlorophyll maps open on, one notch wider
-// so more of the basin is in view.
+// so more of the basin is in view, centred off the Israeli coast.
 const VIEW_BOUNDS = [[30.7, 29.6], [33.5, 35.5]];
+const VIEW_CENTRE = [32.1361, 34.6619];
 
 // Every ramp the service can draw. Any of them works on any layer - the
 // capabilities only advertise a product's default.
@@ -457,13 +513,20 @@ let namesOn = false, namesTouched = false;
 const byId = id => LAYERS.find(l => l.id === id) || LAYERS[0];
 const iso = d => d.toISOString().slice(0, 10);
 const shift = (day, n) => iso(new Date(Date.parse(day + "T00:00:00Z") + n * 86400000));
-// lag: an archive that trails today by a few days. Every map here reaches the
-// present; one that had stopped would need an end date as well.
-const lastDay = l => l.lag ? shift(TODAY, -l.lag) : TODAY;
+// lag: how many days behind today this product's newest day is, measured one
+// tile at a time against each service. Every map here reaches the present; one
+// that had stopped would need an end date as well.
+// A paired map is one entry made of two products: the reprocessed archive,
+// which is the better measurement and runs to about a week ago, and the
+// near-real-time twin, which only keeps a fortnight but reaches today. The
+// archive answers for every day it has; the twin covers the days after it.
+const lastDay = l => l.lag ? shift(TODAY, -l.lag) : TODAY;        // of this product
+const maxDay = l => l.pair ? lastDay(byId(l.pair)) : lastDay(l);  // of the pair
+const half = (l, day) => (l.pair && day > lastDay(l)) ? byId(l.pair) : l;
 // first is what the page was written with; a loaded record replaces it.
 const firstDay = l => l.rolling ? shift(TODAY, -l.rolling) : l.first;
 const clamp = d => d < firstDay(current) ? firstDay(current)
-  : d > lastDay(current) ? lastDay(current) : d;
+  : d > maxDay(current) ? maxDay(current) : d;
 const el = id => document.getElementById(id);
 
 // ------------------------------------------------------------------ tile urls
@@ -477,7 +540,8 @@ function styleString() {
     + `,range:${(lo + k).toFixed(2)}/${(hi + k).toFixed(2)}`;
 }
 
-function tileUrl(lyr, day) {
+function tileUrl(entry, day) {
+  const lyr = half(entry, day);
   if (lyr.src === "gibs")
     return `${GIBS}/${lyr.layer}/default/${day}/`
       + `${lyr.tms || "GoogleMapsCompatible_Level9"}/{z}/{y}/{x}.${lyr.ext}`;
@@ -536,7 +600,7 @@ function painted(url) {
 async function legendFor(style) {
   if (LEGENDS[style]) return LEGENDS[style];
   const url = `${CM}?SERVICE=WMTS&REQUEST=GetLegend`
-    + `&LAYER=${encodeURIComponent(current.layer)}`
+    + `&LAYER=${encodeURIComponent(half(current, date).layer)}`
     + `&STYLE=${encodeURIComponent(style)}`
     + `&FORMAT=${encodeURIComponent("application/json")}`;
   const d = (await (await fetch(url)).json()).continuous;
@@ -662,8 +726,9 @@ function applyFilter() {
 // front page: a reader who wants to know what they are looking at lands on the
 // page that says so.
 function credit() {
-  const who = current.src === "gibs" ? "NASA EOSDIS GIBS" : "E.U. Copernicus Marine";
-  return `<a href="${current.product}" target="_blank" rel="noopener">${who}</a>`;
+  const l = half(current, date);
+  const who = l.src === "gibs" ? "NASA EOSDIS GIBS" : "E.U. Copernicus Marine";
+  return `<a href="${l.product}" target="_blank" rel="noopener">${who}</a>`;
 }
 
 function drawNames() {
@@ -687,11 +752,11 @@ function syncControls() {
   el("group").textContent = current.group;
   el("layer").value = current.id;
   const d = el("date");
-  d.min = firstDay(current); d.max = lastDay(current);
+  d.min = firstDay(current); d.max = maxDay(current);
   // Not while it is being typed into: rewriting the box mid-entry is what made
   // a four digit year impossible to type.
   if (document.activeElement !== d) d.value = date;
-  const atStart = date <= firstDay(current), atEnd = date >= lastDay(current);
+  const atStart = date <= firstDay(current), atEnd = date >= maxDay(current);
   el("prev").disabled = atStart || busy;
   el("next").disabled = atEnd || busy;
   // Greyed out rather than hidden where every day carries data, so the pair of
@@ -710,8 +775,11 @@ function syncControls() {
   el("unit").textContent = current.unit || "";
   el("opacity").disabled = current.cover === "all";
 
-  el("about").textContent = current.about;
-  el("about").title = current.about;
+  const nrt = current.pair && date > lastDay(current);
+  const about = current.about + (nrt
+    ? " היום הזה מוצג מהגרסה בזמן אמת, שכן העיבוד המלא מפגר בכשבוע." : "");
+  el("about").textContent = about;
+  el("about").title = about;
 }
 
 // ------------------------------------------------------------------ stepping
@@ -720,7 +788,7 @@ function setDate(d) { date = clamp(d); draw(); }
 // "אחרון" means the newest day with something on it, not merely the newest day
 // the product covers: on a field with gaps the last day or two are often empty.
 async function goLatest() {
-  const end = lastDay(current);
+  const end = maxDay(current);
   date = end; draw();
   if (!current.probe || busy) return;
   busy = true;
@@ -754,7 +822,7 @@ async function goStart() {
     syncControls();
     if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
     day = shift(day, 1);
-    if (day > lastDay(current)) break;
+    if (day > maxDay(current)) break;
   }
   busy = false;
   el("status").textContent = "";
@@ -767,7 +835,7 @@ async function goStart() {
 function resetAll() {
   current = byId(DEFAULT_LAYER);
   for (const l of LAYERS) Object.assign(l, DEFAULTS[l.id]);
-  date = lastDay(current);
+  date = maxDay(current);
   el("opacity").value = 85;
   el("bright").value = 100;
   el("contrast").value = 100;
@@ -779,7 +847,7 @@ function resetAll() {
   document.body.classList.remove("collapsed");
   paletteOpen = false;
   el("palette").classList.remove("open");
-  map.fitBounds(VIEW_BOUNDS);
+  map.setView(VIEW_CENTRE, map.getBoundsZoom(L.latLngBounds(VIEW_BOUNDS)));
   draw();
 }
 
@@ -788,7 +856,7 @@ function resetAll() {
 async function stepAvailable(dir) {
   if (busy) return;
   busy = true;
-  const floor = firstDay(current), ceil = lastDay(current);
+  const floor = firstDay(current), ceil = maxDay(current);
   let day = date, found = null;
   for (let k = 1; k <= 45; k++) {
     day = shift(day, dir);
@@ -811,7 +879,7 @@ function writeUrl() {
   if (!map) return;
   const q = new URLSearchParams(), d0 = DEFAULTS[current.id];
   if (current.id !== DEFAULT_LAYER) q.set("l", current.id);
-  if (date !== lastDay(current)) q.set("d", date);
+  if (date !== maxDay(current)) q.set("d", date);
   // The opening frame is not stored: only a view the reader moved to is.
   if (!atHomeView()) {
     const c = map.getCenter();
@@ -829,24 +897,30 @@ function writeUrl() {
   if (el("bright").value !== "100") q.set("br", el("bright").value);
   if (el("contrast").value !== "100") q.set("ct", el("contrast").value);
   if (document.body.classList.contains("collapsed")) q.set("bar", "0");
-  const qs = q.toString();
+  // Built by hand rather than with toString(): a centre reads as 32.1361,34.6619
+  // and there is nothing in a comma that needs escaping.
+  const qs = [...q].map(([k, v]) =>
+    k + "=" + encodeURIComponent(v).replace(/%2C/g, ",")).join("&");
   history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
 }
 
 // Whether the map is still on the frame it opens with, within a pixel or two of
 // pan and the same zoom - a fitBounds does not land on round numbers.
 function atHomeView() {
-  const home = map.getBoundsZoom(L.latLngBounds(VIEW_BOUNDS));
-  if (map.getZoom() !== home) return false;
-  const c = map.getCenter(), h = L.latLngBounds(VIEW_BOUNDS).getCenter();
-  return Math.abs(c.lat - h.lat) < 0.02 && Math.abs(c.lng - h.lng) < 0.02;
+  if (map.getZoom() !== map.getBoundsZoom(L.latLngBounds(VIEW_BOUNDS))) return false;
+  const c = map.getCenter();
+  return Math.abs(c.lat - VIEW_CENTRE[0]) < 0.02
+      && Math.abs(c.lng - VIEW_CENTRE[1]) < 0.02;
 }
 
 // The same in reverse, before anything is drawn. Returns the view to open on,
 // when the link carried one.
 function readUrl() {
   const q = new URLSearchParams(location.search);
-  const l = q.get("l") && LAYERS.find(x => x.id === q.get("l"));
+  let l = q.get("l") && LAYERS.find(x => x.id === q.get("l"));
+  // An older link may name the near-real-time half by itself; it now lives
+  // inside its pair, so open that instead.
+  if (l && l.hidden) l = LAYERS.find(x => x.pair === l.id) || l;
   if (l) current = l;
   const d = q.get("d");
   if (/^\d{4}-\d{2}-\d{2}$/.test(d || "")) date = d;
@@ -871,6 +945,7 @@ function buildMenu() {
   const sel = el("layer");
   let group = null, optg = null;
   for (const l of LAYERS) {
+    if (l.hidden) continue;           // the near-real-time half of a pair
     if (l.group !== group) {
       group = l.group;
       optg = document.createElement("optgroup");
@@ -901,8 +976,10 @@ function initMap(view) {
   // Zoom to the right, so the left corner is the colour bar's and the scale
   // bar's: the ramp and the kilometres read down one column.
   map = L.map("map", {zoomControl: false, attributionControl: true});
+  // The bounds set the zoom; the centre is our own, so the coast sits where the
+  // reader expects it rather than wherever the box happens to middle.
   if (view) map.setView(view.centre, view.zoom);
-  else map.fitBounds(VIEW_BOUNDS);     // no extra notch: more of the basin in view
+  else map.setView(VIEW_CENTRE, map.getBoundsZoom(L.latLngBounds(VIEW_BOUNDS)));
   map.on("moveend zoomend", writeUrl);
   L.control.zoom({position: "topright"}).addTo(map);
   map.on("moveend zoomend", drawNames);
@@ -924,7 +1001,7 @@ function wire() {
   el("date").onchange = e => {
     const v = e.target.value;
     if (!v) return;
-    if (v >= firstDay(current) && v <= lastDay(current)) setDate(v);
+    if (v >= firstDay(current) && v <= maxDay(current)) setDate(v);
   };
   el("opacity").oninput = () => {
     if (fieldLayer && current.cover !== "all")

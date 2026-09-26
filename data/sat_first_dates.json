@@ -37,6 +37,9 @@
   "chl_100m": {
    "first": "2020-01-11"
   },
+  "chl_gapfree_my": {
+   "first": "1997-09-19"
+  },
   "chl_gapfree": {
    "rolling": 13
   },
@@ -64,8 +67,26 @@
   "pico": {
    "rolling": 13
   },
+  "prokar_my": {
+   "first": "1997-11-01"
+  },
+  "crypto_my": {
+   "first": "1997-11-01"
+  },
+  "diato_my": {
+   "first": "1997-11-01"
+  },
+  "dino_my": {
+   "first": "1997-11-01"
+  },
+  "pico_my": {
+   "first": "1997-11-01"
+  },
   "kd490": {
    "rolling": 13
+  },
+  "kd490_my": {
+   "first": "1997-11-01"
   },
   "tur_hr": {
    "first": "2020-01-11"
