@@ -561,16 +561,33 @@ function cacheBust(day) {
   return age <= 6 ? "&_d=" + TODAY : "";
 }
 
-// One tile at the middle of the view, as a URL a canvas can read.
-function probeUrl(lyr, day) {
-  const z = Math.min(map.getZoom(), lyr.maxZoom || 12);
-  const p = map.project(map.getCenter(), z).divideBy(256).floor();
-  return tileUrl(lyr, day).replace("{z}", z).replace("{x}", p.x).replace("{y}", p.y);
+// Where "is there data" is asked: the sea off Haifa, off Tel Aviv and off
+// Ashkelon. Fixed points rather than the middle of the view, because a swath can
+// carry a day elsewhere in the basin and miss this coast entirely - and because
+// the answer should not change with where the reader happens to be looking.
+const PROBE_PTS = [[32.90, 34.90], [32.14, 34.66], [31.60, 34.45]];
+const PROBE_Z = 8;
+
+function probeUrls(lyr, day) {
+  const z = Math.min(PROBE_Z, lyr.maxZoom || 12);
+  return PROBE_PTS.map(([lat, lon]) => {
+    const p = map.project(L.latLng(lat, lon), z).divideBy(256).floor();
+    return tileUrl(lyr, day).replace("{z}", z).replace("{x}", p.x).replace("{y}", p.y);
+  });
+}
+
+// Whether this day has anything along our coast. Stops at the first of the three
+// points that answers, so a clear day costs one tile.
+async function hasData(lyr, day) {
+  const jpeg = (half(lyr, day).ext || "png") === "jpg";
+  for (const url of probeUrls(lyr, day))
+    if (await painted(url, jpeg) > 0.02) return true;
+  return false;
 }
 
 // How much of that tile was painted. Copernicus and GIBS both serve tiles with
 // access-control-allow-origin: *, so the canvas stays readable.
-function painted(url) {
+function painted(url, jpeg) {
   return new Promise(resolve => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -583,10 +600,16 @@ function painted(url) {
       try { px = ctx.getImageData(0, 0, c.width, c.height).data; }
       catch (e) { return resolve(1); }        // tainted: assume there is something
       let on = 0;
-      // A JPEG has no transparency, so true colour is judged on darkness: an
-      // empty GIBS tile is solid black, a real one never is.
-      for (let i = 0; i < px.length; i += 4)
-        if (px[i + 3] > 10 && (px[i] > 12 || px[i + 1] > 12 || px[i + 2] > 12)) on++;
+      // A field is drawn on transparency, so its alpha channel is the answer. To
+      // ask about darkness as well would throw real data away: the turbid ramp
+      // starts near black, so low turbidity along the coast read as empty, which
+      // is why "the next day with data" used to walk straight past days that had
+      // some. True colour is a JPEG with no transparency at all, and there an
+      // empty tile is solid black while a real one never is.
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3] <= 10) continue;
+        if (!jpeg || px[i] > 12 || px[i + 1] > 12 || px[i + 2] > 12) on++;
+      }
       resolve(on / (px.length / 4));
     };
     img.onerror = () => resolve(0);
@@ -796,7 +819,7 @@ async function goLatest() {
   for (let k = 0; k < 30; k++) {
     el("status").textContent = `מחפש… ${day}`;
     syncControls();
-    if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
+    if (await hasData(current, day)) { found = day; break; }
     day = shift(day, -1);
     if (day < firstDay(current)) break;
   }
@@ -820,7 +843,7 @@ async function goStart() {
   for (let k = 0; k < 60; k++) {
     el("status").textContent = `מחפש… ${day}`;
     syncControls();
-    if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
+    if (await hasData(current, day)) { found = day; break; }
     day = shift(day, 1);
     if (day > maxDay(current)) break;
   }
@@ -863,7 +886,7 @@ async function stepAvailable(dir) {
     if (day < floor || day > ceil) break;
     el("status").textContent = `מחפש… ${day}`;
     syncControls();
-    if (await painted(probeUrl(current, day)) > 0.02) { found = day; break; }
+    if (await hasData(current, day)) { found = day; break; }
   }
   busy = false;
   el("status").textContent = found ? "" : "לא נמצא יום עם נתונים ב-45 הימים האלה";

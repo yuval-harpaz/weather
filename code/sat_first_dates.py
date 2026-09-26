@@ -45,10 +45,12 @@ ROLLING_DAYS = 60
 # it. The early ocean-colour years are thin - SeaWiFS passed over this corner of
 # the basin every few days at best - so this has to reach past a month.
 MAX_WALK = 120
-# One tile over the eastern basin, wide enough that a single cloudy swath does
-# not read as "no data at all".
-PROBE_Z = 5
-PROBE_LAT, PROBE_LON = 32.6, 34.8
+# Where the question is asked: the sea off Haifa, off Tel Aviv and off Ashkelon.
+# A day can carry a swath elsewhere in the basin and miss this coast entirely,
+# and it is this coast the page is about, so a day counts only if one of these
+# three has something on it. The same three points the page itself probes.
+PROBE_PTS = [(32.90, 34.90), (32.14, 34.66), (31.60, 34.45)]
+PROBE_Z = 8
 PAINTED = 0.01
 TILE = {
     "cm": "https://wmts.marine.copernicus.eu/teroWmts?SERVICE=WMTS&VERSION=1.0.0"
@@ -67,27 +69,39 @@ def tile_xy(lat, lon, z):
     return x, int((0.5 - math.log((1 + s) / (1 - s)) / (4 * math.pi)) * n)
 
 
-def painted(service, layer, day, lvl, ext):
-    """Fraction of a probe tile that came back with something drawn on it."""
-    x, y = tile_xy(PROBE_LAT, PROBE_LON, PROBE_Z)
+def painted(service, layer, day, lvl, ext, lat, lon):
+    """Fraction of one probe tile that came back with something drawn on it."""
+    z = min(PROBE_Z, int(lvl)) if service == "gibs" else PROBE_Z
+    x, y = tile_xy(lat, lon, z)
     url = TILE[service].format(layer=urllib.parse.quote(layer) if service == "cm" else layer,
-                               z=PROBE_Z, x=x, y=y, day=day, lvl=lvl, ext=ext)
+                               z=z, x=x, y=y, day=day, lvl=lvl, ext=ext)
     try:
         raw = urllib.request.urlopen(url, timeout=60).read()
         im = Image.open(io.BytesIO(raw)).convert("RGBA")
         px = list(im.getdata())
     except Exception:
         return 0.0
-    # A jpeg has no transparency, so imagery is judged on darkness instead.
-    on = sum(1 for r, g, b, a in px if a > 10 and (r > 12 or g > 12 or b > 12))
+    # A field is drawn on transparency, so alpha is the answer. Asking about
+    # darkness too would throw real data away, since the turbid and algae ramps
+    # start near black. Imagery is a jpeg with no transparency, and there an
+    # empty tile is solid black while a real one never is.
+    jpeg = ext == "jpg"
+    on = sum(1 for r, g, b, a in px
+             if a > 10 and (not jpeg or r > 12 or g > 12 or b > 12))
     return on / len(px)
+
+
+def has_data(service, layer, day, lvl, ext):
+    """Whether this day has anything along our own coast."""
+    return any(painted(service, layer, day, lvl, ext, lat, lon) > PAINTED
+               for lat, lon in PROBE_PTS)
 
 
 def first_with_data(service, layer, start, lvl, ext):
     """Walk forward from the declared start to the first day that draws."""
     day = date.fromisoformat(start)
     for _ in range(MAX_WALK):
-        if painted(service, layer, day.isoformat(), lvl, ext) > PAINTED:
+        if has_data(service, layer, day.isoformat(), lvl, ext):
             return day.isoformat()
         day += timedelta(days=1)
     return None
