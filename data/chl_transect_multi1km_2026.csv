@@ -775,7 +775,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-15,Damietta_mouth,CHL,my,2.505,1.84,1.124,3.968,1
 2026-09-16,Damietta_mouth,CHL,my,3.06,1.862,1.329,6.138,1
 2026-09-17,Damietta_mouth,CHL,my,3.782,3.34,1.626,3.782,1
-2026-09-18,Damietta_mouth,CHL,nrt,2.107,1.472,0.9213,2.473,1
+2026-09-18,Damietta_mouth,CHL,my,2.104,1.471,0.9199,2.457,1
 2026-09-19,Damietta_mouth,CHL,nrt,1.426,1.426,0.8063,2.234,1
 2026-09-20,Damietta_mouth,CHL,nrt,2.28,1.562,0.8573,2.605,1
 2026-09-22,Damietta_mouth,CHL,nrt,2.527,1.977,1.085,3.043,1
@@ -1346,7 +1346,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-15,Hadera_IL,CHL,my,0.3121,0.5375,0.3927,0.929,0.9751
 2026-09-16,Hadera_IL,CHL,my,0.8433,0.9426,0.4818,1.51,0.9652
 2026-09-17,Hadera_IL,CHL,my,0.3052,0.269,0.1558,0.5883,0.9005
-2026-09-18,Hadera_IL,CHL,nrt,0.1427,0.1466,0.09585,0.1877,0.6219
+2026-09-18,Hadera_IL,CHL,my,0.1427,0.1466,0.09585,0.1877,0.6219
 2026-09-19,Hadera_IL,CHL,nrt,0.2151,0.1869,0.1354,0.352,0.9403
 2026-09-20,Hadera_IL,CHL,nrt,0.2272,0.2941,0.2095,0.8295,1
 2026-09-21,Hadera_IL,CHL,nrt,0.1337,0.1443,0.1211,0.5003,0.9652
@@ -1705,7 +1705,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-15,Port_Said_EG,CHL,my,11.34,10.45,4.84,17,0.9799
 2026-09-16,Port_Said_EG,CHL,my,16.13,16.13,8.155,37.24,1
 2026-09-17,Port_Said_EG,CHL,my,16.91,16.1,8.887,17,1
-2026-09-18,Port_Said_EG,CHL,nrt,6.378,5.195,2.72,7.197,0.9296
+2026-09-18,Port_Said_EG,CHL,my,6.366,5.187,2.715,7.182,0.9296
 2026-09-19,Port_Said_EG,CHL,nrt,10.2,7.675,3.952,13.98,1
 2026-09-20,Port_Said_EG,CHL,nrt,8.59,7.565,3.105,8.59,0.9296
 2026-09-21,Port_Said_EG,CHL,nrt,8.635,8.082,3.863,13.24,0.8693
@@ -1906,7 +1906,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-15,Rafah_Gaza,CHL,my,2.357,2.191,1.29,2.895,1
 2026-09-16,Rafah_Gaza,CHL,my,4.402,6.691,5.949,49.75,1
 2026-09-17,Rafah_Gaza,CHL,my,7.71,5.073,3.501,15.16,0.95
-2026-09-18,Rafah_Gaza,CHL,nrt,2.068,,,,0.235
+2026-09-18,Rafah_Gaza,CHL,my,2.068,,,,0.235
 2026-09-19,Rafah_Gaza,CHL,nrt,2.996,2.75,1.168,3.34,0.95
 2026-09-20,Rafah_Gaza,CHL,nrt,8.161,5.862,2.444,8.764,0.95
 2026-09-21,Rafah_Gaza,CHL,nrt,6.997,5.145,3.008,7.529,1
@@ -2084,7 +2084,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-15,Rosetta_mouth,CHL,my,1.61,1.531,0.9746,2.329,1
 2026-09-16,Rosetta_mouth,CHL,my,3.806,2.925,1.481,3.806,1
 2026-09-17,Rosetta_mouth,CHL,my,2.78,2.163,1.433,2.78,1
-2026-09-18,Rosetta_mouth,CHL,nrt,,1.605,1.065,2.186,0.9392
+2026-09-18,Rosetta_mouth,CHL,my,,1.603,1.064,2.188,0.9392
 2026-09-19,Rosetta_mouth,CHL,nrt,2.105,2.021,1.316,2.105,1
 2026-09-20,Rosetta_mouth,CHL,nrt,1.613,1.398,0.9787,1.694,1
 2026-09-21,Rosetta_mouth,CHL,nrt,1.868,1.675,1.222,2.085,0.8122
