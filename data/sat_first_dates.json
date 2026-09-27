@@ -26,7 +26,7 @@
    "rolling": 13
   },
   "chl_1km_my": {
-   "first": "1997-10-29"
+   "first": "1997-11-01"
   },
   "chl_300m_nrt": {
    "rolling": 13
@@ -55,38 +55,32 @@
   "prokar": {
    "rolling": 13
   },
-  "crypto": {
-   "rolling": 13
-  },
-  "diato": {
-   "rolling": 13
-  },
-  "dino": {
-   "rolling": 13
-  },
-  "pico": {
-   "rolling": 13
-  },
   "prokar_my": {
-   "first": "1997-10-29"
+   "first": "1997-11-01"
   },
-  "crypto_my": {
-   "first": "1997-10-29"
+  "aph443": {
+   "first": "1997-11-01"
   },
-  "diato_my": {
-   "first": "1997-10-29"
-  },
-  "dino_my": {
-   "first": "1997-10-29"
-  },
-  "pico_my": {
-   "first": "1997-10-29"
+  "aph443_nrt": {
+   "rolling": 13
   },
   "kd490": {
    "rolling": 13
   },
+  "adg443": {
+   "first": "1997-11-01"
+  },
+  "adg443_nrt": {
+   "rolling": 13
+  },
+  "bbp443": {
+   "first": "1997-11-01"
+  },
+  "bbp443_nrt": {
+   "rolling": 13
+  },
   "kd490_my": {
-   "first": "1997-10-29"
+   "first": "1997-11-01"
   },
   "tur_hr": {
    "first": "2020-01-06"

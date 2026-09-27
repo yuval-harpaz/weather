@@ -45,12 +45,14 @@ ROLLING_DAYS = 60
 # it. The early ocean-colour years are thin - SeaWiFS passed over this corner of
 # the basin every few days at best - so this has to reach past a month.
 MAX_WALK = 120
-# Where the question is asked: the sea off Haifa, off Tel Aviv and off Ashkelon.
-# A day can carry a swath elsewhere in the basin and miss this coast entirely,
-# and it is this coast the page is about, so a day counts only if one of these
-# three has something on it. The same three points the page itself probes.
-PROBE_PTS = [(32.90, 34.90), (32.14, 34.66), (31.60, 34.45)]
-PROBE_Z = 8
+# Where the question is asked: five points of sea along our own coast, from off
+# Gaza to off Acre, inside 31.32-33.09 N, 34.22-35.11 E. A day whose only pixels
+# lie off Egypt or over Cyprus is not a day with data here. Zoom 10 keeps each
+# probe tile about 33 km across, so it cannot reach the Sinai coast; the page
+# probes exactly the same points at the same zoom.
+PROBE_PTS = [(32.95, 34.92), (32.55, 34.78), (32.14, 34.66),
+             (31.72, 34.50), (31.40, 34.30)]
+PROBE_Z = 10
 PAINTED = 0.01
 TILE = {
     "cm": "https://wmts.marine.copernicus.eu/teroWmts?SERVICE=WMTS&VERSION=1.0.0"

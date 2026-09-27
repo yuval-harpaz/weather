@@ -106,6 +106,7 @@
     border:1px solid rgba(0,0,0,.2); }
   .imgonly { display:none; }
   body.imagery .imgonly { display:inline-block; }
+  body.imagery label.check.imgonly { display:inline-flex; }
 
   @media (max-width:820px) {
     :root { --head:132px; }
@@ -158,7 +159,8 @@
     <span class="lbl imgonly">ניגודיות</span>
     <input type="range" id="contrast" class="imgonly" min="50" max="200" value="100"
            style="width:70px" title="ניגודיות התמונה">
-    <label class="check"><input type="checkbox" id="names"> שמות יישובים</label>
+    <label class="check imgonly"><input type="checkbox" id="names"> שמות יישובים</label>
+    <label class="check imgonly"><input type="checkbox" id="fires"> שריפות</label>
     <span id="about"></span>
     <span id="status"></span>
   </div>
@@ -214,6 +216,15 @@ const OSM_CREDIT = '<a href="https://www.openstreetmap.org/copyright" target="_b
 // rather than as a date that would be wrong tomorrow.
 const FIRST_URL = "https://raw.githubusercontent.com/yuval-harpaz/weather/"
   + "refs/heads/main/data/sat_first_dates.json";
+
+// Fire detections, as NASA draws them. The layers themselves are vector tiles,
+// which leaflet cannot draw, but GIBS rasterises them over WMS with no key, and
+// a picture is all this needs: the point is where the fires are against the
+// smoke in the imagery, not what each one's radiative power was.
+const FIRES_WMS = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi";
+const FIRES_LAYER = "VIIRS_NOAA20_Thermal_Anomalies_375m_All";
+const FIRES_CREDIT = '<a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" '
+  + 'rel="noopener">שריפות: VIIRS / NASA FIRMS</a>';
 
 const PLACES_URL = "https://raw.githubusercontent.com/yuval-harpaz/alarms/"
   + "refs/heads/master/data/coord_place.csv";
@@ -363,35 +374,6 @@ const LAYERS = [
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"חלק הכלורופיל השייך לציאנובקטריה כמו Synechococcus, הנושאות פיקוציאנין "
      + "ופיקואריתרין - הפיגמנטים הכחולים. הקרוב ביותר ל\"פיגמנט הכחול\" מלוויין."},
-  {id:"crypto", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"קריפטופיטים · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
-   scale:"log", cmap:"algae", probe:true,
-   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
-     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/CRYPTO",
-   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
-   about:"אצות שגם הן נושאות פיקואריתרין; קבוצה קטנה יחסית במים האלה."},
-  {id:"diato", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"דיאטומיות · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
-   scale:"log", cmap:"algae", probe:true,
-   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
-     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/DIATO",
-   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
-   about:"האצות הגדולות שמובילות את פריחות החורף והאביב."},
-  {id:"dino", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"דינופלגלטים · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
-   scale:"log", cmap:"algae", probe:true,
-   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
-     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/DINO",
-   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
-   about:"הקבוצה שאליה שייכות פריחות ה\"גאות האדומה\"."},
-  {id:"pico", hidden:true, group:"קבוצות אצות ופיגמנטים", name:"פיקופלנקטון · קופרניקוס",
-   src:"cm", cover:"sea", first:"2022-01-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5, lag:2,
-   scale:"log", cmap:"algae", probe:true,
-   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
-     + "cmems_obs-oc_med_bgc-plankton_nrt_l3-multi-1km_P1D_202211/PICO",
-   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
-   about:"התאים הקטנים מ-2 מיקרון, רוב הייצור הראשוני במים העניים של מזרח הים התיכון בקיץ."},
-
   {id:"prokar_my", group:"קבוצות אצות ופיגמנטים", name:"ציאנובקטריה (פרוקריוטים) · קופרניקוס",
    src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
    scale:"log", cmap:"algae", probe:true, lag:9, pair:"prokar",
@@ -400,62 +382,73 @@ const LAYERS = [
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
    about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
      + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
-  {id:"crypto_my", group:"קבוצות אצות ופיגמנטים", name:"קריפטופיטים · קופרניקוס",
-   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
-   scale:"log", cmap:"algae", probe:true, lag:9, pair:"crypto",
+
+  {id:"aph443", group:"קבוצות אצות ופיגמנטים", name:"בליעת אור של פיגמנט (443 ננומטר) · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"1/מ'", vmin:0.002, vmax:0.2,
+   scale:"log", cmap:"viridis", probe:true, lag:9, pair:"aph443_nrt",
    layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
-     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/CRYPTO",
+     + "cmems_obs-oc_med_bgc-optics_my_l3-multi-1km_P1D_202311/APH443",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
-   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
-     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
-  {id:"diato_my", group:"קבוצות אצות ופיגמנטים", name:"דיאטומיות · קופרניקוס",
-   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
-   scale:"log", cmap:"algae", probe:true, lag:9, pair:"diato",
-   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
-     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/DIATO",
-   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
-   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
-     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
-  {id:"dino_my", group:"קבוצות אצות ופיגמנטים", name:"דינופלגלטים · קופרניקוס",
-   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
-   scale:"log", cmap:"algae", probe:true, lag:9, pair:"dino",
-   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
-     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/DINO",
-   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
-   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
-     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
-  {id:"pico_my", group:"קבוצות אצות ופיגמנטים", name:"פיקופלנקטון · קופרניקוס",
-   src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.005, vmax:0.5,
-   scale:"log", cmap:"algae", probe:true, lag:9, pair:"pico",
-   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
-     + "cmems_obs-oc_med_bgc-plankton_my_l3-multi-1km_P1D_202411/PICO",
-   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
-   about:"אותה קבוצה בעיבוד אחיד לאורך כל התיעוד, מ-1997. המפה בזמן אמת שומרת "
-     + "כשבועיים בלבד; זו הדרך לראות שנים אחורה."},
+   about:"כמה אור כחול בולעים פיגמנטי האצות עצמם. מדידה אופטית ולא חלוקה מודלית של הכלורופיל, ולכן היא אינה חזרה על מפת הכלורופיל."},
+  {id:"aph443_nrt", group:"קבוצות אצות ופיגמנטים", hidden:true, name:"בליעת אור של פיגמנט (443 ננומטר) · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"1/מ'", vmin:0.002, vmax:0.2,
+   scale:"log", cmap:"viridis", probe:true, lag:2,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-optics_nrt_l3-multi-1km_P1D_202207/APH443",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"כמה אור כחול בולעים פיגמנטי האצות עצמם. מדידה אופטית ולא חלוקה מודלית של הכלורופיל, ולכן היא אינה חזרה על מפת הכלורופיל."},
 
   // ------------------------------------------------------------ water clarity
-  {id:"kd490", hidden:true, group:"שקיפות ועכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
+  {id:"kd490", hidden:true, group:"עכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
    src:"cm", cover:"sea", first:"2022-01-01", unit:"1/מ'", vmin:0.02, vmax:1, lag:2,
    scale:"log", cmap:"turbid", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
      + "cmems_obs-oc_med_bgc-transp_nrt_l3-multi-1km_P1D_202207/KD490",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
    about:"כמה מהר נבלע אור כחול-ירוק במים: ערך גבוה הוא מים עכורים מפלומה, סערה או פריחה."},
-  {id:"kd490_my", group:"שקיפות ועכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
+  {id:"adg443", group:"עכירות", name:"בליעת אור של חומר מומס ופירורים (443 ננומטר) · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"1/מ'", vmin:0.002, vmax:0.2,
+   scale:"log", cmap:"turbid", probe:true, lag:9, pair:"adg443_nrt",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-optics_my_l3-multi-1km_P1D_202311/ADG443",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"בליעת האור על ידי החומר שאינו אצות - חומר אורגני מומס ופירורים. מבדילה פלומת נחל או סחף מפריחה."},
+  {id:"adg443_nrt", group:"עכירות", hidden:true, name:"בליעת אור של חומר מומס ופירורים (443 ננומטר) · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"1/מ'", vmin:0.002, vmax:0.2,
+   scale:"log", cmap:"turbid", probe:true, lag:2,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-optics_nrt_l3-multi-1km_P1D_202207/ADG443",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"בליעת האור על ידי החומר שאינו אצות - חומר אורגני מומס ופירורים. מבדילה פלומת נחל או סחף מפריחה."},
+  {id:"bbp443", group:"עכירות", name:"פיזור לאחור של חלקיקים (443 ננומטר) · קופרניקוס",
+   src:"cm", cover:"sea", first:"1997-11-01", unit:"1/מ'", vmin:0.0005, vmax:0.02,
+   scale:"log", cmap:"turbid", probe:true, lag:9, pair:"bbp443_nrt",
+   layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
+     + "cmems_obs-oc_med_bgc-optics_my_l3-multi-1km_P1D_202311/BBP443",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
+   about:"כמה אור מוחזר מהחלקיקים שבמים: מדד לכמות החומר המרחף, בלי קשר לסוגו."},
+  {id:"bbp443_nrt", group:"עכירות", hidden:true, name:"פיזור לאחור של חלקיקים (443 ננומטר) · קופרניקוס (זמן אמת)",
+   src:"cm", cover:"sea", first:"2022-01-01", unit:"1/מ'", vmin:0.0005, vmax:0.02,
+   scale:"log", cmap:"turbid", probe:true, lag:2,
+   layer:"OCEANCOLOUR_MED_BGC_L3_NRT_009_141/"
+     + "cmems_obs-oc_med_bgc-optics_nrt_l3-multi-1km_P1D_202207/BBP443",
+   product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_NRT_009_141/description",
+   about:"כמה אור מוחזר מהחלקיקים שבמים: מדד לכמות החומר המרחף, בלי קשר לסוגו."},
+  {id:"kd490_my", group:"עכירות", name:"בליעת אור KD490 1 ק\"מ · קופרניקוס",
    src:"cm", cover:"sea", first:"1997-11-01", unit:"1/מ'", vmin:0.02, vmax:1,
    scale:"log", cmap:"turbid", probe:true, lag:9, pair:"kd490",
    layer:"OCEANCOLOUR_MED_BGC_L3_MY_009_143/"
      + "cmems_obs-oc_med_bgc-transp_my_l3-multi-1km_P1D_202311/KD490",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
    about:"עכירות המים בעיבוד אחיד לאורך כל התיעוד, מ-1997."},
-  {id:"tur_hr", group:"שקיפות ועכירות", name:"עכירות 100 מ' · קופרניקוס (סנטינל-2)",
+  {id:"tur_hr", group:"עכירות", name:"עכירות 100 מ' · קופרניקוס (סנטינל-2)",
    src:"cm", cover:"sea", first:"2021-01-01", unit:"FNU", vmin:0, vmax:10, lag:2,
    scale:"linear", cmap:"turbid", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
      + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/TUR",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
    about:"עכירות ברזולוציה גבוהה ברצועת החוף, רק בימי מעבר של סנטינל-2."},
-  {id:"spm_hr", group:"שקיפות ועכירות", name:"חומר מרחף 100 מ' · קופרניקוס (סנטינל-2)",
+  {id:"spm_hr", group:"עכירות", name:"חומר מרחף 100 מ' · קופרניקוס (סנטינל-2)",
    src:"cm", cover:"sea", first:"2021-01-01", unit:"ג/מ\"ק", vmin:0, vmax:20, lag:2,
    scale:"linear", cmap:"turbid", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
@@ -506,9 +499,10 @@ const DEFAULTS = Object.fromEntries(LAYERS.map(l =>
 const DEFAULT_LAYER = LAYERS[0].id;
 
 let map = null, baseLayer = null, govLayer = null, fieldLayer = null, labelLayer = null;
+let fireLayer = null;
 let cbox = null, paletteOpen = false;
 let current = LAYERS[0], date = TODAY, busy = false, PLACES = [];
-let namesOn = false, namesTouched = false;
+let namesOn = false, namesTouched = false, firesOn = false;
 
 const byId = id => LAYERS.find(l => l.id === id) || LAYERS[0];
 const iso = d => d.toISOString().slice(0, 10);
@@ -561,12 +555,16 @@ function cacheBust(day) {
   return age <= 6 ? "&_d=" + TODAY : "";
 }
 
-// Where "is there data" is asked: the sea off Haifa, off Tel Aviv and off
-// Ashkelon. Fixed points rather than the middle of the view, because a swath can
-// carry a day elsewhere in the basin and miss this coast entirely - and because
-// the answer should not change with where the reader happens to be looking.
-const PROBE_PTS = [[32.90, 34.90], [32.14, 34.66], [31.60, 34.45]];
-const PROBE_Z = 8;
+// Where "is there data" is asked: five points of sea along our own coast, from
+// off Gaza to off Acre, all inside 31.32-33.09 N, 34.22-35.11 E. Fixed points
+// rather than the middle of the view, because the answer should not depend on
+// where the reader is looking - and a day whose only pixels are off Egypt or
+// over Cyprus is not a day with data here. The zoom matters as much as the
+// points: a tile at 8 is some 130 km across and would reach the Sinai coast,
+// while at 10 it is about 33 km and stays in front of Israel.
+const PROBE_PTS = [[32.95, 34.92], [32.55, 34.78], [32.14, 34.66],
+                   [31.72, 34.50], [31.40, 34.30]];
+const PROBE_Z = 10;
 
 function probeUrls(lyr, day) {
   const z = Math.min(PROBE_Z, lyr.maxZoom || 12);
@@ -729,6 +727,7 @@ function draw() {
     attribution: credit(),
   }).addTo(map);
   applyFilter();
+  drawFires();
   drawNames();
   drawColorbar();
   syncControls();
@@ -754,9 +753,23 @@ function credit() {
   return `<a href="${l.product}" target="_blank" rel="noopener">${who}</a>`;
 }
 
+// Only over imagery that covers the land. On a sea field the marks would sit on
+// a basemap the page is not about, and the reader came for the water.
+function drawFires() {
+  if (fireLayer) { map.removeLayer(fireLayer); fireLayer = null; }
+  if (!firesOn || current.cover !== "all") return;
+  fireLayer = L.tileLayer.wms(FIRES_WMS, {
+    layers: FIRES_LAYER, format: "image/png", transparent: true,
+    version: "1.1.1", time: date, zIndex: 8, attribution: FIRES_CREDIT,
+  }).addTo(map);
+}
+
 function drawNames() {
   if (labelLayer) { map.removeLayer(labelLayer); labelLayer = null; }
-  if (!namesOn || !PLACES.length) return;
+  // Both overlays belong to imagery that covers the land. On a sea field they
+  // would decorate a basemap the reader did not come for, so the boxes keep the
+  // choice and the field decides whether it is drawn.
+  if (!namesOn || current.cover !== "all" || !PLACES.length) return;
   const z = map.getZoom(), b = map.getBounds();
   labelLayer = L.layerGroup([], {attribution: OSM_CREDIT}).addTo(map);
   for (const p of PLACES) {
@@ -866,7 +879,9 @@ function resetAll() {
   el("vmax").value = current.vmax ?? "";
   namesTouched = false;
   namesOn = current.cover === "all";
+  firesOn = false;
   el("names").checked = namesOn;
+  el("fires").checked = firesOn;
   document.body.classList.remove("collapsed");
   paletteOpen = false;
   el("palette").classList.remove("open");
@@ -917,6 +932,7 @@ function writeUrl() {
   }
   if (el("opacity").value !== "85") q.set("op", el("opacity").value);
   if (namesOn !== (current.cover === "all")) q.set("nm", namesOn ? "1" : "0");
+  if (firesOn) q.set("fire", "1");
   if (el("bright").value !== "100") q.set("br", el("bright").value);
   if (el("contrast").value !== "100") q.set("ct", el("contrast").value);
   if (document.body.classList.contains("collapsed")) q.set("bar", "0");
@@ -956,6 +972,7 @@ function readUrl() {
   if (q.get("ct")) el("contrast").value = q.get("ct");
   namesOn = q.get("nm") === "1" || (q.get("nm") === null && current.cover === "all");
   if (q.get("nm") !== null) namesTouched = true;
+  firesOn = q.get("fire") === "1";
   if (q.get("bar") === "0") document.body.classList.add("collapsed");
   const c = (q.get("c") || "").split(",").map(Number);
   const z = +q.get("z");
@@ -986,10 +1003,11 @@ function buildMenu() {
     current = byId(sel.value);
     el("vmin").value = current.vmin ?? "";
     el("vmax").value = current.vmax ?? "";
-    // True colour is worth nothing without the names of the places under it, so
-    // it brings them on by itself until the reader says otherwise.
+    // Both overlays belong to imagery: names come on with it, because a photo of
+    // the ground without them is a puzzle; fires wait to be asked for.
     if (!namesTouched) namesOn = current.cover === "all";
     el("names").checked = namesOn;
+    el("fires").checked = firesOn;
     date = clamp(date);
     draw();
   };
@@ -1038,6 +1056,9 @@ function wire() {
   el("names").onchange = e => {
     namesOn = e.target.checked; namesTouched = true; drawNames(); writeUrl();
   };
+  el("fires").onchange = e => {
+    firesOn = e.target.checked; drawFires(); writeUrl();
+  };
   el("collapse").onclick = () => {
     document.body.classList.add("collapsed"); writeUrl();
   };
@@ -1055,6 +1076,7 @@ buildMenu();
 el("vmin").value = current.vmin ?? "";
 el("vmax").value = current.vmax ?? "";
 el("names").checked = namesOn;
+el("fires").checked = firesOn;
 wire();
 draw();
 
