@@ -104,9 +104,12 @@
   #palette .opt.on { font-weight:700; color:var(--ink); }
   #palette .swatch { width:96px; height:11px; border-radius:2px;
     border:1px solid rgba(0,0,0,.2); }
-  .imgonly { display:none; }
+  .imgonly, label.check.imgonly { display:none; }
   body.imagery .imgonly { display:inline-block; }
   body.imagery label.check.imgonly { display:inline-flex; }
+  /* Shown only for a field that has a wider twin to lay underneath it. */
+  .underonly, label.check.underonly { display:none; }
+  body.hasunder label.check.underonly { display:inline-flex; }
 
   @media (max-width:820px) {
     :root { --head:132px; }
@@ -161,6 +164,7 @@
            style="width:70px" title="ניגודיות התמונה">
     <label class="check imgonly"><input type="checkbox" id="names"> שמות יישובים</label>
     <label class="check imgonly"><input type="checkbox" id="fires"> שריפות</label>
+    <label class="check underonly"><input type="checkbox" id="under"> מפת 1 ק"מ מתחת</label>
     <span id="about"></span>
     <span id="status"></span>
   </div>
@@ -323,12 +327,13 @@ const LAYERS = [
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_L3_MY_009_143/description",
    about:"OLCI בעיבוד אחיד, מאז 2016."},
   {id:"chl_100m", group:"כלורופיל", name:"סנטינל-2 100 מ' · קופרניקוס (פסיפס חוף)",
+   under:"chl_1km_my",
    src:"cm", cover:"sea", first:"2021-01-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10, lag:2,
    scale:"log", cmap:"viridis", probe:true,
    layer:"OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/"
      + "cmems_obs_oc_med_bgc_tur-spm-chl_nrt_l3-hr-mosaic_P1D-m_202107/CHL",
    product:CM_HOME + "OCEANCOLOUR_MED_BGC_HR_L3_NRT_009_205/description",
-   about:"החדה ביותר כאן, ברצועת החוף בלבד ורק בימים שסנטינל-2 עבר מעל האזור - "
+   about:"רזולוציה גבוהה, ברצועת החוף בלבד ורק בימים שסנטינל-2 עבר מעל האזור - "
      + "אחת לכמה ימים. « ו-» יקפצו ליום כזה."},
   {id:"chl_gapfree_my", group:"כלורופיל", name:"מפה מלאה ללא חסרים 1 ק\"מ · קופרניקוס (L4)",
    src:"cm", cover:"sea", first:"1997-11-01", unit:"מג/מ\"ק", vmin:0.01, vmax:10,
@@ -499,10 +504,10 @@ const DEFAULTS = Object.fromEntries(LAYERS.map(l =>
 const DEFAULT_LAYER = LAYERS[0].id;
 
 let map = null, baseLayer = null, govLayer = null, fieldLayer = null, labelLayer = null;
-let fireLayer = null;
+let fireLayer = null, underLayer = null;
 let cbox = null, paletteOpen = false;
 let current = LAYERS[0], date = TODAY, busy = false, PLACES = [];
-let namesOn = false, namesTouched = false, firesOn = false;
+let namesOn = false, namesTouched = false, firesOn = false, underOn = false;
 
 const byId = id => LAYERS.find(l => l.id === id) || LAYERS[0];
 const iso = d => d.toISOString().slice(0, 10);
@@ -711,6 +716,7 @@ function draw() {
   if (baseLayer) { map.removeLayer(baseLayer); baseLayer = null; }
   if (govLayer) { map.removeLayer(govLayer); govLayer = null; }
   if (fieldLayer) { map.removeLayer(fieldLayer); fieldLayer = null; }
+  if (underLayer) { map.removeLayer(underLayer); underLayer = null; }
   // Imagery that covers the land is the basemap of its own; a sea field lies on
   // GovMap where GovMap reaches, and on Google where it does not.
   if (current.cover !== "all") {
@@ -719,6 +725,14 @@ function draw() {
     govLayer = L.tileLayer(GOVMAP, {maxZoom: 12, minZoom: 7, zIndex: 1,
       attribution: GOVMAP_CREDIT, errorTileUrl:
         "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}).addTo(map);
+  }
+  // The coastal mosaic is a strip a few kilometres wide; on its own it hangs in
+  // an empty sea. The kilometre field of the same measure goes underneath it, on
+  // the same colour scale, so the strip is read against the water around it.
+  if (underOn && current.under) {
+    underLayer = L.tileLayer(tileUrl(byId(current.under), date), {
+      maxZoom: 12, opacity: +el("opacity").value / 100, zIndex: 3,
+    }).addTo(map);
   }
   fieldLayer = L.tileLayer(tileUrl(current, date), {
     maxZoom: 12, maxNativeZoom: current.maxZoom || 12,
@@ -785,6 +799,7 @@ function drawNames() {
 
 function syncControls() {
   document.body.classList.toggle("imagery", current.cover === "all");
+  document.body.classList.toggle("hasunder", !!current.under);
   el("group").textContent = current.group;
   el("layer").value = current.id;
   const d = el("date");
@@ -880,8 +895,10 @@ function resetAll() {
   namesTouched = false;
   namesOn = current.cover === "all";
   firesOn = false;
+  underOn = false;
   el("names").checked = namesOn;
   el("fires").checked = firesOn;
+  el("under").checked = underOn;
   document.body.classList.remove("collapsed");
   paletteOpen = false;
   el("palette").classList.remove("open");
@@ -933,6 +950,7 @@ function writeUrl() {
   if (el("opacity").value !== "85") q.set("op", el("opacity").value);
   if (namesOn !== (current.cover === "all")) q.set("nm", namesOn ? "1" : "0");
   if (firesOn) q.set("fire", "1");
+  if (underOn) q.set("under", "1");
   if (el("bright").value !== "100") q.set("br", el("bright").value);
   if (el("contrast").value !== "100") q.set("ct", el("contrast").value);
   if (document.body.classList.contains("collapsed")) q.set("bar", "0");
@@ -973,6 +991,7 @@ function readUrl() {
   namesOn = q.get("nm") === "1" || (q.get("nm") === null && current.cover === "all");
   if (q.get("nm") !== null) namesTouched = true;
   firesOn = q.get("fire") === "1";
+  underOn = q.get("under") === "1";
   if (q.get("bar") === "0") document.body.classList.add("collapsed");
   const c = (q.get("c") || "").split(",").map(Number);
   const z = +q.get("z");
@@ -1045,8 +1064,9 @@ function wire() {
     if (v >= firstDay(current) && v <= maxDay(current)) setDate(v);
   };
   el("opacity").oninput = () => {
-    if (fieldLayer && current.cover !== "all")
-      fieldLayer.setOpacity(+el("opacity").value / 100);
+    const o = +el("opacity").value / 100;
+    if (fieldLayer && current.cover !== "all") fieldLayer.setOpacity(o);
+    if (underLayer) underLayer.setOpacity(o);
   };
   for (const b of [el("log"), el("linear")])
     b.onclick = () => { current.scale = b.dataset.scale; draw(); };
@@ -1059,6 +1079,7 @@ function wire() {
   el("fires").onchange = e => {
     firesOn = e.target.checked; drawFires(); writeUrl();
   };
+  el("under").onchange = e => { underOn = e.target.checked; draw(); };
   el("collapse").onclick = () => {
     document.body.classList.add("collapsed"); writeUrl();
   };
@@ -1077,6 +1098,7 @@ el("vmin").value = current.vmin ?? "";
 el("vmax").value = current.vmax ?? "";
 el("names").checked = namesOn;
 el("fires").checked = firesOn;
+el("under").checked = underOn;
 wire();
 draw();
 
