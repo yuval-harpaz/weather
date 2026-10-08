@@ -598,7 +598,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-26,Bardawil_off,CHL,my,3.306,3.306,2.281,7.294,0.5659
 2026-09-27,Bardawil_off,CHL,my,12.2,5.701,3.979,13.49,1
 2026-09-28,Bardawil_off,CHL,my,4.266,2.316,2.001,6.469,1
-2026-09-29,Bardawil_off,CHL,nrt,2.881,2.071,1.733,3.255,1
+2026-09-29,Bardawil_off,CHL,my,2.884,2.07,1.734,3.252,1
 2026-09-30,Bardawil_off,CHL,nrt,3.174,2.54,1.918,3.245,1
 2026-10-02,Bardawil_off,CHL,nrt,2.863,2.48,1.885,3.237,1
 2026-10-03,Bardawil_off,CHL,nrt,3.01,2.971,2.091,3.227,1
@@ -811,7 +811,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-25,Damietta_mouth,CHL,my,2.171,1.602,1.11,2.723,1
 2026-09-27,Damietta_mouth,CHL,my,7.197,2.931,2.074,8.894,1
 2026-09-28,Damietta_mouth,CHL,my,2.126,1.605,1.072,2.468,1
-2026-09-29,Damietta_mouth,CHL,nrt,2.335,2.335,1.557,2.901,0.5495
+2026-09-29,Damietta_mouth,CHL,my,2.349,2.349,1.567,2.918,0.5495
 2026-09-30,Damietta_mouth,CHL,nrt,2.248,2.248,1.218,2.905,0.5055
 2026-10-01,Damietta_mouth,CHL,nrt,2.489,1.919,1.266,2.88,0.8132
 2026-10-02,Damietta_mouth,CHL,nrt,2.495,1.737,1.277,2.785,1
@@ -1776,7 +1776,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-09-26,Port_Said_EG,CHL,my,10.39,8.673,4.112,10.44,1
 2026-09-27,Port_Said_EG,CHL,my,13.39,13.92,7.899,24.38,1
 2026-09-28,Port_Said_EG,CHL,my,4.625,5.259,2.94,8.338,1
-2026-09-29,Port_Said_EG,CHL,nrt,6.259,6.259,2.836,8.512,0.7487
+2026-09-29,Port_Said_EG,CHL,my,6.275,6.275,2.841,8.525,0.7487
 2026-09-30,Port_Said_EG,CHL,nrt,9.699,9.688,4.563,10.07,0.9698
 2026-10-01,Port_Said_EG,CHL,nrt,7.691,7.691,4.714,12.05,0.7437
 2026-10-02,Port_Said_EG,CHL,nrt,10.37,,,,0.196
