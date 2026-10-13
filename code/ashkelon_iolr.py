@@ -51,6 +51,7 @@ import pandas as pd
 HERE = pathlib.Path(__file__).parent
 DATA = HERE.parent / "data"
 OUT = DATA / "ashkelon_iolr.csv"
+SAT_STATION = "Ashkelon_IL"      # the satellite pixel this mooring sits under
 DEFAULT_DIR = pathlib.Path.home() / "Documents"
 PATTERN = "Ashkelon*.txt"
 
@@ -59,6 +60,18 @@ FILL = {999999.0, -999999.0, -32768.0, -999.0, -9999.0}
 # SeaDataNet L20: 0 no QC, 1 good, 2 probably good, 3 probably bad, 4 bad,
 # 8 interpolated, 9 missing. Only the unambiguous failures go.
 BAD_FLAGS = {3, 4, 9}
+
+# A plausibility window for the channels where one exists. The 2012-2020 export
+# carries no quality control at all - every flag in it is 0, meaning "not
+# checked" - so a dropout there arrives looking exactly like a reading: on
+# 2015-11-26 the thermistor returned a single 0.0 C between two samples of
+# 23.2 C, with the same flag on both. The median shrugged it off but the day's
+# minimum became 0.0, which is the one value in thirteen years below 10 C.
+# Sea water at this site does not approach freezing, so the window throws it out
+# without needing a flag to lean on. Channels absent from this table - waves,
+# currents, the optical pair - keep every value, because zero is a real reading
+# for all of them.
+RANGES = {"WaterTemp [degC]": (5.0, 40.0)}
 
 # ODV channel name -> the column it becomes here. Named for what was actually
 # measured: WaveHightMax is the largest wave of the burst, not the significant
@@ -96,13 +109,16 @@ def header_of(path):
     return pre, cols
 
 
-def clean(values, flags):
-    """Fill values and failed quality codes out, as NaN."""
+def clean(values, flags, channel=None):
+    """Fill values, failed quality codes and impossible readings out, as NaN."""
     v = pd.to_numeric(values, errors="coerce").astype("float64")
     v[v.isin(FILL)] = np.nan
     if flags is not None:
         q = pd.to_numeric(flags, errors="coerce")
         v[q.isin(BAD_FLAGS)] = np.nan
+    lohi = RANGES.get(channel)
+    if lohi:
+        v[(v < lohi[0]) | (v > lohi[1])] = np.nan
     return v
 
 
@@ -151,7 +167,7 @@ def read_file(path):
         if depth_name:
             frame["depth"] = pd.to_numeric(chunk.loc[keep, depth_name], errors="coerce")
         for raw, vname, qname in pairs:
-            frame[raw] = clean(chunk.loc[keep, vname], chunk.loc[keep, qname])
+            frame[raw] = clean(chunk.loc[keep, vname], chunk.loc[keep, qname], raw)
         out.append(pd.DataFrame(frame))
     if not out:
         return None, pre
@@ -180,6 +196,10 @@ def daily_scalar(df, raw, name):
         return None
     g = s.set_index("t")
     agg = g[raw].groupby(pd.Grouper(freq="D"))
+    # Median, min and max - the same three Sdot Yam keeps, so a column means the
+    # same thing on both moorings. A mean was briefly kept here as well and is
+    # gone again: two central values invite the question of which is canonical,
+    # and on 10% of days they differ by more than 0.1 C.
     out = pd.DataFrame({name: agg.median(), f"{name}_min": agg.min(),
                         f"{name}_max": agg.max(), f"{name}_n": agg.count()})
     out[f"{name}_depth"] = g["depth"].groupby(pd.Grouper(freq="D")).median()
@@ -235,6 +255,49 @@ def daily_current(df):
     # written on every row of the merged table including empty ones.
     out["cur_depth"] = np.where(out["cur_n"] > 0, bin_m, np.nan)
     return out, bin_m
+
+
+def flag_odd(day, z_max=4.0):
+    """Mark days whose distance from the satellite is out of character.
+
+    A fixed plausibility window catches a thermistor returning 0 C, but not a
+    sensor that has drifted, fouled or come out of the water while still
+    returning numbers in range. The satellite pixel over the same water is an
+    independent witness, so the quantity watched here is the difference between
+    them.
+
+    Per calendar month, not overall. The difference is strongly seasonal - the
+    mooring reads 0.98 C warmer than the pixel in July and 0.19 C cooler in
+    January, and its spread in May and June is three times September's, because
+    an 11 m sensor under a warm spring surface layer is genuinely colder than a
+    skin temperature. Judged against one global threshold that seasonal cycle
+    looks like a fault: it flagged 76 days, most of them real stratification.
+    Against each month's own median and spread, 20 remain.
+
+    Flagged, never deleted. These are the days worth looking at, not days known
+    to be wrong, and the two should not be confused.
+    """
+    sat = None
+    for name in (f"sst_nrt_{SAT_STATION}.csv", f"sst_rep_{SAT_STATION}.csv"):
+        path = DATA / name
+        if not path.exists():
+            continue
+        col = pd.read_csv(path, parse_dates=["date"]).set_index("date")["sst"]
+        sat = col if sat is None else sat.combine_first(col)
+    if sat is None or "sst" not in day:
+        return day, 0
+    idx = pd.to_datetime(day.index)
+    diff = pd.Series(day["sst"].to_numpy(), index=idx) - sat.reindex(idx)
+    month = idx.month
+    med = diff.groupby(month).transform("median")
+    mad = diff.groupby(month).transform(
+        lambda v: (v - v.median()).abs().median() * 1.4826)
+    z = (diff - med) / mad.replace(0, np.nan)
+    odd = z.abs() > z_max
+    day["sst_sat"] = sat.reindex(idx).round(3).to_numpy()
+    day["sst_odd"] = np.where(diff.isna().to_numpy(), pd.NA,
+                              odd.fillna(False).astype(int).to_numpy())
+    return day, int(odd.fillna(False).sum())
 
 
 def main(argv):
@@ -312,11 +375,21 @@ def main(argv):
     # One number for how much the day rests on, as at Sdot Yam.
     day["samples"] = pd.concat(counts, axis=1, sort=False).max(axis=1).astype("Int64")
     day = day.round(3)
+    day, n_odd = flag_odd(day)
     day.index = day.index.date
     day.index.name = "date"      # after the replacement, or the name is lost
 
     span = f"{day.index.min()} -> {day.index.max()}"
     print(f"\n{len(day):,} days, {span}")
+    if n_odd:
+        odd = day[day["sst_odd"] == 1]
+        print(f"  {n_odd} day(s) sit far from the satellite for the time of year "
+              f"- flagged in sst_odd, not removed:")
+        worst = (odd["sst"] - odd["sst_sat"]).abs().sort_values(ascending=False)
+        for d in worst.head(6).index:
+            print(f"     {d}  buoy {odd.loc[d, 'sst']:.2f}  "
+                  f"satellite {odd.loc[d, 'sst_sat']:.2f}  "
+                  f"diff {odd.loc[d, 'sst'] - odd.loc[d, 'sst_sat']:+.2f}")
     for c in day.columns:
         if c.endswith(("_min", "_max")) or c == "samples":
             continue

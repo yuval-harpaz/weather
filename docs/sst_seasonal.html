@@ -454,8 +454,12 @@ let IOLR_SST = new Map();
 const MOORINGS = [
   {key: BUOY_KEY, lat: 32.49463, lon: 34.87989, series: () => BUOY_SST,
    live: true,  always: false},
+  // Behind the station pins, not over them: this mooring is 8 km from the
+  // Ashkelon satellite station and the two overlap at the opening zoom. The
+  // pixel reading is the one a reader is usually after, so it stays on top and
+  // the buoy shows from behind it.
   {key: IOLR_KEY, lat: 31.63472, lon: 34.49917, series: () => IOLR_SST,
-   live: false, always: true},
+   live: false, always: true, z: -200},
 ];
 const mooringFor = k => MOORINGS.find(m => m.key === k);
 const onMooring = () => !!mooringFor(station);
@@ -998,6 +1002,11 @@ function draw() {
   const years = Object.keys(byYear(map)).map(Number).sort((a, b) => a - b);
   const data = byYear(map);
   const current = years[years.length - 1];
+  // The newest year in the record is only "this year" if it actually is. The
+  // Ashkelon mooring is released on a delay, so its last year is a year or more
+  // old and drawing it heavy claimed a currency it does not have. When the
+  // record stops short it is drawn like every other past year.
+  const isCurrent = current === new Date().getUTCFullYear();
   const x = XDATES;
   const traces = [], annotations = [];
 
@@ -1061,13 +1070,16 @@ function draw() {
           outlinewidth: 0, tickformat: "d"}}});
   } else {
     for (const y of years) {
-      if (y === current || String(y) === prevYear) continue;
+      // When the newest year is not this year it is drawn below as an ordinary
+      // past year, so it must not also be drawn here.
+      if ((y === current && isCurrent) || String(y) === prevYear) continue;
       traces.push(ghost(y, c.ghost, 1));
     }
+    const lastGhost = isCurrent ? current - 1 : current;
     traces.push({x: [null], y: [null], type: "scatter", mode: "lines",
       line: {color: c.ghost.replace(/0\.1\d\)/, "0.6)"), width: 1},
-      name: years[0] === current - 1 ? `${years[0]}`
-        : `${years[0]}–${current - 1}`, hoverinfo: "skip"});
+      name: years[0] === lastGhost ? `${years[0]}`
+        : `${years[0]}–${lastGhost}`, hoverinfo: "skip"});
   }
 
   // The three days a centred window cannot reach, drawn raw so the series still
@@ -1092,7 +1104,8 @@ function draw() {
   if (prevYear && data[+prevYear]) {
     traces.push(line(+prevYear, prevColor, 2.2, prevYear, true));
   }
-  traces.push(line(current, curColor, 3, String(current), true));
+  traces.push(isCurrent ? line(current, curColor, 3, String(current), true)
+                        : line(current, c.ghost, 1, String(current), false));
   if (onLand()) {
     const t = tailTrace(curColor, current);
     if (t) traces.push(t);
@@ -1613,7 +1626,7 @@ function drawBuoy() {
             : `${date} · median of the day's samples`)
       : `${pretty(m.key)} · nothing for ${date} · click for the record`;
     buoyPins[m.key] = L.marker([m.lat, m.lon],
-      {icon, zIndexOffset: sel ? 1250 : 1200, title})
+      {icon, zIndexOffset: sel ? 1250 : (m.z !== undefined ? m.z : 1200), title})
       .addTo(map).on("click", () => select(m.key));
   }
 }
