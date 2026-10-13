@@ -206,6 +206,9 @@
     <a href="https://med-lter.haifa.ac.il/sdot-yam-float-overview/" target="_blank"
     rel="noopener">Morris Kahn Marine Research Station, the School of Marine
     Sciences, and the University of Haifa</a>.
+    Ashkelon mooring data from
+    <a href="https://isramar.ocean.org.il/isramar2009/" target="_blank"
+    rel="noopener">Israel Oceanographic and Limnological Research</a>.
     Air temperature at Bet Dagan from
     <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
        title="Israel Meteorological Service — open data"><img
@@ -437,10 +440,31 @@ let BD = new Map();              // the merged view the chart and pins read
 const BUOY_KEY = "Sdot_Yam_buoy";
 const BUOY_AT = {name: BUOY_KEY, lat: 32.49463, lon: 34.87989};
 let BUOY_SST = new Map(), BUOY_FRESH = new Map();
+
+// The second mooring, off Ashkelon, run by IOLR. It is read from a file that is
+// built by hand from their SeaDataNet exports and will never be current - the
+// institute releases on a year's delay - so unlike Sdot Yam it is drawn even on
+// days it has nothing to say. An absent Sdot Yam reading means the buoy was out
+// of the water, which is worth seeing; an absent Ashkelon reading means only
+// that the year has not been released yet, and hiding the marker would leave
+// thirteen years of record with nothing to click on.
+const IOLR_KEY = "Ashkelon_IOLR_buoy";
+let IOLR_SST = new Map();
+
+const MOORINGS = [
+  {key: BUOY_KEY, lat: 32.49463, lon: 34.87989, series: () => BUOY_SST,
+   live: true,  always: false},
+  {key: IOLR_KEY, lat: 31.63472, lon: 34.49917, series: () => IOLR_SST,
+   live: false, always: true},
+];
+const mooringFor = k => MOORINGS.find(m => m.key === k);
+const onMooring = () => !!mooringFor(station);
 const onBuoy = () => station === BUOY_KEY;
 const MKMRS = '<a href="https://med-lter.haifa.ac.il/sdot-yam-float-overview/"'
   + ' target="_blank" rel="noopener">Morris Kahn Marine Research Station, the'
   + ' School of Marine Sciences, and the University of Haifa</a>';
+const IOLR = '<a href="https://isramar.ocean.org.il/isramar2009/" target="_blank"'
+  + ' rel="noopener">Israel Oceanographic and Limnological Research</a>';
 
 // The station's own dashboard, the one embedded on the MKMRS overview page. It
 // answers without credentials and sends Access-Control-Allow-Origin: *, so the
@@ -491,6 +515,12 @@ async function loadFrame() {
   for (const r of (await grab("buoy_sdot_yam.csv", d3.csv) || [])) {
     const v = +r.sst;
     if (r.sst !== "" && !isNaN(v)) BUOY_SST.set(r.date, v);
+  }
+  // Built by hand from IOLR's SeaDataNet exports by code/ashkelon_iolr.py; the
+  // institute releases on a year's delay, so this file never reaches today.
+  for (const r of (await grab("ashkelon_iolr.csv", d3.csv) || [])) {
+    const v = +r.sst;
+    if (r.sst !== "" && !isNaN(v)) IOLR_SST.set(r.date, v);
   }
   if (!STATIONS.length) throw new Error("no sst_stations.csv");
   STATIONS.push({name: BD_KEY, lat: BD_AT.lat, lon: BD_AT.lon,
@@ -774,7 +804,7 @@ async function loadBDToday() {
 }
 
 const onLand = () => station === BD_KEY;
-const chartSeries = () => onBuoy() ? BUOY_SST
+const chartSeries = () => onMooring() ? mooringFor(station).series()
   : onLand() ? bdView()
   : SERIES[`${chartStream()}|${station}`];
 
@@ -948,7 +978,7 @@ function bdTail() {
 // is why this is a button rather than always-on.
 function yRangeNow() {
   if (onLand()) return bdCfg().range.slice();
-  if (showAir && !onBuoy()) {
+  if (showAir && !onMooring()) {
     const r = bdCfg().range;
     return [Math.min(Y_RANGE[0], r[0]), Math.max(Y_RANGE[1], r[1])];
   }
@@ -974,7 +1004,7 @@ function draw() {
   // The analyses have no gaps to bridge; the buoy does - three months out of
   // the water in 2026 - and drawing through them would invent a spring it never
   // measured, which is exactly what the footnote promises it does not do.
-  const joins = !onBuoy();
+  const joins = !onMooring();
   const line = (y, color, width, name, show, dash) => ({
     x, y: data[y], type: "scatter", mode: "lines", connectgaps: joins,
     line: {color, width, dash}, name: name || String(y), showlegend: !!show,
@@ -1179,7 +1209,13 @@ function draw() {
     ? ` The newest point is marked * on the map and is the buoy's latest `
       + `reading (${[...BUOY_FRESH.values()].sort().pop()}) rather than a `
       + `whole-day median, matching the station's own dashboard.` : "";
-  footEl.textContent = onLand()
+  footEl.textContent = station === IOLR_KEY
+    ? `${pretty(station)} · moored thermistor off Ashkelon, ${years[0]}–${current}, `
+      + `${map.size.toLocaleString()} daily values. A median of each day's `
+      + `samples, taken from the shallowest sensor that reported - 11 m, and 12 m `
+      + `from 2022. This record is released on a delay and is rebuilt by hand, so `
+      + `it stops well short of today and will not follow the map's newest day.`
+    : onLand()
     ? `${pretty(station)} · IMS station 54, 32.007 N 34.814 E, `
       + `${years[0]}–${current}, ${map.size.toLocaleString()} daily values. `
       + `The ${bdCfg().label} air temperature of each day, 7 km inland — not a `
@@ -1227,6 +1263,8 @@ function draw() {
   // textContent first so nothing from the data can be read as markup, then the
   // one piece of trusted HTML this line needs.
   if (onBuoy()) footEl.innerHTML = footEl.innerHTML + ` Buoy data: ${MKMRS}.`;
+  if (station === IOLR_KEY)
+    footEl.innerHTML = footEl.innerHTML + ` Mooring data: ${IOLR}.`;
 }
 
 // Clicking a day in the chart takes the map to it. The shared tooltip means a
@@ -1273,7 +1311,7 @@ const LABELS = dark => "https://services.arcgisonline.com/ArcGIS/rest/services/C
   + "/MapServer/tile/{z}/{y}/{x}";
 
 let map = null, baseLayer = null, labelLayer = null, sstLayer = null;
-let pins = {}, buoyPin = null, cbBar = null, cbMax = null, cbMin = null;
+let pins = {}, buoyPins = {}, cbBar = null, cbMax = null, cbMin = null;
 
 // Off by default: 17-31 covers the annual cycle along this coast, so the same
 // colour means the same temperature in February and in September and two days
@@ -1541,32 +1579,43 @@ function drawLand(s) {
 
 // A buoy rather than a label: wide body carrying the reading, tapering to a tip
 // that sits on the mooring itself, so the shape says where the number was taken
-// and the fill - the same ramp as the field - says how it compares.
+// and the fill - the same ramp as the field - says how it compares. Both
+// moorings wear it, because they are the same kind of instrument; what tells
+// them apart is where they sit and how often they have anything to say.
 function drawBuoy() {
-  const date = shownDate();
-  if (buoyPin) { map.removeLayer(buoyPin); buoyPin = null; }
-  const v = BUOY_SST.get(date);
-  if (v === undefined) return;       // out of the water, or no reading that day
-  const st = pinStyle(v);
-  // The value and its live marker are one centred string: drawn as two texts
-  // the asterisk lands on the outline and gets cut in half.
-  const label = v.toFixed(1) + (BUOY_FRESH.has(date) ? "*" : "");
-  const html = `<svg width="52" height="39" viewBox="0 0 52 39"`
-    + ` style="overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">`
-    + `<path d="M5 8 Q5 3 10 3 H42 Q47 3 47 8 V20 L26 37.5 L5 20 Z"`
-    + ` fill="${st.bg}" stroke="${onBuoy() ? "#0b0b0b" : "rgba(255,255,255,0.85)"}"`
-    + ` stroke-width="${onBuoy() ? 2.5 : 1.5}" stroke-linejoin="round"/>`
-    + `<text x="26" y="16" text-anchor="middle" fill="${st.fg}"`
-    + ` font-family="system-ui, sans-serif" font-size="12" font-weight="600"`
-    + ` letter-spacing="-0.02em">${label}</text></svg>`;
-  const icon = L.divIcon({html, className: "", iconSize: [52, 39],
-    iconAnchor: [26, 38]});
-  buoyPin = L.marker([BUOY_AT.lat, BUOY_AT.lon], {icon, zIndexOffset: 1200,
-    title: `${pretty(BUOY_KEY)} · ${v.toFixed(2)} °C · `
-      + (BUOY_FRESH.has(date)
-          ? `latest reading, ${BUOY_FRESH.get(date)}`
-          : `${date} · median of the day's in-water samples`)
-      }).addTo(map).on("click", () => select(BUOY_KEY));
+  const date = shownDate(), c = C();
+  for (const m of MOORINGS) {
+    if (buoyPins[m.key]) { map.removeLayer(buoyPins[m.key]); delete buoyPins[m.key]; }
+    const v = m.series().get(date);
+    if (v === undefined && !m.always) continue;   // out of the water
+    const sel = station === m.key;
+    const has = v !== undefined;
+    const st = has ? pinStyle(v) : {bg: c.surface, fg: c.muted};
+    // The value and its live marker are one centred string: drawn as two texts
+    // the asterisk lands on the outline and gets cut in half.
+    const label = has
+      ? v.toFixed(1) + (m.live && BUOY_FRESH.has(date) ? "*" : "")
+      : "\u2013";
+    const html = `<svg width="52" height="39" viewBox="0 0 52 39"`
+      + ` style="overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">`
+      + `<path d="M5 8 Q5 3 10 3 H42 Q47 3 47 8 V20 L26 37.5 L5 20 Z"`
+      + ` fill="${st.bg}" stroke="${sel ? "#0b0b0b" : has ? "rgba(255,255,255,0.85)" : c.axis}"`
+      + ` stroke-width="${sel ? 2.5 : 1.5}" stroke-linejoin="round"/>`
+      + `<text x="26" y="16" text-anchor="middle" fill="${st.fg}"`
+      + ` font-family="system-ui, sans-serif" font-size="12" font-weight="600"`
+      + ` letter-spacing="-0.02em">${label}</text></svg>`;
+    const icon = L.divIcon({html, className: "", iconSize: [52, 39],
+      iconAnchor: [26, 38]});
+    const title = has
+      ? `${pretty(m.key)} · ${v.toFixed(2)} °C · `
+        + (m.live && BUOY_FRESH.has(date)
+            ? `latest reading, ${BUOY_FRESH.get(date)}`
+            : `${date} · median of the day's samples`)
+      : `${pretty(m.key)} · nothing for ${date} · click for the record`;
+    buoyPins[m.key] = L.marker([m.lat, m.lon],
+      {icon, zIndexOffset: sel ? 1250 : 1200, title})
+      .addTo(map).on("click", () => select(m.key));
+  }
 }
 
 // Every stream is loaded for every station once that stream is first needed, so
@@ -1878,7 +1927,7 @@ function syncAir() {
 }
 
 function syncScheme() {
-  if (onBuoy()) {
+  if (onMooring()) {
     if (gridScheme === null) gridScheme = scheme;
     scheme = "record";
   } else if (gridScheme !== null) {
@@ -1886,7 +1935,7 @@ function syncScheme() {
     gridScheme = null;
   }
   document.querySelectorAll("button.sch").forEach(b => {
-    b.disabled = onBuoy() && b.dataset.sch !== "record";
+    b.disabled = onMooring() && b.dataset.sch !== "record";
     b.classList.toggle("on", b.dataset.sch === scheme);
   });
 }
@@ -1968,9 +2017,9 @@ async function main() {
   }
   document.getElementById("station").innerHTML = STATIONS.map(s =>
     `<option value="${s.name}">${pretty(s.name)}</option>`).join("")
-    + (BUOY_SST.size ? `<option value="${BUOY_KEY}">${pretty(BUOY_KEY)}</option>` : "");
-  if (!STATIONS.some(s => s.name === station)
-      && !(station === BUOY_KEY && BUOY_SST.size)) station = DEFAULT_STATION;
+    + (BUOY_SST.size ? `<option value="${BUOY_KEY}">${pretty(BUOY_KEY)}</option>` : "")
+    + (IOLR_SST.size ? `<option value="${IOLR_KEY}">${pretty(IOLR_KEY)}</option>` : "");
+  if (!STATIONS.some(s => s.name === station) && !onMooring()) station = DEFAULT_STATION;
   document.getElementById("station").value = station;
   applyLang();
   syncScheme();          // also covers arriving on ?station=Sdot_Yam_buoy

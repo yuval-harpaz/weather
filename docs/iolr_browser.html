@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IOLR data browser</title>
+<link rel="icon" href="logo.jpg">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root, .viz-root { color-scheme: light;
+    --surface:#f9fbfe; --page:#eaf0f8; --ink:#0b0b0b; --ink2:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10); }
+  body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
+    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])),
+    :root:where(:not([data-theme="light"])) .viz-root { color-scheme: dark;
+      --surface:#181a1f; --page:#0b0d12; --ink:#ffffff; --ink2:#c3c2b7;
+      --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+      --border:rgba(255,255,255,0.10); } }
+  :root[data-theme="dark"], :root[data-theme="dark"] .viz-root { color-scheme: dark;
+    --surface:#181a1f; --page:#0b0d12; --ink:#ffffff; --ink2:#c3c2b7;
+    --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+    --border:rgba(255,255,255,0.10); }
+  .wrap { max-width:1400px; margin:0 auto; }
+  .pagehead { display:flex; align-items:flex-start; gap:12px; }
+  .pagehead h1 { flex:1; font-size:19px; font-weight:600; margin:0 0 4px;
+    letter-spacing:-0.01em; }
+  .homelink { display:inline-flex; align-items:center; color:var(--muted);
+    text-decoration:none; padding:3px; border-radius:6px; flex:none; }
+  .homelink:hover { color:var(--ink); background:var(--surface); }
+  .sub { color:var(--ink2); margin:0 0 14px; }
+  .bar { display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; }
+  .grp { display:flex; gap:0; }
+  .grp button { border-radius:0; margin-left:-1px; }
+  .grp button:first-child { border-radius:7px 0 0 7px; margin-left:0; }
+  .grp button:last-child { border-radius:0 7px 7px 0; }
+  .lbl { color:var(--muted); font-size:12.5px; margin-right:2px; }
+  .spacer { flex:1 }
+  button, select { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:6px 12px; cursor:pointer; }
+  button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
+  button:hover:not(:disabled), select:hover { color:var(--ink); }
+  button:disabled, select:disabled { opacity:.45; cursor:default; }
+  .card { background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:8px 4px 4px; min-height:120px; }
+  .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; }
+  .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11.5px; }
+  /* The drop zone doubles as the empty state, so the page is never a blank slab */
+  #drop { border:1.5px dashed var(--axis); border-radius:10px; padding:28px 18px;
+    text-align:center; color:var(--ink2); background:var(--surface); cursor:pointer; }
+  #drop.over { border-color:var(--ink); color:var(--ink); }
+  #info { background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:12px 14px; margin:0 0 14px; display:none; }
+  #info h2 { font-size:13px; margin:0 0 8px; font-weight:600; color:var(--ink); }
+  #info dl { display:grid; grid-template-columns:auto 1fr; gap:3px 14px;
+    margin:0; font-size:12.5px; }
+  #info dt { color:var(--muted); white-space:nowrap; }
+  #info dd { margin:0; color:var(--ink2); overflow-wrap:anywhere; }
+  #info details { margin-top:9px; }
+  #info summary { cursor:pointer; color:var(--muted); font-size:12.5px; }
+  #info pre { margin:7px 0 0; padding:9px 11px; background:var(--page);
+    border-radius:7px; overflow-x:auto; font-size:11px; line-height:1.45; }
+  .warn { color:#b4451b; }
+  :root[data-theme="dark"] .warn, :root:where(:not([data-theme="light"])) .warn { color:#e0845c; }
+  @media (prefers-color-scheme: light) { .warn { color:#b4451b; } }
+  #bar-progress { height:4px; background:var(--grid); border-radius:3px;
+    overflow:hidden; margin:10px 0 0; display:none; }
+  #bar-progress > div { height:100%; width:0; background:var(--axis);
+    transition:width .15s linear; }
+</style>
+</head>
+<body>
+<div class="viz-root wrap">
+
+  <div class="pagehead">
+    <h1>IOLR data browser</h1>
+    <a class="homelink" href="index.html" title="All charts" aria-label="Home">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg></a>
+  </div>
+  <p class="sub">Open one SeaDataNet/ODV export from the Israel Oceanographic and
+  Limnological Research institute. Every channel in the file gets its own panel,
+  with each year drawn over a common January&ndash;December calendar. Nothing is
+  uploaded anywhere &mdash; the file is read in this browser.</p>
+
+  <div class="bar">
+    <input type="file" id="file" accept=".txt,.csv,.tsv,text/plain" hidden>
+    <button id="pick">Open a file&hellip;</button>
+    <span class="lbl" style="margin-left:14px">Values</span>
+    <span class="grp">
+      <button class="agg" data-agg="raw">Raw</button>
+      <button class="agg on" data-agg="mean">Daily mean</button>
+      <button class="agg" data-agg="max">Daily max</button>
+      <button class="agg" data-agg="min">Daily min</button>
+    </span>
+    <span class="lbl" style="margin-left:14px">Depth</span>
+    <select id="depth" disabled></select>
+    <button id="qc" class="on" style="margin-left:14px"
+      title="leave out values the file flags as probably bad, bad or missing
+             (SeaDataNet codes 3, 4 and 9)">Drop flagged bad</button>
+    <span class="spacer"></span>
+    <button id="theme">Dark mode</button>
+  </div>
+
+  <div id="info"></div>
+  <div id="bar-progress"><div></div></div>
+
+  <div id="drop">
+    <strong>Drop a file here</strong>, or use &ldquo;Open a file&hellip;&rdquo;.<br>
+    <span class="mono">AshkelonCTD_*.txt</span> &middot;
+    <span class="mono">AshkelonRDI_*.txt</span>
+  </div>
+
+  <div class="card" id="chartcard" style="display:none"><div id="chart"></div></div>
+  <p class="note" id="foot"></p>
+</div>
+
+<script>
+// ---------------------------------------------------------------- constants
+// A leap year, so 29 February has somewhere to sit when years are overlaid.
+const BASE_YEAR = 2020;
+const DAY_MS = 86400000;
+// Raw mode keeps every sample, which on the ADCP export is millions of points.
+// Past this the page says so rather than quietly hanging the tab.
+const RAW_WARN_POINTS = 400000;
+// These exports carry absent readings as fill values rather than as blanks, and
+// they differ by channel: 999999 throughout, and -32768 - an int16 sentinel -
+// in the ADCP currents. Left in, they would not be outliers so much as a second
+// fake signal: a tenth of the turbidity column is 999999, which would flatten
+// every real value onto the axis. They are dropped, and counted, so the tally
+// is visible rather than silently applied.
+const FILL = new Set([999999, -999999, -32768, -999, -9999]);
+const isFill = v => !isFinite(v) || FILL.has(v) || Math.abs(v) >= 1e35;
+
+const isDark = () => document.documentElement.dataset.theme
+  ? document.documentElement.dataset.theme === "dark"
+  : matchMedia("(prefers-color-scheme: dark)").matches;
+const C = () => isDark()
+  ? {surface:"#181a1f", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
+     grid:"#2c2c2a", axis:"#383835"}
+  : {surface:"#f9fbfe", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
+     grid:"#e1e0d9", axis:"#c3c2b7"};
+
+// Plain SVG unless the browser really will give us a WebGL context. Some
+// browsers with fingerprinting protection refuse one outright, and a scattergl
+// trace in that case draws nothing at all rather than falling back.
+const HAS_WEBGL = (() => {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl") || c.getContext("experimental-webgl"));
+  } catch (e) { return false; }
+})();
+
+let DATA = null;            // the parsed file
+let agg = "mean";
+let depthChoice = "";       // "" = whichever depth was chosen as default
+// SeaDataNet quality codes: 0 no QC, 1 good, 2 probably good, 3 probably bad,
+// 4 bad, 8 interpolated, 9 missing. Only the unambiguous failures are dropped,
+// and 0 is never one of them - whole files carry nothing but 0.
+const BAD_FLAGS = new Set([3, 4, 9]);
+let dropBad = true;
+
+// ---------------------------------------------------------------- growable arrays
+// The row count is not known until the file has been read, and these files run
+// to millions of rows, so the columns grow by doubling rather than being pushed
+// onto ordinary arrays.
+function Column(Type) {
+  return {buf: new Type(1 << 16), n: 0, Type,
+    push(v) {
+      if (this.n === this.buf.length) {
+        const b = new this.Type(this.buf.length * 2);
+        b.set(this.buf); this.buf = b;
+      }
+      this.buf[this.n++] = v;
+    },
+    trim() { return this.buf.subarray(0, this.n); }};
+}
+
+// ---------------------------------------------------------------- parsing
+// ODV exports carry their channel names twice: once in the //SDN_parameter_mapping
+// preamble, and once in the column header. The preamble also carries the
+// vocabulary codes, which are the only place the units are stated unambiguously.
+function parsePreamble(lines) {
+  const out = [];
+  for (const l of lines) {
+    const m = /<subject>SDN:LOCAL:(.*?)<\/subject>.*?<object>(.*?)<\/object>.*?<units>(.*?)<\/units>/.exec(l);
+    if (m) out.push({name: m[1], object: m[2], units: m[3]});
+  }
+  return out;
+}
+
+// The line is scanned once for its tab positions and only the wanted columns
+// are turned into strings. At two and a half million rows, splitting every line
+// into an array of twenty-odd strings is the difference between seconds and
+// minutes, and most of those strings would be thrown away unread.
+const TABS = new Int32Array(256);
+function scan(line) {
+  let n = 0;
+  TABS[n++] = -1;
+  for (let i = 0; i < line.length; i++)
+    if (line.charCodeAt(i) === 9 && n < TABS.length) TABS[n++] = i;
+  if (n < TABS.length) TABS[n++] = line.length;
+  return n;                       // field i is line.slice(TABS[i]+1, TABS[i+1])
+}
+const field = (line, nf, i) =>
+  (i < 0 || i + 1 >= nf) ? "" : line.slice(TABS[i] + 1, TABS[i + 1]);
+
+// "2012-07-18T09:00:00" -> epoch ms, without constructing a Date per row.
+function fastTime(s) {
+  if (s.length < 19) return NaN;
+  const y = +s.slice(0, 4), mo = +s.slice(5, 7), d = +s.slice(8, 10);
+  const h = +s.slice(11, 13), mi = +s.slice(14, 16), se = +s.slice(17, 19);
+  return Date.UTC(y, mo - 1, d, h, mi, se);
+}
+
+async function parseFile(file, onProgress) {
+  const reader = file.stream().pipeThrough(new TextDecoderStream()).getReader();
+  let tail = "", read = 0, header = null, cols = null;
+  let channels = [], depthCol = -1, timeCol = -1;
+  const preamble = [], meta = {};
+  const times = Column(Float64Array), depths = Column(Float32Array);
+  let values = [], qvals = [], filled = [], qv = [];
+  const stations = new Set();
+  let badTime = 0, rows = 0;
+  const buf = [];
+
+  const handleHeader = line => {
+    cols = line.split("\t").map(s => s.trim());
+    // A QV column qualifies the column before it, so every column followed by
+    // one is a measurement; everything else is station metadata.
+    const isQV = cols.map(c => c === "QV:SEADATANET");
+    timeCol = cols.findIndex(c => c.startsWith("time_ISO8601"));
+    depthCol = cols.findIndex(c => /^Depth \[/.test(c));
+    channels = [];
+    cols.forEach((c, i) => {
+      if (isQV[i] || !isQV[i + 1]) return;
+      if (i === timeCol || i === depthCol) return;
+      channels.push({name: c, col: i, qvCol: i + 1});
+    });
+    meta.cruiseCol = cols.indexOf("Cruise");
+    meta.stationCol = cols.indexOf("Station");
+    meta.lonCol = cols.findIndex(c => c.startsWith("Longitude"));
+    meta.latCol = cols.findIndex(c => c.startsWith("Latitude"));
+    meta.botCol = cols.findIndex(c => c.startsWith("Bot. Depth"));
+    meta.edmoCol = cols.indexOf("EDMO_code");
+    values = channels.map(() => Column(Float32Array));
+    qvals = channels.map(() => Column(Uint8Array));
+    filled = channels.map(() => 0);
+    qv = channels.map(() => ({}));
+    header = true;
+  };
+
+  const handleRow = line => {
+    if (!line) return;
+    const nf = scan(line);
+    const t = fastTime(field(line, nf, timeCol));
+    if (!isFinite(t)) { badTime++; return; }
+    times.push(t);
+    const ds = field(line, nf, depthCol);
+    depths.push(ds === "" ? NaN : +ds);
+    const st = field(line, nf, meta.stationCol);
+    if (st) stations.add(st);
+    if (meta.lon === undefined) {
+      const lon = field(line, nf, meta.lonCol);
+      if (lon) {
+        meta.lon = lon;
+        meta.lat = field(line, nf, meta.latCol);
+        meta.bot = field(line, nf, meta.botCol);
+        meta.edmo = field(line, nf, meta.edmoCol);
+      }
+    }
+    for (let c = 0; c < channels.length; c++) {
+      const s2 = field(line, nf, channels[c].col);
+      const v = s2 === "" ? NaN : +s2;
+      if (isFill(v)) { values[c].push(NaN); filled[c]++; }
+      else values[c].push(v);
+      // The quality flag is a single character here, so it is read straight off
+      // the line rather than sliced out - a string per flag per row would be
+      // ten million allocations on the ADCP file.
+      const q = channels[c].qvCol;
+      const code = (q + 1 < nf) ? line.charCodeAt(TABS[q] + 1) - 48 : -1;
+      qvals[c].push(code >= 0 && code <= 9 ? code : 255);
+      if (code >= 0 && code <= 9) qv[c][code] = (qv[c][code] || 0) + 1;
+    }
+    rows++;
+  };
+
+  for (;;) {
+    const {value, done} = await reader.read();
+    if (done) break;
+    read += value.length;
+    const text = tail + value;
+    const parts = text.split("\n");
+    tail = parts.pop();
+    for (let i = 0; i < parts.length; i++) {
+      const line = parts[i].charCodeAt(parts[i].length - 1) === 13
+        ? parts[i].slice(0, -1) : parts[i];
+      if (!header) {
+        if (line.startsWith("//")) { preamble.push(line); continue; }
+        if (!line.trim()) continue;
+        handleHeader(line);
+      } else handleRow(line);
+    }
+    if (onProgress) await onProgress(read, file.size);
+  }
+  if (tail) {
+    const line = tail.endsWith("\r") ? tail.slice(0, -1) : tail;
+    if (header) handleRow(line); else if (!line.startsWith("//")) handleHeader(line);
+  }
+
+  // Second pass over the quality flags is not worth it; the counts are gathered
+  // from the data columns we already hold.
+  return {
+    file, preamble, params: parsePreamble(preamble), cols, channels, meta,
+    stations: [...stations], rows, badTime, filled, qv,
+    t: times.trim(), depth: depths.trim(),
+    v: values.map(c => c.trim()),
+    q: qvals.map(c => c.trim()),
+  };
+}
+
+// ---------------------------------------------------------------- depth
+// Depth means different things in these files. On the ADCP it is a genuine
+// profile - forty-odd bins half a metre apart, measured at the same instant. On
+// the CTD it is where that deployment's instrument sat, so a file can hold an
+// 11 m sensor and a 120 m one, and averaging across them would mix two
+// different pieces of water. So nothing is pooled unless it is asked for.
+function depthSummary(d) {
+  const counts = new Map();
+  for (let i = 0; i < d.length; i++) {
+    const k = d[i];
+    if (!isFinite(k)) continue;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const list = [...counts.entries()].sort((a, b) => a[0] - b[0]);
+  const byCount = [...list].sort((a, b) => b[1] - a[1]);
+  return {list, best: byCount.length ? byCount[0][0] : null};
+}
+
+// True when a single instant carries several depths - a profile - as against a
+// column where the depth simply changed between deployments.
+function depthsCoincide(d) {
+  const seen = new Map();
+  const step = Math.max(1, Math.floor(d.t.length / 200000));
+  for (let i = 0; i < d.t.length; i += step) {
+    const prev = seen.get(d.t[i]);
+    if (prev !== undefined && prev !== d.depth[i]) return true;
+    seen.set(d.t[i], d.depth[i]);
+    if (seen.size > 300000) break;
+  }
+  return false;
+}
+
+function depthMask(choice) {
+  if (choice === "__all__" || DATA.depths.list.length <= 1) return null;
+  return +choice;
+}
+
+// ---------------------------------------------------------------- series
+// One series per channel, already reduced to the chosen depth and aggregation.
+// Returns {x: epoch ms, y} in time order.
+function seriesFor(ci) {
+  const t = DATA.t, d = DATA.depth, v = DATA.v[ci];
+  const want = depthMask(depthChoice);
+  const q = DATA.q[ci];
+  const bad = i => dropBad && BAD_FLAGS.has(q[i]);
+  if (agg === "raw") {
+    const x = [], y = [];
+    for (let i = 0; i < t.length; i++) {
+      if (want !== null && d[i] !== want) continue;
+      if (bad(i)) continue;
+      const val = v[i];
+      if (!isFinite(val)) continue;
+      x.push(t[i]); y.push(val);
+    }
+    return {x, y};
+  }
+  // Daily buckets. When depths are pooled this also averages across them, which
+  // is the one case where pooling happens, and it is opt-in.
+  const sum = new Map(), cnt = new Map(), mx = new Map(), mn = new Map();
+  for (let i = 0; i < t.length; i++) {
+    if (want !== null && d[i] !== want) continue;
+    if (bad(i)) continue;
+    const val = v[i];
+    if (!isFinite(val)) continue;
+    const day = Math.floor(t[i] / DAY_MS) * DAY_MS;
+    cnt.set(day, (cnt.get(day) || 0) + 1);
+    sum.set(day, (sum.get(day) || 0) + val);
+    if (!mx.has(day) || val > mx.get(day)) mx.set(day, val);
+    if (!mn.has(day) || val < mn.get(day)) mn.set(day, val);
+  }
+  const days = [...cnt.keys()].sort((a, b) => a - b);
+  const pickv = day => agg === "max" ? mx.get(day)
+    : agg === "min" ? mn.get(day)
+    : sum.get(day) / cnt.get(day);
+  return {x: days, y: days.map(pickv)};
+}
+
+// The median spacing, used to decide what counts as a gap in raw mode. Taken
+// from a sample: the exact value does not matter, only its order of magnitude.
+function medianStep(x) {
+  if (x.length < 3) return DAY_MS;
+  const step = Math.max(1, Math.floor(x.length / 2000));
+  const d = [];
+  for (let i = step; i < x.length; i += step) d.push((x[i] - x[i - step]) / step);
+  d.sort((a, b) => a - b);
+  return d[d.length >> 1] || DAY_MS;
+}
+
+// Split one channel into a trace per year, on a shared calendar, with a null
+// inserted wherever the record skips - so a break in the data is a break in the
+// line rather than a straight segment drawn across months of absence.
+function yearTraces(ser, colourOf, showLegend) {
+  const gap = agg === "raw" ? Math.max(3 * medianStep(ser.x), 2 * 60000)
+                            : 1.5 * DAY_MS;
+  const byYear = new Map();
+  for (let i = 0; i < ser.x.length; i++) {
+    const dt = new Date(ser.x[i]);
+    const y = dt.getUTCFullYear();
+    if (!byYear.has(y)) byYear.set(y, {x: [], y: [], last: null});
+    const s = byYear.get(y);
+    if (s.last !== null && ser.x[i] - s.last > gap) { s.x.push(null); s.y.push(null); }
+    s.x.push(Date.UTC(BASE_YEAR, dt.getUTCMonth(), dt.getUTCDate(),
+                      dt.getUTCHours(), dt.getUTCMinutes(), dt.getUTCSeconds()));
+    s.y.push(ser.y[i]);
+    s.last = ser.x[i];
+  }
+  const years = [...byYear.keys()].sort((a, b) => a - b);
+  return years.map(y => ({
+    x: byYear.get(y).x, y: byYear.get(y).y,
+    type: HAS_WEBGL && agg === "raw" ? "scattergl" : "scatter",
+    mode: "lines", connectgaps: false,
+    line: {color: colourOf(y), width: 1.4},
+    name: String(y), legendgroup: String(y), showlegend: showLegend,
+    hovertemplate: `${y}  %{y:.3f}  %{x|%-d %b}<extra></extra>`,
+  }));
+}
+
+// ---------------------------------------------------------------- drawing
+function draw() {
+  if (!DATA) return;
+  const c = C(), chans = DATA.channels;
+  const series = chans.map((_, i) => seriesFor(i));
+  const points = series.reduce((a, s) => a + s.x.length, 0);
+
+  // Years are ordered, so they take a perceptually even ramp rather than
+  // unrelated hues; every year is also named in the legend and in the hover, so
+  // nothing here is identified by colour alone.
+  const years = new Set();
+  for (const s of series)
+    for (const x of s.x) years.add(new Date(x).getUTCFullYear());
+  const yrs = [...years].sort((a, b) => a - b);
+  const span = Math.max(1, yrs.length - 1);
+  const ramp = new Map(yrs.map((y, i) => [y, d3.interpolateViridis(0.08 + 0.84 * i / span)]));
+  const colourOf = y => ramp.get(y) || c.ink2;
+
+  const traces = [];
+  const layout = {
+    height: Math.max(260, 210 * chans.length) + 60,
+    margin: {l: 64, r: 18, t: 28, b: 42},
+    paper_bgcolor: c.surface, plot_bgcolor: c.surface,
+    font: {color: c.ink2, size: 12},
+    hovermode: "closest",
+    hoverlabel: {bgcolor: c.surface, bordercolor: c.axis, font: {color: c.ink}},
+    showlegend: true,
+    legend: {orientation: "h", y: 1.02, yanchor: "bottom", x: 0,
+             bgcolor: "rgba(0,0,0,0)", font: {size: 11.5}},
+    annotations: [],
+  };
+  const n = chans.length;
+  const top = 1, bottom = 0.06, gap = 0.055;
+  const h = (top - bottom - gap * (n - 1)) / n;
+
+  chans.forEach((ch, i) => {
+    const ax = i === 0 ? "" : String(i + 1);
+    const y1 = top - i * (h + gap), y0 = y1 - h;
+    for (const tr of yearTraces(series[i], colourOf, i === 0)) {
+      tr.xaxis = "x" + ax; tr.yaxis = "y" + ax;
+      traces.push(tr);
+    }
+    layout["xaxis" + ax] = {
+      type: "date", domain: [0, 1], anchor: "y" + ax,
+      range: [Date.UTC(BASE_YEAR, 0, 1), Date.UTC(BASE_YEAR, 11, 31, 23, 59)],
+      dtick: "M1", tickformat: "%b", ticklabelmode: "period",
+      showgrid: true, gridcolor: c.grid, zeroline: false, linecolor: c.axis,
+      tickfont: {color: c.ink2, size: 11},
+      showticklabels: i === n - 1,
+    };
+    layout["yaxis" + ax] = {
+      domain: [y0, y1], anchor: "x" + ax,
+      gridcolor: c.grid, zeroline: false, linecolor: c.axis,
+      tickfont: {color: c.ink2, size: 11},
+      title: {text: ch.name, font: {size: 11.5, color: c.ink2}, standoff: 6},
+    };
+  });
+
+  // The card has to be on screen before Plotly measures it, or the plot is laid
+  // out against a width of zero and stays narrow.
+  document.getElementById("chartcard").style.display = "block";
+  Plotly.react("chart", traces, layout, {displayModeBar: false, responsive: true})
+    .then(() => Plotly.Plots.resize("chart"));
+
+  const dsel = DATA.depths.list.length > 1
+    ? (depthMask(depthChoice) === null
+        ? (DATA.profile
+            ? `all ${DATA.depths.list.length} depths averaged over the water column`
+            : `all ${DATA.depths.list.length} depths, which never overlap in time `
+              + `(the instrument moved between deployments)`)
+        : `depth ${depthChoice} m only`)
+    : `single depth ${DATA.depths.list.length ? DATA.depths.list[0][0] : "?"} m`;
+  document.getElementById("foot").innerHTML =
+    `${chans.length} channel${chans.length === 1 ? "" : "s"}, `
+    + `${yrs.length} year${yrs.length === 1 ? "" : "s"} (${yrs[0]}–${yrs[yrs.length - 1]}), `
+    + `${points.toLocaleString()} plotted points, ${dsel}. `
+    + `Gaps are left open rather than bridged. `
+    + (agg === "raw" && points > RAW_WARN_POINTS
+        ? `<span class="warn">Raw mode is drawing ${points.toLocaleString()} points; `
+          + `a daily aggregate will be far quicker to pan.</span>`
+        : "")
+    + (!HAS_WEBGL && agg === "raw"
+        ? ` This browser gives no WebGL context, so raw mode is drawn as plain SVG.`
+        : "");
+}
+
+// ---------------------------------------------------------------- file info
+function showInfo() {
+  const d = DATA, el = document.getElementById("info");
+  const esc = s => String(s).replace(/[&<>]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
+  const t0 = d.t.length ? new Date(d.t[0]).toISOString().slice(0, 19).replace("T", " ") : "?";
+  const t1 = d.t.length ? new Date(d.t[d.t.length - 1]).toISOString().slice(0, 19).replace("T", " ") : "?";
+  const depthTxt = d.depths.list.length === 1
+    ? `${d.depths.list[0][0]} m`
+    : `${d.depths.list.length} values, ${d.depths.list[0][0]}–`
+      + `${d.depths.list[d.depths.list.length - 1][0]} m`;
+  const rows = [
+    ["File", `${esc(d.file.name)} <span class="mono">(${(d.file.size / 1048576).toFixed(1)} MB)</span>`],
+    ["Rows read", `${d.rows.toLocaleString()}`
+      + (d.badTime ? ` <span class="warn">(${d.badTime.toLocaleString()} skipped: unreadable time)</span>` : "")],
+    ["Time span", `${t0} → ${t1} UTC`],
+    ["Channels", d.channels.map(c => esc(c.name)).join(" &middot; ")],
+    ["Depth column", depthTxt],
+    ["Stations", d.stations.length <= 6 ? d.stations.map(esc).join(", ")
+      : `${d.stations.length} (${esc(d.stations[0])} … ${esc(d.stations[d.stations.length - 1])})`],
+  ];
+  if (d.meta.lon) rows.push(["Position", `${esc(d.meta.lat)} N, ${esc(d.meta.lon)} E`
+    + (d.meta.bot ? ` &middot; bottom ${esc(d.meta.bot)} m` : "")
+    + (d.meta.edmo ? ` &middot; EDMO ${esc(d.meta.edmo)}` : "")]);
+
+  const params = d.params.length
+    ? `<details><summary>SeaDataNet parameter mapping (${d.params.length})</summary><pre>`
+      + d.params.map(p => `${(p.name || "(unnamed)").padEnd(26)} ${p.object}   ${p.units}`)
+          .map(esc).join("\n") + `</pre></details>`
+    : `<p class="note">No <span class="mono">//SDN_parameter_mapping</span> preamble in this
+       file, so the channel names above come from the column header alone.</p>`;
+
+  el.innerHTML = `<h2>File header</h2><dl>`
+    + rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")
+    + `</dl>${params}`;
+  el.style.display = "block";   // not "": that falls back to the CSS, which hides it
+}
+
+function fillDepths() {
+  const sel = document.getElementById("depth");
+  const {list, best} = DATA.depths;
+  sel.innerHTML = "";
+  if (list.length <= 1) {
+    sel.innerHTML = `<option>${list.length ? list[0][0] + " m" : "n/a"}</option>`;
+    sel.disabled = true;
+    depthChoice = list.length ? String(list[0][0]) : "";
+    return;
+  }
+  sel.disabled = false;
+  // Pooled by default. What that means depends on the file, and the two cases
+  // are told apart by whether one instant ever carries more than one depth: on
+  // the ADCP it does - forty bins measured together, so pooling is a column
+  // average - while on the CTD it never does, because the depths are successive
+  // deployments, so pooling simply lays the record end to end. Defaulting to a
+  // single depth looked safer but silently hid three quarters of the CTD years.
+  sel.innerHTML =
+    `<option value="__all__">all ${list.length} depths${DATA.profile ? ", averaged" : ""}</option>`
+    + list.map(([v, n]) =>
+      `<option value="${v}">${v} m &nbsp;(${n.toLocaleString()} rows)</option>`).join("");
+  depthChoice = "__all__";
+  sel.value = depthChoice;
+}
+
+// ---------------------------------------------------------------- loading
+async function load(file) {
+  const prog = document.getElementById("bar-progress");
+  const fill = prog.firstElementChild;
+  prog.style.display = "";
+  fill.style.width = "0%";
+  document.getElementById("drop").textContent = `Reading ${file.name}…`;
+  let lastPaint = 0;
+  try {
+    const parsed = await parseFile(file, async (read, size) => {
+      const now = performance.now();
+      if (now - lastPaint < 100) return;
+      lastPaint = now;
+      fill.style.width = (100 * read / Math.max(1, size)).toFixed(1) + "%";
+      await new Promise(r => setTimeout(r, 0));   // let the bar actually paint
+    });
+    if (!parsed.channels.length) throw new Error(
+      "no measurement columns found - is this an ODV spreadsheet export?");
+    parsed.depths = depthSummary(parsed.depth);
+    parsed.profile = depthsCoincide(parsed);
+    DATA = parsed;
+    fillDepths();
+    showInfo();
+    document.getElementById("drop").style.display = "none";
+    draw();
+  } catch (e) {
+    document.getElementById("drop").innerHTML =
+      `<span class="warn">Could not read ${file.name}</span><br>`
+      + `<span class="mono">${e.message}</span><br>`
+      + `<span class="note">Drop another file to try again.</span>`;
+  } finally {
+    prog.style.display = "none";
+  }
+}
+
+// ---------------------------------------------------------------- wiring
+document.getElementById("pick").onclick = () => document.getElementById("file").click();
+document.getElementById("file").onchange = e => {
+  if (e.target.files[0]) load(e.target.files[0]);
+};
+const drop = document.getElementById("drop");
+drop.onclick = () => document.getElementById("file").click();
+for (const ev of ["dragenter", "dragover"])
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); });
+for (const ev of ["dragleave", "drop"])
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); });
+drop.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (f) load(f);
+});
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => e.preventDefault());
+
+document.querySelectorAll("button.agg").forEach(b => b.onclick = () => {
+  agg = b.dataset.agg;
+  document.querySelectorAll("button.agg").forEach(o => o.classList.toggle("on", o === b));
+  draw();
+});
+document.getElementById("depth").onchange = e => { depthChoice = e.target.value; draw(); };
+const qcBtn = document.getElementById("qc");
+qcBtn.onclick = () => { dropBad = !dropBad; qcBtn.classList.toggle("on", dropBad); draw(); };
+const theme = document.getElementById("theme");
+theme.onclick = () => {
+  document.documentElement.dataset.theme = isDark() ? "light" : "dark";
+  theme.textContent = isDark() ? "Light mode" : "Dark mode";
+  draw();
+};
+theme.textContent = isDark() ? "Light mode" : "Dark mode";
+</script>
+</body>
+</html>
