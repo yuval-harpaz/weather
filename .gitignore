@@ -16,3 +16,7 @@ AGENTS.md
 data/cameri_buoys.csv
 code/ashdod_buoy.md
 moana_maps
+
+# IOLR Ashkelon mooring data - not cleared for publication; remove once they agree
+data/ashkelon_iolr.csv
+docs/ashkelon_buoy_sat.html

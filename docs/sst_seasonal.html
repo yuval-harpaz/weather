@@ -206,9 +206,6 @@
     <a href="https://med-lter.haifa.ac.il/sdot-yam-float-overview/" target="_blank"
     rel="noopener">Morris Kahn Marine Research Station, the School of Marine
     Sciences, and the University of Haifa</a>.
-    Ashkelon mooring data from
-    <a href="https://isramar.ocean.org.il/isramar2009/" target="_blank"
-    rel="noopener">Israel Oceanographic and Limnological Research</a>.
     Air temperature at Bet Dagan from
     <a href="https://ims.gov.il/en/data_gov" target="_blank" rel="noopener"
        title="Israel Meteorological Service — open data"><img
@@ -441,25 +438,9 @@ const BUOY_KEY = "Sdot_Yam_buoy";
 const BUOY_AT = {name: BUOY_KEY, lat: 32.49463, lon: 34.87989};
 let BUOY_SST = new Map(), BUOY_FRESH = new Map();
 
-// The second mooring, off Ashkelon, run by IOLR. It is read from a file that is
-// built by hand from their SeaDataNet exports and will never be current - the
-// institute releases on a year's delay - so unlike Sdot Yam it is drawn even on
-// days it has nothing to say. An absent Sdot Yam reading means the buoy was out
-// of the water, which is worth seeing; an absent Ashkelon reading means only
-// that the year has not been released yet, and hiding the marker would leave
-// thirteen years of record with nothing to click on.
-const IOLR_KEY = "Ashkelon_IOLR_buoy";
-let IOLR_SST = new Map();
-
 const MOORINGS = [
   {key: BUOY_KEY, lat: 32.49463, lon: 34.87989, series: () => BUOY_SST,
    live: true,  always: false},
-  // Behind the station pins, not over them: this mooring is 8 km from the
-  // Ashkelon satellite station and the two overlap at the opening zoom. The
-  // pixel reading is the one a reader is usually after, so it stays on top and
-  // the buoy shows from behind it.
-  {key: IOLR_KEY, lat: 31.63472, lon: 34.49917, series: () => IOLR_SST,
-   live: false, always: true, z: -200},
 ];
 const mooringFor = k => MOORINGS.find(m => m.key === k);
 const onMooring = () => !!mooringFor(station);
@@ -467,8 +448,6 @@ const onBuoy = () => station === BUOY_KEY;
 const MKMRS = '<a href="https://med-lter.haifa.ac.il/sdot-yam-float-overview/"'
   + ' target="_blank" rel="noopener">Morris Kahn Marine Research Station, the'
   + ' School of Marine Sciences, and the University of Haifa</a>';
-const IOLR = '<a href="https://isramar.ocean.org.il/isramar2009/" target="_blank"'
-  + ' rel="noopener">Israel Oceanographic and Limnological Research</a>';
 
 // The station's own dashboard, the one embedded on the MKMRS overview page. It
 // answers without credentials and sends Access-Control-Allow-Origin: *, so the
@@ -519,12 +498,6 @@ async function loadFrame() {
   for (const r of (await grab("buoy_sdot_yam.csv", d3.csv) || [])) {
     const v = +r.sst;
     if (r.sst !== "" && !isNaN(v)) BUOY_SST.set(r.date, v);
-  }
-  // Built by hand from IOLR's SeaDataNet exports by code/ashkelon_iolr.py; the
-  // institute releases on a year's delay, so this file never reaches today.
-  for (const r of (await grab("ashkelon_iolr.csv", d3.csv) || [])) {
-    const v = +r.sst;
-    if (r.sst !== "" && !isNaN(v)) IOLR_SST.set(r.date, v);
   }
   if (!STATIONS.length) throw new Error("no sst_stations.csv");
   STATIONS.push({name: BD_KEY, lat: BD_AT.lat, lon: BD_AT.lon,
@@ -1003,9 +976,8 @@ function draw() {
   const data = byYear(map);
   const current = years[years.length - 1];
   // The newest year in the record is only "this year" if it actually is. The
-  // Ashkelon mooring is released on a delay, so its last year is a year or more
-  // old and drawing it heavy claimed a currency it does not have. When the
-  // record stops short it is drawn like every other past year.
+  // record may stop short of today, and drawing its last year heavy would claim a
+  // currency it does not have. When it does, it is drawn like every other past year.
   const isCurrent = current === new Date().getUTCFullYear();
   const x = XDATES;
   const traces = [], annotations = [];
@@ -1222,13 +1194,7 @@ function draw() {
     ? ` The newest point is marked * on the map and is the buoy's latest `
       + `reading (${[...BUOY_FRESH.values()].sort().pop()}) rather than a `
       + `whole-day median, matching the station's own dashboard.` : "";
-  footEl.textContent = station === IOLR_KEY
-    ? `${pretty(station)} · moored thermistor off Ashkelon, ${years[0]}–${current}, `
-      + `${map.size.toLocaleString()} daily values. A median of each day's `
-      + `samples, taken from the shallowest sensor that reported - 11 m, and 12 m `
-      + `from 2022. This record is released on a delay and is rebuilt by hand, so `
-      + `it stops well short of today and will not follow the map's newest day.`
-    : onLand()
+  footEl.textContent = onLand()
     ? `${pretty(station)} · IMS station 54, 32.007 N 34.814 E, `
       + `${years[0]}–${current}, ${map.size.toLocaleString()} daily values. `
       + `The ${bdCfg().label} air temperature of each day, 7 km inland — not a `
@@ -1276,8 +1242,6 @@ function draw() {
   // textContent first so nothing from the data can be read as markup, then the
   // one piece of trusted HTML this line needs.
   if (onBuoy()) footEl.innerHTML = footEl.innerHTML + ` Buoy data: ${MKMRS}.`;
-  if (station === IOLR_KEY)
-    footEl.innerHTML = footEl.innerHTML + ` Mooring data: ${IOLR}.`;
 }
 
 // Clicking a day in the chart takes the map to it. The shared tooltip means a
@@ -2030,8 +1994,7 @@ async function main() {
   }
   document.getElementById("station").innerHTML = STATIONS.map(s =>
     `<option value="${s.name}">${pretty(s.name)}</option>`).join("")
-    + (BUOY_SST.size ? `<option value="${BUOY_KEY}">${pretty(BUOY_KEY)}</option>` : "")
-    + (IOLR_SST.size ? `<option value="${IOLR_KEY}">${pretty(IOLR_KEY)}</option>` : "");
+    + (BUOY_SST.size ? `<option value="${BUOY_KEY}">${pretty(BUOY_KEY)}</option>` : "");
   if (!STATIONS.some(s => s.name === station) && !onMooring()) station = DEFAULT_STATION;
   document.getElementById("station").value = station;
   applyLang();
