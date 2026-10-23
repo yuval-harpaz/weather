@@ -625,7 +625,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-10-10,Bardawil_off,CHL,my,2.195,2.08,1.568,2.336,0.9505
 2026-10-12,Bardawil_off,CHL,my,1.994,1.613,1.393,2.098,1
 2026-10-13,Bardawil_off,CHL,my,2.428,2.263,1.623,2.47,1
-2026-10-14,Bardawil_off,CHL,nrt,2.217,,,,0.2527
+2026-10-14,Bardawil_off,CHL,my,2.217,,,,0.2527
 2026-10-16,Bardawil_off,CHL,nrt,2.337,1.996,1.578,2.337,1
 2026-10-17,Bardawil_off,CHL,nrt,2.73,2.381,2.015,2.73,1
 2026-10-18,Bardawil_off,CHL,nrt,2.099,,,,0.1923
@@ -848,7 +848,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-10-10,Damietta_mouth,CHL,my,2.339,1.631,1.318,3.192,1
 2026-10-11,Damietta_mouth,CHL,my,2.248,2.025,1.299,2.608,0.8187
 2026-10-12,Damietta_mouth,CHL,my,2.829,1.695,1.251,4.249,1
-2026-10-14,Damietta_mouth,CHL,nrt,4.159,2.819,1.691,4.775,1
+2026-10-14,Damietta_mouth,CHL,my,4.148,2.814,1.687,4.762,1
 2026-10-15,Damietta_mouth,CHL,nrt,3.584,,,,0.4945
 2026-10-16,Damietta_mouth,CHL,nrt,2.352,2.192,1.612,2.554,1
 2026-10-17,Damietta_mouth,CHL,nrt,2.594,2.238,1.641,2.766,1
@@ -1636,7 +1636,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-10-09,Open_sea_ref,CHL,my,0.04887,0.04887,0.04887,0.04887,1
 2026-10-12,Open_sea_ref,CHL,my,0.03606,0.03606,0.03606,0.03606,1
 2026-10-13,Open_sea_ref,CHL,my,0.03232,0.03232,0.03232,0.03232,1
-2026-10-14,Open_sea_ref,CHL,nrt,0.02758,0.02758,0.02758,0.02758,1
+2026-10-14,Open_sea_ref,CHL,my,0.0274,0.0274,0.0274,0.0274,1
 2026-10-16,Open_sea_ref,CHL,nrt,0.03537,0.03537,0.03537,0.03537,1
 2026-10-18,Open_sea_ref,CHL,nrt,0.03332,0.03332,0.03332,0.03332,1
 2026-01-03,Port_Said_EG,CHL,my,9.061,9.059,5.801,14.65,0.9146
@@ -1855,7 +1855,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-10-09,Port_Said_EG,CHL,my,19.26,7.475,4.483,19.26,0.8744
 2026-10-10,Port_Said_EG,CHL,my,17.15,8.929,6.27,29.79,1
 2026-10-12,Port_Said_EG,CHL,my,8.615,8.615,4.564,15.5,0.9296
-2026-10-14,Port_Said_EG,CHL,nrt,8.511,9.354,6.099,11.58,0.9698
+2026-10-14,Port_Said_EG,CHL,my,8.508,9.351,6.097,11.58,0.9698
 2026-10-16,Port_Said_EG,CHL,nrt,9.703,9.668,4.346,11.15,1
 2026-10-17,Port_Said_EG,CHL,nrt,8.294,7.352,4.017,9.279,0.9698
 2026-10-19,Port_Said_EG,CHL,nrt,7.549,9.832,5.412,22.23,1
@@ -2268,7 +2268,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-10-10,Rosetta_mouth,CHL,my,1.685,1.163,0.6401,1.897,1
 2026-10-11,Rosetta_mouth,CHL,my,1.718,1.718,0.8117,1.856,0.8674
 2026-10-12,Rosetta_mouth,CHL,my,2.873,,,,0.4972
-2026-10-14,Rosetta_mouth,CHL,nrt,3.329,3.329,2.147,3.57,1
+2026-10-14,Rosetta_mouth,CHL,my,3.326,3.326,2.153,3.577,1
 2026-10-15,Rosetta_mouth,CHL,nrt,7.193,5.789,3.884,7.193,0.6133
 2026-10-18,Rosetta_mouth,CHL,nrt,2.454,1.442,1.065,2.805,0.6906
 2026-10-19,Rosetta_mouth,CHL,nrt,3.389,2.054,1.445,3.587,0.9392
