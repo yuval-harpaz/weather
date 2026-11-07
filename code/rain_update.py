@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 sys.path.append(os.environ['HOME']+'/weather/code')
 if os.path.exists('/home/yuval'):
     os.chdir('/home/yuval/weather')
@@ -15,9 +15,11 @@ current_year = datetime.now().year
 y = str(current_year)
 m = str(datetime.now().month).zfill(2)
 d = str(datetime.now().day).zfill(2)
+# The IMS API's 'to' date is exclusive, so ask up to tomorrow to get today's data too
+to_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
 opcsv = f'data/rain_{y}.csv'
 if not os.path.exists(opcsv):
-    df_rain = rain_1h(from_date=f'{y}-01-01', to_date=f'{y}-{m}-{d}', save_csv=opcsv)
+    df_rain = rain_1h(from_date=f'{y}-01-01', to_date=to_date, save_csv=opcsv)
 else:
     df_sta = pd.read_csv('data/ims_stations.csv')
     df_act = pd.read_csv('data/ims_activity.csv')
@@ -36,7 +38,7 @@ else:
                 last = df_rain['datetime'][0][:10]
             else:
                 last = df_rain['datetime'][last[-1]][:10]
-            df_rain_new = rain_1h(stations=[sta], from_date=last, to_date=f'{y}-{m}-{d}', save_csv=False)
+            df_rain_new = rain_1h(stations=[sta], from_date=last, to_date=to_date, save_csv=False)
             if df_rain_new['datetime'].iloc[-1] > df_rain['datetime'].iloc[-1]:
                 istart = np.where(df_rain_new['datetime'] == df_rain['datetime'].iloc[-1])[0][0] + 1
                 for irow in range(istart, len(df_rain_new)):
@@ -48,7 +50,7 @@ else:
                         raise ValueError('Datetime mismatch when updating rain data')
                     df_rain.at[row[0], sta] = df_rain_new.at[row_new, sta]
         else:
-            df_rain_new = rain_1h(stations=[sta], from_date=f'{y}-01-01', to_date=f'{y}-{m}-{d}', save_csv=False)
+            df_rain_new = rain_1h(stations=[sta], from_date=f'{y}-01-01', to_date=to_date, save_csv=False)
             if df_rain_new['datetime'].iloc[-1] > df_rain['datetime'].iloc[-1]:
                 istart = np.where(df_rain_new['datetime'] == df_rain['datetime'].iloc[-1])[0][0] + 1
                 for irow in range(istart, len(df_rain_new)):

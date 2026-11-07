@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 
 # Setup paths
@@ -18,7 +18,8 @@ now = datetime.now()
 y = str(now.year)
 m = str(now.month).zfill(2)
 d = str(now.day).zfill(2)
-to_date = f'{y}-{m}-{d}'
+# The IMS API's 'to' date is exclusive, so ask up to tomorrow to get today's data too
+to_date = (now + timedelta(days=1)).strftime('%Y-%m-%d')
 
 df_sta = pd.read_csv('data/ims_stations.csv')
 df_act = pd.read_csv('data/ims_activity.csv')

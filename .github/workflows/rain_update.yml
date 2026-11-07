@@ -1,12 +1,15 @@
 name: Rain Data Update
 on:
   schedule:
-    # Runs at 23:00 UTC = 1:00, 7:00 AM Israel time (winter, UTC+2)
+    # Runs at 05:00 and 15:00 UTC = 7:00 and 17:00 Israel time (winter, UTC+2)
     - cron: '0 5,15 * * *'
   workflow_dispatch:  # Allows manual triggering from the Actions tab
 jobs:
   update-rain-data:
     runs-on: ubuntu-latest
+    env:
+      # IMS timestamps are Israel time; the hourly rows are built up to datetime.now()
+      TZ: Asia/Jerusalem
     permissions:
       contents: write
     
