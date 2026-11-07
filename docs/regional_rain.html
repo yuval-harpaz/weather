@@ -61,6 +61,13 @@
       font-weight: bold;
     }
 
+    #lastRain {
+      margin: 6px 0 0 0;
+      direction: rtl;
+      font-size: 0.85em;
+      color: #555;
+    }
+
     .footer {
       position: fixed;
       bottom: 10px;
@@ -101,6 +108,8 @@
   <button id="nextBtn" title="חזור קדימה" disabled>▶ חורף הבא</button>
   <span id="prevLabel"></span>
 </div>
+
+<div id="lastRain"></div>
 
 <div id="plot"></div>
 
@@ -542,7 +551,47 @@
     }
   }
 
+  // Last hour of this winter in which any station measured rain, read from the
+  // hourly rain table (IMS local time, rows labelled by the hour's start).
+  // Loaded on its own so a failure never stops the chart from drawing.
+  async function showLastRain() {
+    const el = document.getElementById('lastRain');
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      // The winter starts on 1 September; from January the previous year's file holds its start
+      const startYear = now.getMonth() + 1 >= 9 ? year : year - 1;
+      const winterStart = `${startYear}-09-01`;
+
+      let dt = '';
+      for (let y = year; y >= startYear && !dt; y--) {
+        const rows = await d3.csv(`https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data/rain_${y}.csv`);
+        for (let r = rows.length - 1; r >= 0; r--) {
+          const row = rows[r];
+          if (row.datetime < winterStart) break;
+          if (Object.keys(row).some(k => k !== 'datetime' && +row[k] > 0)) {
+            dt = row.datetime;
+            break;
+          }
+        }
+      }
+      if (!dt) {
+        el.textContent = 'טרם נמדד גשם בחורף הנוכחי';
+        return;
+      }
+      // '2026-11-06 23:00' -> '06/11/2026, 23:00–24:00'
+      const [date, time] = dt.split(' ');
+      const [y, m, d] = date.split('-');
+      const h = +time.split(':')[0];
+      const end = String(h + 1).padStart(2, '0') + ':00';
+      el.textContent = `גשם אחרון נמדד: ${d}/${m}/${y}, ${time}–${end}`;
+    } catch (e) {
+      console.warn('Could not load last rain time:', e);
+    }
+  }
+
   loadAndPlot();
+  showLastRain();
 </script>
 </body>
 
