@@ -85,6 +85,13 @@
             border:1px solid #e2e8f0; direction:ltr;
         }
         .colorbar-gradient { width:13px; border-radius:4px; }
+        .code-legend { flex-direction:column; gap:3px; max-width:260px; font-size:11px; color:#1e293b; }
+        .code-legend .code-row { display:flex; align-items:flex-start; gap:6px; line-height:1.25; }
+        .code-legend .code-swatch {
+            flex:none; width:11px; height:11px; margin-top:1px; border-radius:50%; border:1px solid #fff;
+            box-shadow:0 0 0 1px #94a3b8;
+        }
+        .code-legend .code-title { font-size:10px; font-weight:700; color:#334155; padding-bottom:2px; }
         .colorbar-labels {
             display:flex; flex-direction:column; justify-content:space-between;
             font-size:10px; font-weight:700; color:#334155; padding:2px 0; min-width:36px; text-align:right;
@@ -186,8 +193,8 @@ let autoLatest = true;
 let xmlTitle = 'Israeli Surface Stations Hourly Observations';
 let colorScaleMode = 'set';
 let customScaleRanges = {};
-// Shareable view: ?measure=R24&scale=minmax. scale is set | minmax | custom;
-// custom also takes &min=..&max=.. in the units shown on the color bar.
+// Shareable view: ?measure=R24&scale=minmax&lang=he. scale is set | minmax | custom;
+// custom also takes &min=..&max=.. in the units shown on the color bar; lang is en | he.
 // The URL follows the controls, so the address bar can be copied as is.
 const SCALE_MODES = ['set','minmax','custom'];
 const urlParams = new URLSearchParams(location.search);
@@ -205,8 +212,106 @@ const heParamNames = {
     FM:'מהירות משב 3 שעות', SSS:'משך שמש', H85:'גיאופוטנציאל 850 hPa',
     PP1:'שינוי לחץ 1 שעה', PP3:'שינוי לחץ 3 שעות',
     R24:'גשם יומי', R01:'גשם שעתי', R06:'גשם 6 שעות', R12:'גשם 12 שעות',
+    RRS:'גשם עונתי', EEE:'התאדות יומית',
+    TN1:'טמפרטורה מינימלית שעתית', TX1:'טמפרטורה מקסימלית שעתית',
+    FX1:'מהירות רוח מקסימלית שעתית', FM1:'מהירות משב שעתית',
+    N:'כיסוי עננים כולל', NH:'כמות העננים הנמוכים', H:'גובה הענן הנמוך ביותר',
+    CL:'עננים נמוכים', CM:'עננים בינוניים', CH:'עננים גבוהים',
     WW:'מזג אוויר נוכחי', W1:'מזג אוויר עבר 1', W2:'מזג אוויר עבר 2'
 };
+// Dropdown topics, in display order. Within a group the order is by meaning
+// (hourly before daily, mean before extremes), not alphabetical. A measure the
+// feed has but no group lists goes to the last group; empty groups are hidden.
+const MEASURE_GROUPS = [
+    { en:'Rain', he:'גשם', shorts:['R01','R06','R12','R24','RRS','EEE'] },
+    { en:'Temperature & humidity', he:'טמפרטורה ולחות',
+      shorts:['TT','TX1','TN1','TX','TN','TD','TWE','RH','TG','TW'] },
+    { en:'Wind', he:'רוח', shorts:['FF','FFX','FX1','FM1','FM'] },
+    { en:'Clouds & visibility', he:'עננות ונראות', shorts:['N','NH','H','CL','CM','CH','VV'] },
+    { en:'Pressure', he:'לחץ', shorts:['PP','PO','PP1','PP3','H85'] },
+    { en:'Misc', he:'שונות', shorts:['GRH','GRD','SSS','WW','W1','W2'] }
+];
+// Cloud measures are WMO SYNOP code numbers, not amounts, so they are shown by
+// meaning: a label per code and a fixed color per code instead of a scale.
+// The feed writes the SYNOP "/" (not observable) as 10.
+const OKTAS = {
+    0:['Clear sky (0/8)','שמיים בהירים (0/8)'], 1:['1/8 or less','1/8 או פחות'],
+    2:['2/8','2/8'], 3:['3/8','3/8'], 4:['4/8','4/8'], 5:['5/8','5/8'], 6:['6/8','6/8'],
+    7:['7/8 or more, not overcast','7/8 ומעלה, לא מעונן לגמרי'],
+    8:['Overcast (8/8)','מעונן לגמרי (8/8)'],
+    9:['Sky obscured (fog etc.)','השמיים מוסתרים (ערפל וכו׳)'],
+    10:['Not determinable','לא ניתן לקביעה']
+};
+const CLOUD_CODES = {
+    N: OKTAS,
+    NH: OKTAS,
+    H: {
+        0:['0–50 m','0–50 מ׳'], 1:['50–100 m','50–100 מ׳'], 2:['100–200 m','100–200 מ׳'],
+        3:['200–300 m','200–300 מ׳'], 4:['300–600 m','300–600 מ׳'], 5:['600–1,000 m','600–1,000 מ׳'],
+        6:['1,000–1,500 m','1,000–1,500 מ׳'], 7:['1,500–2,000 m','1,500–2,000 מ׳'],
+        8:['2,000–2,500 m','2,000–2,500 מ׳'], 9:['2,500 m or more, or no clouds','2,500 מ׳ ומעלה, או ללא עננים'],
+        10:['Not determinable','לא ניתן לקביעה']
+    },
+    CL: {
+        0:['No low clouds','אין עננים נמוכים'],
+        1:['Fair-weather cumulus','קומולוס של מזג אוויר נאה'],
+        2:['Cumulus of moderate or strong vertical extent','קומולוס בעל התפתחות אנכית בינונית עד חזקה'],
+        3:['Cumulonimbus without anvil','קומולונימבוס ללא סדן'],
+        4:['Stratocumulus from spreading cumulus','סטרטוקומולוס מהתפשטות קומולוס'],
+        5:['Stratocumulus','סטרטוקומולוס'],
+        6:['Stratus','סטרטוס'],
+        7:['Ragged stratus or cumulus of bad weather','סטרטוס או קומולוס קרועים של מזג אוויר סגרירי'],
+        8:['Cumulus and stratocumulus at different levels','קומולוס וסטרטוקומולוס בגבהים שונים'],
+        9:['Cumulonimbus with anvil','קומולונימבוס עם סדן'],
+        10:['Not visible (darkness, fog...)','לא נראים (חושך, ערפל וכו׳)']
+    },
+    CM: {
+        0:['No middle clouds','אין עננים בינוניים'],
+        1:['Thin altostratus','אלטוסטרטוס דק'],
+        2:['Thick altostratus or nimbostratus','אלטוסטרטוס עבה או נימבוסטרטוס'],
+        3:['Thin altocumulus, one level','אלטוקומולוס דק בשכבה אחת'],
+        4:['Patches of altocumulus, changing (often lenticular)','כתמי אלטוקומולוס משתנים (לרוב עדשתיים)'],
+        5:['Altocumulus in bands, thickening','אלטוקומולוס ברצועות, מתעבה'],
+        6:['Altocumulus from spreading cumulus','אלטוקומולוס מהתפשטות קומולוס'],
+        7:['Altocumulus in two layers, or with altostratus or nimbostratus','אלטוקומולוס בשתי שכבות, או עם אלטוסטרטוס או נימבוסטרטוס'],
+        8:['Altocumulus with turrets or tufts (castellanus, floccus)','אלטוקומולוס מגדלי או פתיתי'],
+        9:['Altocumulus of a chaotic sky','אלטוקומולוס בשמיים כאוטיים'],
+        10:['Not visible (hidden by lower clouds)','לא נראים (מוסתרים בעננים נמוכים)']
+    },
+    CH: {
+        0:['No high clouds','אין עננים גבוהים'],
+        1:['Cirrus filaments (mares’ tails)','צירוס סיבי (זנבות סוס)'],
+        2:['Dense cirrus in patches or tufts','צירוס סמיך בכתמים או בציציות'],
+        3:['Dense cirrus left from a cumulonimbus anvil','צירוס סמיך משארית סדן של קומולונימבוס'],
+        4:['Cirrus hooks or filaments, spreading','צירוס מאונקל או סיבי, מתפשט'],
+        5:['Cirrus or cirrostratus in bands, below 45°','צירוס או צירוסטרטוס ברצועות, מתחת ל־45°'],
+        6:['Cirrus or cirrostratus in bands, above 45°','צירוס או צירוסטרטוס ברצועות, מעל 45°'],
+        7:['Cirrostratus covering the whole sky','צירוסטרטוס המכסה את כל השמיים'],
+        8:['Cirrostratus not covering the whole sky','צירוסטרטוס שאינו מכסה את כל השמיים'],
+        9:['Cirrocumulus','צירוקומולוס'],
+        10:['Not visible (hidden by lower clouds)','לא נראים (מוסתרים בעננים נמוכים)']
+    }
+};
+const CLOUD_TYPE_COLORS = ['#9ecbff','#2ca02c','#ff7f0e','#d62728','#9467bd','#8c564b',
+                           '#7f7f7f','#17becf','#bcbd22','#e377c2'];
+const NOT_OBSERVED_COLOR = '#d1d5db';
+function mixColor(a, b, t) {
+    return 'rgb(' + a.map(function(v, i) { return Math.round(v + (b[i] - v) * t); }).join(',') + ')';
+}
+function cloudColor(pshort, code) {
+    if (code === 10 || !(code in CLOUD_CODES[pshort])) return NOT_OBSERVED_COLOR;
+    if (pshort === 'N' || pshort === 'NH') {
+        if (code === 9) return '#a78bfa';                                // obscured
+        return mixColor([120,185,255], [75,75,75], code / 8);           // sky blue -> overcast gray
+    }
+    if (pshort === 'H') return mixColor([60,60,60], [205,228,255], code / 9);  // low and dark -> high and light
+    return CLOUD_TYPE_COLORS[code];
+}
+function cloudLabel(pshort, code) {
+    const entry = CLOUD_CODES[pshort][code];
+    if (!entry) return String(code);
+    return code + ' – ' + entry[lang === 'he' ? 1 : 0];
+}
 const heUI = {
     measure:'פרמטר:', home:'דף הבית', sourceLabel:'נתונים מ',
     title:'תצפיות שעתיות של תחנות פני קרקע בישראל',
@@ -285,6 +390,7 @@ function getScaleUnit(pshort, pinfo) {
     return pinfo.units.replace(/^Tenths\s+/, '');
 }
 function valueColor(pshort, rawVal, pinfo) {
+    if (CLOUD_CODES[pshort]) return cloudColor(pshort, rawVal);
     const range = getActiveRangeRaw(pshort);
     if (!range) return jetColor(0.5);
     const mn = range[0], mx = range[1];
@@ -297,6 +403,7 @@ function valueColor(pshort, rawVal, pinfo) {
     return jetColor(ratio);
 }
 function fmtVal(pshort, rawVal, pinfo) {
+    if (CLOUD_CODES[pshort]) return cloudLabel(pshort, rawVal);
     const v = rawVal / pinfo.scale;
     if (WIND_MEASURES.includes(pshort)) return (v * 3.6).toFixed(1) + ' km/h';
     if (pshort === 'VV')                    return (rawVal / 1000).toFixed(1) + ' km';
@@ -326,6 +433,7 @@ function syncUrl() {
     const q = new URLSearchParams(location.search);
     q.set('measure', currentMeasure);
     q.set('scale', colorScaleMode);
+    q.set('lang', lang);
     const pinfo = params.find(function(p) { return p.short === currentMeasure; });
     const range = colorScaleMode === 'custom' ? customScaleRanges[currentMeasure] : null;
     if (range && pinfo) {
@@ -355,6 +463,9 @@ function formatInputValue(value) {
     return String(parseFloat(value.toFixed(3)));
 }
 function updateScaleControls() {
+    // Codes have a fixed color each, so there is no scale to choose
+    const scaleRow = document.querySelector('.scale-row');
+    if (scaleRow) scaleRow.style.display = CLOUD_CODES[currentMeasure] ? 'none' : '';
     ['set','minmax','custom'].forEach(function(mode) {
         const btn = document.getElementById('scale-' + mode);
         if (btn) btn.classList.toggle('active', colorScaleMode === mode);
@@ -446,15 +557,33 @@ function buildDropdown() {
     const sel = document.getElementById('measure-select');
     const prev = sel.value || currentMeasure;
     sel.innerHTML = '';
-    // DD is rendered together with wind-speed params as arrows, hide it from standalone list
+    // Measures with data, by short name. DD is drawn as the direction of the wind
+    // arrows, so it has no entry of its own.
+    const shown = {};
     params.forEach(function(p) {
-        if (p.short === 'DD') return; // direction shown via wind-speed arrows
+        if (p.short === 'DD') return;
         if (availableShorts.size > 0 && !availableShorts.has(p.short)) return; // no data
-        const opt = document.createElement('option');
-        opt.value = p.short;
-        opt.textContent = p.short + ' \u2013 ' + (lang === 'he' ? (heParamNames[p.short] || p.full) : p.full);
-        if (WIND_MEASURES.includes(p.short)) opt.textContent += (lang === 'he' ? ' (חצים)' : ' (arrows)');
-        sel.appendChild(opt);
+        shown[p.short] = p;
+    });
+    const grouped = new Set();
+    MEASURE_GROUPS.forEach(function(g) { g.shorts.forEach(function(s) { grouped.add(s); }); });
+    const leftovers = params.map(function(p) { return p.short; })
+        .filter(function(s) { return shown[s] && !grouped.has(s); });
+    MEASURE_GROUPS.forEach(function(g, gi) {
+        let shorts = g.shorts.filter(function(s) { return shown[s]; });
+        if (gi === MEASURE_GROUPS.length - 1) shorts = shorts.concat(leftovers);
+        if (!shorts.length) return;
+        const group = document.createElement('optgroup');
+        group.label = lang === 'he' ? g.he : g.en;
+        shorts.forEach(function(s) {
+            const p = shown[s];
+            const opt = document.createElement('option');
+            opt.value = p.short;
+            opt.textContent = p.short + ' – ' + (lang === 'he' ? (heParamNames[p.short] || p.full) : p.full);
+            if (WIND_MEASURES.includes(p.short)) opt.textContent += (lang === 'he' ? ' (חצים)' : ' (arrows)');
+            group.appendChild(opt);
+        });
+        sel.appendChild(group);
     });
     sel.value = (sel.querySelector('option[value="'+prev+'"]') ? prev : (sel.options[0]||{}).value) || prev;
     currentMeasure = sel.value;
@@ -533,7 +662,25 @@ function makeScaleLabels(minVal, maxVal) {
     }
     return labels;
 }
+// Legend for a code measure: the codes reported at this time, each with its color and meaning
+function renderCodeLegend(pinfo) {
+    const sh = currentMeasure;
+    const codes = Array.from(new Set(getTimeVals(sh))).sort(function(a, b) { return a - b; });
+    colorbarCtrl = L.control({ position:'bottomleft' });
+    colorbarCtrl.onAdd = function() {
+        const div = L.DomUtil.create('div', 'colorbar-control code-legend');
+        div.dir = lang === 'he' ? 'rtl' : 'ltr';
+        const title = lang === 'he' ? (heParamNames[sh] || pinfo.full) : pinfo.full;
+        div.innerHTML = '<div class="code-title">' + title + '</div>' + codes.map(function(c) {
+            return '<div class="code-row"><span class="code-swatch" style="background:' +
+                cloudColor(sh, c) + '"></span><span>' + cloudLabel(sh, c) + '</span></div>';
+        }).join('');
+        return div;
+    };
+    colorbarCtrl.addTo(map);
+}
 function renderColorbar(pinfo) {
+    if (CLOUD_CODES[currentMeasure]) return renderCodeLegend(pinfo);
     colorbarCtrl = L.control({ position:'bottomleft' });
     colorbarCtrl.onAdd = function() {
         const div = L.DomUtil.create('div', 'colorbar-control');
@@ -640,6 +787,7 @@ function toggleLang() {
     }
     buildDropdown();
     updateScaleControls();
+    syncUrl();
 }
 window.addEventListener('resize', function(){ map.invalidateSize(); });
 window.addEventListener('load', function(){ setTimeout(function(){ map.invalidateSize(); }, 0); });
@@ -650,6 +798,8 @@ fetch('https://ims-observ.yuvharpaz.workers.dev/')
         parseXML(xmlText);
         buildDropdown();
         applyUrlCustomRange();
+        // After parseXML, which writes the English title from the feed
+        if (urlParams.get('lang') === 'he') toggleLang();
         // start in latest mode — jump to latest time for default measure
         timeIndex = latestIndexFor(currentMeasure);
         setLatestMode(true);
