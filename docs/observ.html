@@ -186,6 +186,13 @@ let autoLatest = true;
 let xmlTitle = 'Israeli Surface Stations Hourly Observations';
 let colorScaleMode = 'set';
 let customScaleRanges = {};
+// Shareable view: ?measure=R24&scale=minmax. scale is set | minmax | custom;
+// custom also takes &min=..&max=.. in the units shown on the color bar.
+// The URL follows the controls, so the address bar can be copied as is.
+const SCALE_MODES = ['set','minmax','custom'];
+const urlParams = new URLSearchParams(location.search);
+if (urlParams.get('measure')) currentMeasure = urlParams.get('measure').toUpperCase();
+if (SCALE_MODES.includes(urlParams.get('scale'))) colorScaleMode = urlParams.get('scale');
 const WIND_MEASURES = ['FF','FFX','FM','FM1','FX1'];
 const RAIN_MEASURES = ['R01','R06','R12','R24'];
 const heParamNames = {
@@ -312,6 +319,36 @@ function setScaleMode(mode) {
     if (mode === 'custom') ensureCustomScale();
     updateScaleControls();
     renderMarkers();
+    syncUrl();
+}
+// Write the current measure and scale into the address bar, keeping any other parameters
+function syncUrl() {
+    const q = new URLSearchParams(location.search);
+    q.set('measure', currentMeasure);
+    q.set('scale', colorScaleMode);
+    const pinfo = params.find(function(p) { return p.short === currentMeasure; });
+    const range = colorScaleMode === 'custom' ? customScaleRanges[currentMeasure] : null;
+    if (range && pinfo) {
+        q.set('min', formatInputValue(rawToDisplay(currentMeasure, range[0], pinfo)));
+        q.set('max', formatInputValue(rawToDisplay(currentMeasure, range[1], pinfo)));
+    } else {
+        q.delete('min');
+        q.delete('max');
+    }
+    history.replaceState(null, '', location.pathname + '?' + q.toString() + location.hash);
+}
+// A custom range from the URL, applied once the measure's units are known
+function applyUrlCustomRange() {
+    if (colorScaleMode !== 'custom') return;
+    if ((urlParams.get('measure') || '').toUpperCase() !== currentMeasure) return;
+    const mn = parseFloat(urlParams.get('min'));
+    const mx = parseFloat(urlParams.get('max'));
+    const pinfo = params.find(function(p) { return p.short === currentMeasure; });
+    if (!pinfo || !Number.isFinite(mn) || !Number.isFinite(mx) || mn >= mx) return;
+    customScaleRanges[currentMeasure] = [
+        displayToRaw(currentMeasure, mn, pinfo),
+        displayToRaw(currentMeasure, mx, pinfo)
+    ];
 }
 function formatInputValue(value) {
     if (!Number.isFinite(value)) return '';
@@ -354,6 +391,7 @@ function applyCustomScale() {
         displayToRaw(currentMeasure, mx, pinfo)
     ];
     renderMarkers();
+    syncUrl();
 }
 function handleScaleKey(event) {
     if (event.key === 'Enter') {
@@ -570,6 +608,7 @@ function onMeasureChange() {
     if (colorScaleMode === 'custom') ensureCustomScale();
     updateScaleControls();
     renderMarkers();
+    syncUrl();
 }
 function toggleLang() {
     lang = lang === 'en' ? 'he' : 'en';
@@ -610,6 +649,7 @@ fetch('https://ims-observ.yuvharpaz.workers.dev/')
     .then(function(xmlText){
         parseXML(xmlText);
         buildDropdown();
+        applyUrlCustomRange();
         // start in latest mode — jump to latest time for default measure
         timeIndex = latestIndexFor(currentMeasure);
         setLatestMode(true);
