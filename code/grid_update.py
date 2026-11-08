@@ -40,6 +40,7 @@ month is parsed, or to check the older months for corrections.
 import argparse
 import csv
 import datetime as dt
+import html as html_lib
 import io
 import pathlib
 import re
@@ -57,10 +58,14 @@ OUT = DATA / "grid_peaks.csv"
 # What was fetched last time, so a run can tell a new month from a known one.
 SOURCES = DATA / "grid_sources.csv"
 
-INDEX = "https://www.noga-iso.co.il/obligation-to-report/daily-demand-peaks/"
+INDEX = "https://www.noga-iso.co.il/obligation-to-report-new/?feed=peak-hour"
 SITE = "https://www.noga-iso.co.il"
 UA = {"User-Agent": "Mozilla/5.0 (compatible; yuval-harpaz/weather)"}
-LINK_RE = re.compile(r"/media/[a-z0-9]+/peak_hour_[0-9-]+\.csv")
+# Since November 2026 the files are served through an API by name; the older
+# /media/<hash>/ links are still accepted in case they come back.
+LINK_RE = re.compile(r"/umbraco/api/ObligationFiles/Download\?feed=peak-hour"
+                     r"&(?:amp;)?file=peak_hour_[0-9.-]+\.csv"
+                     r"|/media/[a-z0-9]+/peak_hour_[0-9-]+\.csv")
 
 # The published columns, in order, renamed on the way in. The source headers are
 # Hebrew and have changed spacing between years, so position is the stable key.
@@ -143,7 +148,7 @@ def fetch(url, timeout=60, tries=4):
 def month_links():
     """Every monthly CSV the index page offers, oldest first."""
     html = fetch(INDEX).decode("utf-8", "ignore")
-    return sorted(set(LINK_RE.findall(html)))
+    return sorted({html_lib.unescape(l) for l in LINK_RE.findall(html)})
 
 
 def decode(raw):
@@ -172,7 +177,7 @@ def parse_month(raw):
     return df.dropna(subset=["date"])
 
 
-MONTH_RE = re.compile(r"peak_hour_(\d{2})-?(\d{2})-?(\d{4})\.csv")
+MONTH_RE = re.compile(r"peak_hour_(\d{2})[-.]?(\d{2})[-.]?(\d{4})\.csv")
 
 
 def file_month(name):
@@ -216,7 +221,7 @@ def collect(force_all=False):
     links = month_links()
     known = read_sources()
     have = None if force_all else read_existing()
-    by_file = {l.split("/")[-1]: l for l in links}
+    by_file = {re.split(r"[/=]", l)[-1]: l for l in links}
     months = {name: file_month(name) for name in by_file}
     recent = sorted(m for m in months.values() if m)[-REFRESH_MONTHS:]
 
@@ -228,13 +233,17 @@ def collect(force_all=False):
             known = dict(by_file)
             print("  adopting the existing table as the starting point")
 
+    # Matched by month, not filename: the November 2026 site move renamed every
+    # file (28022026 -> 28.02.2026) without changing what is in it.
+    known_urls = {file_month(n): u for n, u in known.items()}
     wanted = []
     for name, link in by_file.items():
+        old = known_urls.get(months[name])
         if have is None:
             wanted.append(name)
-        elif name not in known:
+        elif old is None:
             wanted.append(name)                 # a month that is new to us
-        elif known[name] != link:
+        elif old != link and "/media/" in old and "/media/" in link:
             wanted.append(name)                 # republished under a new id
         elif months[name] in recent:
             wanted.append(name)                 # late corrections land here
