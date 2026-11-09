@@ -106,11 +106,9 @@ SPIKE_PROM_MW = 3000
 # pass unnoticed - 28 February 2026 sat at 12.9% with a peak 207 MW BELOW its
 # own fortnight, while the days either side of it held 30-38%.
 SUPPLY_PCT = 15.0
-# The newest months are re-fetched every run even when their link has not
-# changed, because a late correction to last month is plausible and would
-# otherwise never be noticed. Older months are treated as settled; use
-# --rebuild to check them.
-REFRESH_MONTHS = 2
+# A month already on disk is fetched again only when it looks partial - fewer
+# days than the calendar month, or a day without a peak or reserve. Complete
+# months are treated as settled; use --rebuild to check them for corrections.
 # The columns a month contributes. Everything else in the output is derived
 # from these and recomputed locally on every run.
 RAW_KEEP = ["date", "peak_hour", "capacity_mw", "peak_mw", "renewables_mw",
@@ -210,6 +208,17 @@ def read_existing():
     return d.dropna(subset=["date"])[RAW_KEEP]
 
 
+def partial_months(have):
+    """Months on disk with missing days or missing peak/reserve values."""
+    if have is None or not len(have):
+        return set()
+    d = have.assign(month=have["date"].astype(str).str[:7])
+    ok = d.dropna(subset=["peak_mw", "reserve_mw"])
+    days = ok.groupby("month")["date"].nunique()
+    need = {m: pd.Period(m).days_in_month for m in d["month"].unique()}
+    return {m for m, n in need.items() if days.get(m, 0) < n}
+
+
 def collect(force_all=False):
     """Fetch what has changed and fold it into the table already on disk.
 
@@ -223,7 +232,8 @@ def collect(force_all=False):
     have = None if force_all else read_existing()
     by_file = {re.split(r"[/=]", l)[-1]: l for l in links}
     months = {name: file_month(name) for name in by_file}
-    recent = sorted(m for m in months.values() if m)[-REFRESH_MONTHS:]
+    partial = partial_months(have)
+    covered = set() if have is None else {str(d)[:7] for d in have["date"]}
 
     # A table built before this file existed is trusted for the months it
     # already covers, rather than re-downloading all of them to prove it.
@@ -241,12 +251,12 @@ def collect(force_all=False):
         old = known_urls.get(months[name])
         if have is None:
             wanted.append(name)
-        elif old is None:
+        elif old is None or months[name] not in covered:
             wanted.append(name)                 # a month that is new to us
         elif old != link and "/media/" in old and "/media/" in link:
             wanted.append(name)                 # republished under a new id
-        elif months[name] in recent:
-            wanted.append(name)                 # late corrections land here
+        elif months[name] in partial:
+            wanted.append(name)                 # what we hold is incomplete
     wanted.sort()
 
     print(f"index lists {len(links)} monthly files; "
@@ -292,8 +302,9 @@ def collect(force_all=False):
     fetched = dt.date.today().isoformat()
     rows = [{"file": n, "url": by_file[n], "month": months[n],
              "fetched": fetched if n in wanted else ""} for n in sorted(by_file)]
-    pd.DataFrame(rows).to_csv(SOURCES, index=False)
-    return df
+    # Saved by main() only once the table itself is written, so a dry run or a
+    # crash can never mark a month as fetched when its rows are not on disk.
+    return df, pd.DataFrame(rows)
 
 
 def prominence(peaks):
@@ -491,7 +502,7 @@ def main(argv):
                     help="re-download all months instead of only what changed")
     args = ap.parse_args(argv)
 
-    df = collect(force_all=args.rebuild)
+    df, sources = collect(force_all=args.rebuild)
     df["reserve_pct"] = (100 * df["reserve_mw"] / df["peak_mw"]).round(2)
     df["peak_prom_mw"] = prominence(df["peak_mw"].to_numpy())
     local = df["peak_mw"].rolling(SPIKE_WINDOW * 2 + 1, center=True,
@@ -529,6 +540,7 @@ def main(argv):
               "explained", "suppressed", "run_days",
               "temp_station", "temp_kind", "temp_c", "temp_rank", "note"]]
     out.to_csv(OUT, index=False)
+    sources.to_csv(SOURCES, index=False)
     print(f"  wrote {OUT.name} ({OUT.stat().st_size / 1024:.0f} kB), "
           f"{before:,} -> {len(out):,} rows")
     return 0

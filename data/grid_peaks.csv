@@ -14,20 +14,20 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2022-01-13,18:58,11221.0,13917.0,2696.0,24.03,-39.0,-39.0,18.0,254.0,False,False,,False,False,0,,,,,
 2022-01-14,16:43,11260.0,14907.0,3647.0,32.39,-710.0,-37.0,442.0,168.0,False,False,,False,False,0,,,,,
 2022-01-15,18:32,11970.0,14149.0,2179.0,18.2,-195.0,0.0,15.0,254.0,False,False,,False,False,0,,,,,
-2022-01-16,18:23,13370.0,14226.0,856.0,6.4,1205.0,1205.0,19.0,277.0,False,False,tight reserve,True,False,2,JERUSALEM CENTRE,min,3.1,0.0376,"tight reserve — Jerusalem Centre 3.1 °C, colder than 96% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-01-16 to 2022-01-17"
+2022-01-16,18:23,13370.0,14226.0,856.0,6.4,1205.0,1205.0,19.0,277.0,False,False,tight reserve,True,False,2,JERUSALEM CENTRE,min,3.1,0.0372,"tight reserve — Jerusalem Centre 3.1 °C, colder than 96% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-01-16 to 2022-01-17"
 2022-01-17,19:00,14038.0,15064.0,1146.0,8.16,1873.0,1734.0,15.0,250.0,True,False,,False,True,2,BET DAGAN,min,2.0,0.0029,"demand response, tight reserve — Bet Dagan 2.0 °C, colder than 100% of winter days"
 2022-01-18,19:18,13839.0,15241.0,1403.0,10.14,1674.0,469.0,169.0,229.0,False,False,,False,False,0,,,,,
-2022-01-19,18:34,14737.0,15378.0,771.0,5.23,2572.0,971.0,103.0,247.0,True,False,"demand response, tight reserve",True,False,2,JERUSALEM CENTRE,min,1.0,0.0087,"demand response, tight reserve — Jerusalem Centre 1.0 °C, colder than 99% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-01-19 to 2022-01-20"
+2022-01-19,18:34,14737.0,15378.0,771.0,5.23,2572.0,971.0,103.0,247.0,True,False,"demand response, tight reserve",True,False,2,JERUSALEM CENTRE,min,1.0,0.0086,"demand response, tight reserve — Jerusalem Centre 1.0 °C, colder than 99% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-01-19 to 2022-01-20"
 2022-01-20,18:39,14012.0,15335.0,1453.0,10.37,1847.0,173.0,90.0,214.0,True,False,,False,True,2,JERUSALEM CENTRE,min,0.4,0.0043,"demand response — Jerusalem Centre 0.4 °C, colder than 100% of winter days"
 2022-01-21,18:07,12165.0,15208.0,3043.0,25.01,-139.0,-1674.0,119.0,238.0,False,False,,False,False,0,,,,,
 2022-01-22,19:18,12304.0,14883.0,2579.0,20.96,-507.0,-1535.0,121.0,257.0,False,False,,False,False,0,,,,,
-2022-01-23,18:29,14142.0,15273.0,1331.0,9.41,1331.0,303.0,244.0,118.0,True,False,,False,True,7,JERUSALEM CENTRE,min,4.7,0.0883,"demand response, tight reserve — Jerusalem Centre 4.7 °C, colder than 91% of winter days"
-2022-01-24,18:46,14253.0,15310.0,1177.0,8.26,1442.0,414.0,122.0,231.0,True,False,,False,True,7,JERUSALEM CENTRE,min,3.1,0.0376,"demand response, tight reserve — Jerusalem Centre 3.1 °C, colder than 96% of winter days"
+2022-01-23,18:29,14142.0,15273.0,1331.0,9.41,1331.0,303.0,244.0,118.0,True,False,,False,True,7,JERUSALEM CENTRE,min,4.7,0.0873,"demand response, tight reserve — Jerusalem Centre 4.7 °C, colder than 91% of winter days"
+2022-01-24,18:46,14253.0,15310.0,1177.0,8.26,1442.0,414.0,122.0,231.0,True,False,,False,True,7,JERUSALEM CENTRE,min,3.1,0.0372,"demand response, tight reserve — Jerusalem Centre 3.1 °C, colder than 96% of winter days"
 2022-01-25,19:11,13766.0,15533.0,1767.0,12.84,955.0,0.0,166.0,285.0,False,False,,False,True,7,,,,,"low reserve, demand ordinary — 12.8% reserve on a peak level with the days around it, so the shortfall was in supply, not demand"
 2022-01-26,18:19,14802.0,15678.0,996.0,6.73,2637.0,1316.0,131.0,232.0,True,False,"demand response, tight reserve",True,False,7,JERUSALEM CENTRE,min,-0.2,0.0014,"demand response, tight reserve — Jerusalem Centre -0.2 °C, colder than 100% of winter days · the lowest reserve of 7 consecutive flagged days, 2022-01-23 to 2022-01-29"
 2022-01-27,18:51,14205.0,15539.0,1454.0,10.24,2040.0,769.0,72.0,214.0,True,False,,False,True,7,JERUSALEM CENTRE,min,-0.6,0.0,"demand response — Jerusalem Centre -0.6 °C, colder than 100% of winter days"
-2022-01-28,16:22,13486.0,16074.0,2707.0,20.07,1321.0,285.0,469.0,255.0,True,False,,False,True,7,JERUSALEM CENTRE,min,2.8,0.0304,"demand response — Jerusalem Centre 2.8 °C, colder than 97% of winter days"
-2022-01-29,19:20,12811.0,15655.0,2964.0,23.14,507.0,-390.0,113.0,227.0,True,False,,False,True,7,JERUSALEM CENTRE,min,3.1,0.0376,"demand response — Jerusalem Centre 3.1 °C, colder than 96% of winter days"
+2022-01-28,16:22,13486.0,16074.0,2707.0,20.07,1321.0,285.0,469.0,255.0,True,False,,False,True,7,JERUSALEM CENTRE,min,2.8,0.03,"demand response — Jerusalem Centre 2.8 °C, colder than 97% of winter days"
+2022-01-29,19:20,12811.0,15655.0,2964.0,23.14,507.0,-390.0,113.0,227.0,True,False,,False,True,7,JERUSALEM CENTRE,min,3.1,0.0372,"demand response — Jerusalem Centre 3.1 °C, colder than 96% of winter days"
 2022-01-30,19:34,13201.0,15544.0,2343.0,17.75,390.0,0.0,122.0,279.0,False,False,,False,False,0,,,,,
 2022-01-31,19:22,13436.0,16001.0,2565.0,19.09,625.0,334.0,11.0,245.0,False,False,,False,False,0,,,,,
 2022-02-01,19:18,13102.0,15994.0,2893.0,22.08,291.0,291.0,114.0,250.0,False,False,,False,False,0,,,,,
@@ -70,18 +70,18 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2022-03-10,19:16,10938.0,12633.0,1694.0,15.49,-391.0,-226.0,25.0,266.0,False,False,,False,False,0,,,,,
 2022-03-11,18:15,11329.0,13441.0,2112.0,18.64,203.0,203.0,52.0,252.0,False,False,,False,False,0,,,,,
 2022-03-12,19:23,11814.0,13521.0,1706.0,14.44,688.0,532.0,13.0,262.0,False,False,,False,False,0,,,,,
-2022-03-13,19:25,13334.0,13685.0,501.0,3.76,2208.0,2005.0,132.0,240.0,True,False,"demand response, tight reserve",True,False,4,BET DAGAN,min,3.7,0.0188,"demand response, tight reserve — Bet Dagan 3.7 °C, colder than 98% of winter days · the lowest reserve of 4 consecutive flagged days, 2022-03-13 to 2022-03-16"
-2022-03-14,19:24,13355.0,14238.0,1013.0,7.59,2229.0,1780.0,16.0,270.0,True,False,,False,True,4,JERUSALEM CENTRE,min,2.2,0.0217,"demand response, tight reserve — Jerusalem Centre 2.2 °C, colder than 98% of winter days"
+2022-03-13,19:25,13334.0,13685.0,501.0,3.76,2208.0,2005.0,132.0,240.0,True,False,"demand response, tight reserve",True,False,4,BET DAGAN,min,3.7,0.0186,"demand response, tight reserve — Bet Dagan 3.7 °C, colder than 98% of winter days · the lowest reserve of 4 consecutive flagged days, 2022-03-13 to 2022-03-16"
+2022-03-14,19:24,13355.0,14238.0,1013.0,7.59,2229.0,1780.0,16.0,270.0,True,False,,False,True,4,JERUSALEM CENTRE,min,2.2,0.0215,"demand response, tight reserve — Jerusalem Centre 2.2 °C, colder than 98% of winter days"
 2022-03-15,19:19,13638.0,14168.0,660.0,4.84,2512.0,1824.0,38.0,271.0,True,False,,False,True,4,JERUSALEM CENTRE,min,0.8,0.0072,"demand response, tight reserve — Jerusalem Centre 0.8 °C, colder than 99% of winter days"
 2022-03-16,19:28,12845.0,14082.0,1367.0,10.64,1719.0,441.0,19.0,222.0,True,False,,False,True,4,BET DAGAN,min,2.1,0.0043,"demand response — Bet Dagan 2.1 °C, colder than 100% of winter days"
 2022-03-17,19:25,11575.0,14166.0,2590.0,22.38,449.0,-1244.0,16.0,269.0,False,False,,False,False,0,,,,,
 2022-03-18,17:16,11126.0,14009.0,2882.0,25.9,-203.0,-1693.0,334.0,176.0,False,False,,False,False,0,,,,,
 2022-03-19,19:29,11282.0,14048.0,2766.0,24.52,156.0,-1537.0,13.0,262.0,False,False,,False,False,0,,,,,
-2022-03-20,19:18,13099.0,13611.0,512.0,3.91,1973.0,280.0,14.0,276.0,False,False,tight reserve,True,False,2,JERUSALEM CENTRE,min,2.7,0.026,"tight reserve — Jerusalem Centre 2.7 °C, colder than 97% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-03-20 to 2022-03-21"
-2022-03-21,19:33,13034.0,13853.0,948.0,7.27,1908.0,630.0,12.0,236.0,True,False,,False,True,2,JERUSALEM CENTRE,min,3.8,0.055,"demand response, tight reserve — Jerusalem Centre 3.8 °C, colder than 95% of winter days"
+2022-03-20,19:18,13099.0,13611.0,512.0,3.91,1973.0,280.0,14.0,276.0,False,False,tight reserve,True,False,2,JERUSALEM CENTRE,min,2.7,0.0258,"tight reserve — Jerusalem Centre 2.7 °C, colder than 97% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-03-20 to 2022-03-21"
+2022-03-21,19:33,13034.0,13853.0,948.0,7.27,1908.0,630.0,12.0,236.0,True,False,,False,True,2,JERUSALEM CENTRE,min,3.8,0.0544,"demand response, tight reserve — Jerusalem Centre 3.8 °C, colder than 95% of winter days"
 2022-03-22,19:49,12404.0,13661.0,1257.0,10.13,1278.0,829.0,14.0,244.0,False,False,,False,False,0,,,,,
-2022-03-23,19:39,12819.0,13600.0,911.0,7.11,1693.0,1537.0,17.0,289.0,True,False,,False,True,2,BET DAGAN,min,3.7,0.0188,"demand response, tight reserve — Bet Dagan 3.7 °C, colder than 98% of winter days"
-2022-03-24,18:45,13309.0,13855.0,676.0,5.08,2183.0,2110.0,15.0,255.0,True,False,"demand response, tight reserve",True,False,2,JERUSALEM CENTRE,min,3.2,0.0463,"demand response, tight reserve — Jerusalem Centre 3.2 °C, colder than 95% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-03-23 to 2022-03-24"
+2022-03-23,19:39,12819.0,13600.0,911.0,7.11,1693.0,1537.0,17.0,289.0,True,False,,False,True,2,BET DAGAN,min,3.7,0.0186,"demand response, tight reserve — Bet Dagan 3.7 °C, colder than 98% of winter days"
+2022-03-24,18:45,13309.0,13855.0,676.0,5.08,2183.0,2110.0,15.0,255.0,True,False,"demand response, tight reserve",True,False,2,JERUSALEM CENTRE,min,3.2,0.0458,"demand response, tight reserve — Jerusalem Centre 3.2 °C, colder than 95% of winter days · the lowest reserve of 2 consecutive flagged days, 2022-03-23 to 2022-03-24"
 2022-03-25,19:12,11199.0,13618.0,2420.0,21.61,73.0,73.0,43.0,273.0,False,False,,False,False,0,,,,,
 2022-03-26,20:38,10771.0,12772.0,2001.0,18.58,-428.0,-207.0,201.0,253.0,False,False,,False,False,0,,,,,
 2022-03-27,20:10,10978.0,13677.0,2699.0,24.59,207.0,207.0,204.0,264.0,False,False,,False,False,0,,,,,
@@ -358,8 +358,8 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2022-12-23,17:31,9013.0,12333.0,3320.0,36.84,-586.0,-586.0,47.0,0.0,False,False,,False,False,0,,,,,
 2022-12-24,18:17,9599.0,12181.0,2582.0,26.9,-407.0,-241.0,45.0,0.0,False,False,,False,False,0,,,,,
 2022-12-25,17:58,11155.0,12708.0,1553.0,13.92,1149.0,1149.0,116.0,0.0,False,False,,False,False,0,,,,,
-2022-12-26,18:19,12077.0,13352.0,1476.0,12.22,2071.0,1754.0,26.0,0.0,True,False,demand response,False,False,2,JERUSALEM CENTRE,min,5.8,0.1447,"demand response — Jerusalem Centre 5.8 °C, colder than 86% of winter days; not an extreme day · the lowest reserve of 2 consecutive flagged days, 2022-12-26 to 2022-12-27"
-2022-12-27,18:46,11566.0,12993.0,1557.0,13.46,1560.0,561.0,16.0,0.0,True,False,,False,True,2,JERUSALEM CENTRE,min,6.7,0.2055,"demand response — Jerusalem Centre 6.7 °C, colder than 79% of winter days; not an extreme day"
+2022-12-26,18:19,12077.0,13352.0,1476.0,12.22,2071.0,1754.0,26.0,0.0,True,False,demand response,False,False,2,JERUSALEM CENTRE,min,5.8,0.1431,"demand response — Jerusalem Centre 5.8 °C, colder than 86% of winter days; not an extreme day · the lowest reserve of 2 consecutive flagged days, 2022-12-26 to 2022-12-27"
+2022-12-27,18:46,11566.0,12993.0,1557.0,13.46,1560.0,561.0,16.0,0.0,True,False,,False,True,2,JERUSALEM CENTRE,min,6.7,0.2031,"demand response — Jerusalem Centre 6.7 °C, colder than 80% of winter days; not an extreme day"
 2022-12-28,19:30,11281.0,12911.0,1629.0,14.44,1275.0,126.0,103.0,0.0,False,False,,False,False,0,,,,,
 2022-12-29,18:57,11005.0,13100.0,2096.0,19.05,999.0,-150.0,173.0,0.0,False,False,,False,False,0,,,,,
 2022-12-30,17:38,10006.0,12733.0,2727.0,27.25,-317.0,-1149.0,112.0,0.0,False,False,,False,False,0,,,,,
@@ -395,21 +395,21 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2023-01-29,18:45,10260.0,13071.0,2810.0,27.39,-624.0,-303.0,34.0,0.0,False,False,,False,False,0,,,,,
 2023-01-30,19:28,10884.0,13097.0,2213.0,20.33,-118.0,0.0,59.0,0.0,False,False,,False,False,0,,,,,
 2023-01-31,18:49,12032.0,14343.0,2311.0,19.21,1030.0,1030.0,74.0,0.0,False,False,,False,False,0,,,,,
-2023-02-01,18:36,12883.0,13942.0,1059.0,8.22,1881.0,1218.0,121.0,0.0,False,False,tight reserve,True,False,1,JERUSALEM CENTRE,min,3.9,0.0608,"tight reserve — Jerusalem Centre 3.9 °C, colder than 94% of winter days"
+2023-02-01,18:36,12883.0,13942.0,1059.0,8.22,1881.0,1218.0,121.0,0.0,False,False,tight reserve,True,False,1,JERUSALEM CENTRE,min,3.9,0.0601,"tight reserve — Jerusalem Centre 3.9 °C, colder than 94% of winter days"
 2023-02-02,18:45,12321.0,14359.0,2038.0,16.54,1319.0,289.0,90.0,0.0,False,False,,False,False,0,,,,,
 2023-02-03,16:17,11002.0,14939.0,3936.0,35.78,-411.0,-1030.0,649.0,0.0,False,False,,False,False,0,,,,,
 2023-02-04,18:58,11665.0,14152.0,2487.0,21.32,252.0,-382.0,106.0,0.0,False,False,,False,False,0,,,,,
 2023-02-05,18:48,12047.0,14505.0,2458.0,20.4,634.0,-79.0,167.0,0.0,False,False,,False,False,0,,,,,
-2023-02-06,18:36,13717.0,14796.0,1079.0,7.87,2304.0,1396.0,82.0,0.0,False,False,,False,True,3,JERUSALEM CENTRE,min,1.8,0.0174,"tight reserve — Jerusalem Centre 1.8 °C, colder than 98% of winter days"
-2023-02-07,18:40,13930.0,14636.0,706.0,5.07,2517.0,1152.0,57.0,0.0,False,False,tight reserve,True,False,3,JERUSALEM CENTRE,min,1.4,0.013,"tight reserve — Jerusalem Centre 1.4 °C, colder than 99% of winter days · the lowest reserve of 3 consecutive flagged days, 2023-02-06 to 2023-02-08"
-2023-02-08,19:26,13984.0,14756.0,901.0,6.44,2571.0,1101.0,93.0,0.0,True,False,,False,True,3,JERUSALEM CENTRE,min,2.0,0.0188,"demand response, tight reserve — Jerusalem Centre 2.0 °C, colder than 98% of winter days"
+2023-02-06,18:36,13717.0,14796.0,1079.0,7.87,2304.0,1396.0,82.0,0.0,False,False,,False,True,3,JERUSALEM CENTRE,min,1.8,0.0172,"tight reserve — Jerusalem Centre 1.8 °C, colder than 98% of winter days"
+2023-02-07,18:40,13930.0,14636.0,706.0,5.07,2517.0,1152.0,57.0,0.0,False,False,tight reserve,True,False,3,JERUSALEM CENTRE,min,1.4,0.0129,"tight reserve — Jerusalem Centre 1.4 °C, colder than 99% of winter days · the lowest reserve of 3 consecutive flagged days, 2023-02-06 to 2023-02-08"
+2023-02-08,19:26,13984.0,14756.0,901.0,6.44,2571.0,1101.0,93.0,0.0,True,False,,False,True,3,JERUSALEM CENTRE,min,2.0,0.0186,"demand response, tight reserve — Jerusalem Centre 2.0 °C, colder than 98% of winter days"
 2023-02-09,19:08,13233.0,14590.0,1357.0,10.25,1820.0,362.0,15.0,0.0,False,False,,False,False,0,,,,,
 2023-02-10,18:19,11413.0,14562.0,3150.0,27.6,411.0,-1458.0,70.0,0.0,False,False,,False,False,0,,,,,
 2023-02-11,19:14,12126.0,14401.0,2275.0,18.76,713.0,-745.0,109.0,0.0,False,False,,False,False,0,,,,,
 2023-02-12,19:36,13149.0,14531.0,1382.0,10.51,1736.0,278.0,103.0,0.0,False,False,,False,False,0,,,,,
 2023-02-13,19:37,13083.0,14575.0,1492.0,11.4,1670.0,212.0,111.0,0.0,False,False,,False,False,0,,,,,
 2023-02-14,19:23,12778.0,14340.0,1562.0,12.22,1365.0,0.0,100.0,0.0,False,False,,False,True,2,,,,,"low reserve, demand ordinary — 12.2% reserve on a peak level with the days around it, so the shortfall was in supply, not demand"
-2023-02-15,19:21,13194.0,14280.0,1086.0,8.23,1781.0,1068.0,29.0,0.0,False,False,tight reserve,True,False,2,JERUSALEM CENTRE,min,4.7,0.0883,"tight reserve — Jerusalem Centre 4.7 °C, colder than 91% of winter days · the lowest reserve of 2 consecutive flagged days, 2023-02-14 to 2023-02-15"
+2023-02-15,19:21,13194.0,14280.0,1086.0,8.23,1781.0,1068.0,29.0,0.0,False,False,tight reserve,True,False,2,JERUSALEM CENTRE,min,4.7,0.0873,"tight reserve — Jerusalem Centre 4.7 °C, colder than 91% of winter days · the lowest reserve of 2 consecutive flagged days, 2023-02-14 to 2023-02-15"
 2023-02-16,19:26,12871.0,14359.0,1487.0,11.55,1458.0,1247.0,108.0,0.0,False,False,,False,False,0,,,,,
 2023-02-17,18:20,10872.0,14267.0,3395.0,31.23,-541.0,-541.0,77.0,0.0,False,False,,False,False,0,,,,,
 2023-02-18,19:24,10960.0,13903.0,2943.0,26.85,88.0,-422.0,127.0,0.0,False,False,,False,False,0,,,,,
@@ -436,8 +436,8 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2023-03-11,19:17,8286.0,10970.0,2684.0,32.39,-307.0,-759.0,136.0,0.0,False,False,,False,False,0,,,,,
 2023-03-12,19:03,8751.0,11082.0,2330.0,26.63,158.0,-364.0,140.0,0.0,False,False,,False,False,0,,,,,
 2023-03-13,18:49,9115.0,10408.0,1293.0,14.19,522.0,-17.0,79.0,0.0,False,False,,False,True,3,,,,,"low reserve, demand ordinary — 14.2% reserve on a peak 17 MW below the days around it, so the shortfall was in supply, not demand"
-2023-03-14,18:42,10158.0,10717.0,689.0,6.78,1565.0,781.0,31.0,0.0,True,False,"demand response, tight reserve",False,False,3,JERUSALEM CENTRE,min,6.2,0.1635,"demand response, tight reserve — Jerusalem Centre 6.2 °C, colder than 84% of winter days; not an extreme day · the lowest reserve of 3 consecutive flagged days, 2023-03-13 to 2023-03-15"
-2023-03-15,18:53,10422.0,11395.0,1114.0,10.69,1829.0,979.0,248.0,0.0,True,False,,False,True,3,JERUSALEM CENTRE,min,7.3,0.2605,"demand response — Jerusalem Centre 7.3 °C, colder than 74% of winter days; not an extreme day"
+2023-03-14,18:42,10158.0,10717.0,689.0,6.78,1565.0,781.0,31.0,0.0,True,False,"demand response, tight reserve",False,False,3,JERUSALEM CENTRE,min,6.2,0.1617,"demand response, tight reserve — Jerusalem Centre 6.2 °C, colder than 84% of winter days; not an extreme day · the lowest reserve of 3 consecutive flagged days, 2023-03-13 to 2023-03-15"
+2023-03-15,18:53,10422.0,11395.0,1114.0,10.69,1829.0,979.0,248.0,0.0,True,False,,False,True,3,JERUSALEM CENTRE,min,7.3,0.2575,"demand response — Jerusalem Centre 7.3 °C, colder than 74% of winter days; not an extreme day"
 2023-03-16,19:17,9555.0,11793.0,2368.0,24.78,962.0,0.0,163.0,0.0,True,False,,False,False,0,,,,,
 2023-03-17,18:30,8593.0,11388.0,2925.0,34.04,-103.0,-962.0,183.0,0.0,True,False,,False,False,0,,,,,
 2023-03-18,19:18,9132.0,11438.0,2306.0,25.25,436.0,-423.0,48.0,0.0,False,False,,False,False,0,,,,,
@@ -1093,7 +1093,7 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2024-12-27,11:01,11543.0,16282.0,4740.0,41.06,662.0,474.0,3348.0,0.0,False,False,,False,False,0,,,,,
 2024-12-28,11:53,11022.0,17249.0,6226.0,56.49,141.0,-107.0,3440.0,0.0,False,False,,False,False,0,,,,,
 2024-12-29,17:37,11562.0,14047.0,2485.0,21.49,681.0,133.0,311.0,162.0,False,False,,False,False,0,,,,,
-2024-12-30,18:04,12792.0,15151.0,2509.0,19.61,1911.0,1363.0,354.0,212.0,True,False,demand response,False,False,2,JERUSALEM CENTRE,min,5.4,0.1172,"demand response — Jerusalem Centre 5.4 °C, colder than 88% of winter days; not an extreme day · the lowest reserve of 2 consecutive flagged days, 2024-12-30 to 2024-12-31"
+2024-12-30,18:04,12792.0,15151.0,2509.0,19.61,1911.0,1363.0,354.0,212.0,True,False,demand response,False,False,2,JERUSALEM CENTRE,min,5.4,0.1159,"demand response — Jerusalem Centre 5.4 °C, colder than 88% of winter days; not an extreme day · the lowest reserve of 2 consecutive flagged days, 2024-12-30 to 2024-12-31"
 2024-12-31,18:19,12629.0,15067.0,2589.0,20.5,1748.0,1086.0,207.0,213.0,True,False,,False,True,2,,,,,demand response — no station reading for this day
 2025-01-01,18:42,11771.0,15059.0,3288.0,27.93,890.0,228.0,238.0,544.0,False,False,,False,False,0,,,,,
 2025-01-02,19:14,12088.0,14332.0,2244.0,18.56,1082.0,545.0,348.0,745.0,False,False,,False,False,0,,,,,
@@ -1134,10 +1134,10 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2025-02-06,18:41,13028.0,15399.0,2371.0,18.2,1091.0,978.0,467.0,790.0,False,False,,False,False,0,,,,,
 2025-02-07,16:35,12416.0,13922.0,1506.0,12.13,1181.0,366.0,578.0,290.0,False,False,,False,False,0,,,,,
 2025-02-08,19:00,11937.0,13866.0,1930.0,16.17,909.0,-113.0,402.0,429.0,False,False,,False,False,0,,,,,
-2025-02-09,18:53,13568.0,14420.0,852.0,6.28,2540.0,1518.0,228.0,711.0,False,False,tight reserve,True,False,1,JERUSALEM CENTRE,min,4.8,0.0941,"tight reserve — Jerusalem Centre 4.8 °C, colder than 91% of winter days"
+2025-02-09,18:53,13568.0,14420.0,852.0,6.28,2540.0,1518.0,228.0,711.0,False,False,tight reserve,True,False,1,JERUSALEM CENTRE,min,4.8,0.093,"tight reserve — Jerusalem Centre 4.8 °C, colder than 91% of winter days"
 2025-02-10,18:39,13492.0,14994.0,1502.0,11.13,2464.0,1442.0,334.0,601.0,False,False,,False,False,0,,,,,
 2025-02-11,19:28,13241.0,14969.0,1728.0,13.05,2230.0,1191.0,341.0,444.0,False,False,,False,False,0,,,,,
-2025-02-12,18:38,13652.0,15412.0,1890.0,13.84,1715.0,1602.0,370.0,510.0,True,False,demand response,False,False,1,BET DAGAN,min,6.4,0.1158,"demand response — Bet Dagan 6.4 °C, colder than 88% of winter days; not an extreme day"
+2025-02-12,18:38,13652.0,15412.0,1890.0,13.84,1715.0,1602.0,370.0,510.0,True,False,demand response,False,False,1,BET DAGAN,min,6.4,0.1144,"demand response — Bet Dagan 6.4 °C, colder than 89% of winter days; not an extreme day"
 2025-02-13,18:44,13046.0,15762.0,2717.0,20.83,1109.0,1042.0,641.0,456.0,False,False,,False,False,0,,,,,
 2025-02-14,18:10,11235.0,14489.0,3254.0,28.96,-702.0,-702.0,232.0,736.0,False,False,,False,False,0,,,,,
 2025-02-15,19:23,11028.0,14785.0,3757.0,34.07,-207.0,-909.0,520.0,443.0,False,False,,False,False,0,,,,,
@@ -1148,8 +1148,8 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2025-02-20,18:43,12004.0,15976.0,3972.0,33.09,201.0,0.0,471.0,371.0,False,False,,False,False,0,,,,,
 2025-02-21,16:45,11803.0,16522.0,4720.0,39.99,831.0,-49.0,971.0,278.0,False,False,,False,False,0,,,,,
 2025-02-22,19:21,12472.0,16650.0,4178.0,33.5,1500.0,620.0,346.0,757.0,False,False,,False,False,0,,,,,
-2025-02-23,19:27,14673.0,16861.0,2188.0,14.91,3701.0,2821.0,278.0,737.0,False,True,,False,True,3,JERUSALEM CENTRE,min,1.2,0.0116,"peak spike of 14,673 MW, standing 3,701 MW above the days around it — Jerusalem Centre 1.2 °C, colder than 99% of winter days"
-2025-02-24,19:24,15077.0,16461.0,1384.0,9.18,4105.0,3274.0,276.0,755.0,False,True,"tight reserve, peak spike",True,False,3,JERUSALEM CENTRE,min,0.6,0.0058,"tight reserve, peak spike of 15,077 MW, standing 4,105 MW above the days around it — Jerusalem Centre 0.6 °C, colder than 99% of winter days · the highest peak of 3 consecutive flagged days, 2025-02-23 to 2025-02-25"
+2025-02-23,19:27,14673.0,16861.0,2188.0,14.91,3701.0,2821.0,278.0,737.0,False,True,,False,True,3,JERUSALEM CENTRE,min,1.2,0.0114,"peak spike of 14,673 MW, standing 3,701 MW above the days around it — Jerusalem Centre 1.2 °C, colder than 99% of winter days"
+2025-02-24,19:24,15077.0,16461.0,1384.0,9.18,4105.0,3274.0,276.0,755.0,False,True,"tight reserve, peak spike",True,False,3,JERUSALEM CENTRE,min,0.6,0.0057,"tight reserve, peak spike of 15,077 MW, standing 4,105 MW above the days around it — Jerusalem Centre 0.6 °C, colder than 99% of winter days · the highest peak of 3 consecutive flagged days, 2025-02-23 to 2025-02-25"
 2025-02-25,19:39,14557.0,16213.0,1656.0,11.38,3585.0,2754.0,347.0,708.0,False,True,,False,True,3,BET DAGAN,min,0.2,0.0,"peak spike of 14,557 MW, standing 3,585 MW above the days around it — Bet Dagan 0.2 °C, colder than 100% of winter days"
 2025-02-26,19:33,13749.0,15494.0,1745.0,12.69,2336.0,1946.0,382.0,587.0,False,False,,False,False,0,,,,,
 2025-02-27,19:37,12520.0,15211.0,2691.0,21.49,717.0,717.0,356.0,730.0,False,False,,False,False,0,,,,,
@@ -1477,7 +1477,7 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2026-01-15,19:19,12361.0,14973.0,2611.0,21.12,1307.0,0.0,603.0,849.0,False,False,,False,False,0,,,,,
 2026-01-16,17:45,11054.0,14767.0,3713.0,33.59,202.0,-1307.0,504.0,870.0,False,False,,False,False,0,,,,,
 2026-01-17,19:34,11383.0,14917.0,3533.0,31.04,531.0,-978.0,498.0,1009.0,False,False,,False,False,0,,,,,
-2026-01-18,19:24,13318.0,14455.0,1137.0,8.54,2264.0,957.0,494.0,1013.0,False,False,tight reserve,False,False,1,JERUSALEM CENTRE,min,8.0,0.3546,"tight reserve — Jerusalem Centre 8.0 °C, colder than 65% of winter days; not an extreme day"
+2026-01-18,19:24,13318.0,14455.0,1137.0,8.54,2264.0,957.0,494.0,1013.0,False,False,tight reserve,False,False,1,JERUSALEM CENTRE,min,8.0,0.3505,"tight reserve — Jerusalem Centre 8.0 °C, colder than 65% of winter days; not an extreme day"
 2026-01-19,19:37,13535.0,15888.0,2353.0,17.38,2481.0,1174.0,585.0,916.0,False,False,,False,False,0,,,,,
 2026-01-20,19:44,13966.0,15843.0,1876.0,13.43,2912.0,1605.0,622.0,945.0,False,False,,False,False,0,,,,,
 2026-01-21,19:27,14043.0,15708.0,1666.0,11.86,2989.0,1682.0,798.0,963.0,False,False,,False,False,0,,,,,
@@ -1696,10 +1696,40 @@ date,peak_hour,peak_mw,capacity_mw,reserve_mw,reserve_pct,peak_prom_mw,peak_vs_l
 2026-08-22,13:41,13467.0,19454.0,5987.0,44.46,-215.0,-1078.0,4797.0,0.0,False,False,,False,False,0,,,,,
 2026-08-23,15:21,15023.0,19339.0,4316.0,28.73,1556.0,478.0,4419.0,461.0,False,False,,False,False,0,,,,,
 2026-08-24,15:24,14887.0,19490.0,4603.0,30.92,1420.0,495.0,4397.0,491.0,False,False,,False,False,0,,,,,
-2026-08-25,16:20,14784.0,18755.0,3971.0,26.86,1317.0,394.0,3747.0,624.0,False,False,,False,False,0,,,,,
-2026-08-26,15:38,15465.0,18622.0,3158.0,20.42,1998.0,1073.0,4281.0,620.0,False,False,,False,False,0,,,,,
-2026-08-27,15:28,15444.0,19063.0,3619.0,23.43,1977.0,858.0,4239.0,638.0,False,False,,False,False,0,,,,,
-2026-08-28,13:43,14251.0,19743.0,5492.0,38.54,784.0,-138.0,4896.0,0.0,False,False,,False,False,0,,,,,
-2026-08-29,13:12,13154.0,19141.0,5987.0,45.51,-885.0,-1364.0,4817.0,0.0,False,False,,False,False,0,,,,,
-2026-08-30,15:31,14039.0,19252.0,5213.0,37.13,-62.0,-745.0,4163.0,347.0,False,False,,False,False,0,,,,,
-2026-08-31,14:37,14101.0,19097.0,4996.0,35.43,,-416.0,4062.0,373.0,False,False,,False,False,0,,,,,
+2026-08-25,16:20,14784.0,18755.0,3971.0,26.86,1317.0,392.0,3747.0,624.0,False,False,,False,False,0,,,,,
+2026-08-26,15:38,15465.0,18622.0,3158.0,20.42,1998.0,888.0,4281.0,620.0,False,False,,False,False,0,,,,,
+2026-08-27,15:28,15444.0,19063.0,3619.0,23.43,1977.0,660.0,4239.0,638.0,False,False,,False,False,0,,,,,
+2026-08-28,13:43,14251.0,19743.0,5492.0,38.54,784.0,-326.0,4896.0,0.0,False,False,,False,False,0,,,,,
+2026-08-29,13:12,13154.0,19141.0,5987.0,45.51,-313.0,-1423.0,4817.0,0.0,False,False,,False,False,0,,,,,
+2026-08-30,15:31,14039.0,19252.0,5213.0,37.13,885.0,-538.0,4163.0,347.0,False,False,,False,False,0,,,,,
+2026-08-31,14:37,14101.0,19097.0,4996.0,35.43,947.0,-476.0,4062.0,373.0,False,False,,False,False,0,,,,,
+2026-09-01,14:50,14577.0,19619.0,5041.0,34.58,1423.0,0.0,4549.0,356.0,False,False,,False,False,0,,,,,
+2026-09-02,15:23,15200.0,18366.0,3166.0,20.83,2046.0,722.0,4203.0,612.0,False,False,,False,False,0,,,,,
+2026-09-03,15:23,15131.0,18866.0,3735.0,24.68,1977.0,718.0,4154.0,595.0,False,False,,False,False,0,,,,,
+2026-09-04,14:22,13643.0,19170.0,5527.0,40.51,489.0,-608.0,4881.0,119.0,False,False,,False,False,0,,,,,
+2026-09-05,13:51,12587.0,18871.0,6284.0,49.92,-567.0,-1601.0,4850.0,0.0,False,False,,False,False,0,,,,,
+2026-09-06,15:41,14188.0,18518.0,4330.0,30.52,1601.0,0.0,4135.0,644.0,False,False,,False,False,0,,,,,
+2026-09-07,15:29,14905.0,18530.0,3626.0,24.33,2318.0,492.0,4100.0,679.0,False,False,,False,False,0,,,,,
+2026-09-08,15:30,15203.0,18268.0,3065.0,20.16,2616.0,725.0,4193.0,685.0,False,False,,False,False,0,,,,,
+2026-09-09,14:38,14478.0,18947.0,4469.0,30.87,1891.0,0.0,4733.0,141.0,False,False,,False,False,0,,,,,
+2026-09-10,15:08,14413.0,19172.0,4759.0,33.02,1826.0,-65.0,4474.0,344.0,False,False,,False,False,0,,,,,
+2026-09-11,13:31,13537.0,19304.0,5766.0,42.59,950.0,-876.0,4895.0,0.0,False,False,,False,False,0,,,,,
+2026-09-12,16:30,11970.0,17237.0,5267.0,44.0,-617.0,-2443.0,3129.0,667.0,False,False,,False,False,0,,,,,
+2026-09-13,13:30,12536.0,18280.0,5745.0,45.83,566.0,-1877.0,4908.0,0.0,False,False,,False,False,0,,,,,
+2026-09-14,15:13,14790.0,18448.0,3657.0,24.73,2820.0,377.0,4335.0,523.0,False,False,,False,False,0,,,,,
+2026-09-15,15:10,14852.0,18352.0,3501.0,23.57,2882.0,1315.0,4307.0,588.0,False,False,,False,False,0,,,,,
+2026-09-16,15:39,14558.0,18325.0,3767.0,25.88,2588.0,1432.0,3870.0,391.0,False,False,,False,False,0,,,,,
+2026-09-17,15:28,14896.0,18295.0,3399.0,22.82,2926.0,1770.0,4020.0,649.0,False,False,,False,False,0,,,,,
+2026-09-18,14:15,12897.0,18782.0,5885.0,45.63,927.0,0.0,4049.0,0.0,False,False,,False,False,0,,,,,
+2026-09-19,14:41,11228.0,17956.0,6728.0,59.92,-742.0,-1650.0,4218.0,100.0,False,False,,False,False,0,,,,,
+2026-09-20,16:17,11896.0,17585.0,5688.0,47.81,668.0,-982.0,3344.0,683.0,False,False,,False,False,0,,,,,
+2026-09-21,14:55,10778.0,17029.0,6250.0,57.99,-450.0,-2100.0,4353.0,0.0,False,False,,False,False,0,,,,,
+2026-09-22,14:38,13126.0,18464.0,5338.0,40.67,2348.0,1230.0,4388.0,365.0,False,False,,False,False,0,,,,,
+2026-09-23,14:14,12878.0,18720.0,5843.0,45.37,2100.0,1252.0,4622.0,0.0,False,False,,False,False,0,,,,,
+2026-09-24,14:48,13263.0,18105.0,4842.0,36.51,2485.0,1638.0,4252.0,0.0,False,False,,False,False,0,,,,,
+2026-09-25,14:16,11626.0,17402.0,5777.0,49.69,848.0,1.0,4488.0,0.0,False,False,,False,False,0,,,,,
+2026-09-26,14:49,10404.0,16995.0,6591.0,63.35,-439.0,-1142.0,4171.0,0.0,False,False,,False,False,0,,,,,
+2026-09-27,15:35,11467.0,17193.0,5726.0,49.93,624.0,-158.0,3826.0,165.0,False,False,,False,False,0,,,,,
+2026-09-28,13:31,11625.0,17167.0,5542.0,47.67,782.0,79.0,3833.0,47.0,False,False,,False,False,0,,,,,
+2026-09-29,15:12,11074.0,16524.0,5449.0,49.21,231.0,-551.0,3108.0,137.0,False,False,,False,False,0,,,,,
+2026-09-30,15:08,10843.0,16022.0,5179.0,47.76,,-703.0,2686.0,144.0,False,False,,False,False,0,,,,,
