@@ -28,10 +28,12 @@
   .sub { color:var(--ink2); margin:0 0 14px; max-width:960px; }
   .bar { display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; }
   .grp { display:flex; gap:0; }
-  .grp button { border-radius:0; margin-left:-1px; }
-  .grp button:first-child { border-radius:7px 0 0 7px; margin-left:0; }
-  .grp button:last-child { border-radius:0 7px 7px 0; }
-  .lbl { color:var(--muted); font-size:12.5px; margin-right:2px; }
+  .grp button { border-radius:0; margin-inline-start:-1px; }
+  .grp button:first-child { border-start-start-radius:7px; border-end-start-radius:7px;
+    margin-inline-start:0; }
+  .grp button:last-child { border-start-end-radius:7px; border-end-end-radius:7px; }
+  .lbl { color:var(--muted); font-size:12.5px; margin-inline-end:2px; }
+  .lbl.gap { margin-inline-start:14px; }
   .spacer { flex:1 }
   .explain { color:var(--ink2); font-size:13px; margin:-4px 2px 14px; max-width:960px; }
   button, select { font:inherit; font-size:12.5px; color:var(--ink2);
@@ -48,16 +50,17 @@
   .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; max-width:1000px; }
   .note a { color:var(--ink2); }
   .note a:hover { color:var(--ink); }
+  .note a.gh { display:inline-flex; color:var(--ink2); }
   .status { color:var(--muted); padding:24px 12px; }
   details { margin:14px 2px 0; }
   summary { cursor:pointer; color:var(--ink2); font-size:13px; }
   .tablewrap { overflow-x:auto; max-height:420px; overflow-y:auto; margin-top:8px; }
   table { border-collapse:collapse; font-size:12.5px; }
-  th, td { padding:4px 12px 4px 0; text-align:right; border-bottom:1px solid var(--border);
+  th, td { padding-block:4px; padding-inline:0 12px; text-align:end; border-bottom:1px solid var(--border);
     font-variant-numeric:tabular-nums; white-space:nowrap; }
   th { color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--page); }
-  th:first-child, td:first-child { text-align:left; }
-  .source { display:inline-flex; align-items:center; gap:8px; margin-right:8px;
+  th:first-child, td:first-child { text-align:start; }
+  .source { display:inline-flex; align-items:center; gap:8px; margin-inline-end:8px;
     vertical-align:middle; }
   :root[data-theme="dark"] .source img,
   :root:where(:not([data-theme="light"])) .source img { filter:invert(1) brightness(1.6); }
@@ -69,72 +72,74 @@
 <body>
 <div class="viz-root wrap">
 
-  <h1>Electricity by source &mdash; Israel</h1>
-  <p class="sub">
-    Gross generation by fuel: how much of the country's electricity came from
-    gas, coal, liquid fuel, sun, wind and pumped storage.
-  </p>
+  <h1 data-t="title">Electricity by source &mdash; Israel</h1>
+  <p class="sub" data-t="sub"></p>
 
   <div class="bar">
-    <span class="lbl" id="unitlbl">Units</span>
+    <span class="lbl" id="unitlbl" data-t="units">Units</span>
     <span class="grp" role="radiogroup" aria-labelledby="unitlbl">
-      <button class="unit on" role="radio" data-v="pct">Share %</button>
-      <button class="unit" role="radio" data-v="gwh">Energy GWh</button>
+      <button class="unit on" role="radio" data-v="pct" data-t="pct">Share %</button>
+      <button class="unit" role="radio" data-v="gwh" data-t="gwh">Energy GWh</button>
     </span>
-    <span class="lbl" id="layoutlbl" style="margin-left:14px">Layout</span>
+    <span class="lbl gap" id="layoutlbl" data-t="layout">Layout</span>
     <span class="grp" role="radiogroup" aria-labelledby="layoutlbl">
-      <button class="layout on" role="radio" data-v="timeline">Timeline</button>
-      <button class="layout" role="radio" data-v="season">Average year</button>
+      <button class="layout on" role="radio" data-v="timeline" data-t="timeline">Timeline</button>
+      <button class="layout" role="radio" data-v="season" data-t="season">Average year</button>
     </span>
-    <label class="lbl" for="res" style="margin-left:14px">Each bar</label>
+    <label class="lbl gap" for="res" data-t="eachbar">Each bar</label>
     <select id="res">
-      <option value="year">Year</option>
-      <option value="month" selected>Month</option>
-      <option value="week">Week</option>
-      <option value="day">Day</option>
+      <option value="year" data-t="year">Year</option>
+      <option value="month" data-t="month" selected>Month</option>
+      <option value="week" data-t="week">Week</option>
+      <option value="day" data-t="day">Day</option>
     </select>
     <span class="spacer"></span>
+    <button id="lang" lang="he">עברית</button>
     <button id="theme">Dark mode</button>
-    <a href="index.html" class="home" title="All charts" aria-label="Home">
+    <a href="index.html" class="home" data-t-title="home">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
            stroke-width="2" aria-hidden="true">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
         <polyline points="9 22 9 12 15 12 15 22"></polyline>
-      </svg>Home</a>
+      </svg><span data-t="home">Home</span></a>
   </div>
   <p class="explain" id="explain"></p>
 
-  <div class="card"><div id="chart"><div class="status" id="status">loading&hellip;</div></div></div>
+  <div class="card"><div id="chart" dir="ltr"><div class="status" id="status" data-t="loading">loading&hellip;</div></div></div>
   <p class="note" id="foot"></p>
 
   <details>
-    <summary>Table</summary>
+    <summary data-t="table">Table</summary>
     <div class="tablewrap" id="table"></div>
   </details>
 
-  <p class="note">
-    <b>Solar</b> includes Noga's estimate
-    of rooftop and other distribution-connected panels, plus two solar-thermal
-    plants. <b>Liquid fuel</b> is diesel and heavy fuel oil, burned mostly when
-    gas supply is cut. <b>Pumped storage</b> counts only what it generates, not
-    the power it uses to pump; batteries are not in this feed. The steam stages
-    of combined-cycle plants carry no fuel label in the source and are counted
-    with the fuel their unit is registered for.
-  </p>
+  <p class="note" data-t="notes"></p>
 
   <p class="note">
     <span class="source">
-      Source:
+      <span data-t="code">Code:</span>
+      <a href="https://github.com/yuval-harpaz/weather/blob/main/code/grid_mix_update.py"
+         target="_blank" rel="noopener" class="gh" data-t-title="codeTitle">
+        <svg viewBox="0 0 16 16" width="26" height="26" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+            0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52
+            -.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2
+            -3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64
+            -.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51
+            .56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01
+            2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+        </svg>
+      </a>
+    </span>
+    <span class="source">
+      <span data-t="source">Source:</span>
       <a href="https://www.noga-iso.co.il/obligation-to-report-new/?feed=stations-nopv"
-         target="_blank" rel="noopener"
-         title="Noga — Israel Independent System Operator, production by unit">
+         target="_blank" rel="noopener" data-t-title="noga">
         <img src="https://www.noga-iso.co.il/media/jhzn54k0/logostiki.svg?v=1dc52170218afd0"
              alt="Noga — Israel Independent System Operator" height="34">
       </a>
     </span>
-    Half-hourly generation per unit published by Noga under its reporting
-    obligation, one file per month, summed per day by
-    <code>code/grid_mix_update.py</code>.
+    <span data-t="method"></span>
   </p>
 </div>
 
@@ -149,34 +154,143 @@ const BASES = LOCAL ? ["../data", RAW] : [RAW, "../data"];
 // storage) blue, biomass green. Adjacent pairs pass the colour-blindness
 // separation check in both themes. `ink` is the label colour inside a segment.
 const SERIES = [
-  {key: "gas",    name: "Natural gas",    cols: ["gas"],
+  {key: "gas",    en: "Natural gas",     he: "גז טבעי",        cols: ["gas"],
    light: "#e8603c", dark: "#f0703f", ink: "#ffffff"},
-  {key: "coal",   name: "Coal",           cols: ["coal"],
+  {key: "coal",   en: "Coal",            he: "פחם",            cols: ["coal"],
    light: "#3b3631", dark: "#9a9089", ink: "#ffffff"},
-  {key: "solar",  name: "Solar",          cols: ["solar_pv", "solar_thermal"],
+  {key: "solar",  en: "Solar",           he: "שמש",            cols: ["solar_pv", "solar_thermal"],
    light: "#f2c12e", dark: "#f2c12e", ink: "#0b0b0b"},
-  {key: "liquid", name: "Liquid fuel",    cols: ["liquid"],
+  {key: "liquid", en: "Liquid fuel",     he: "דלק נוזלי",      cols: ["liquid"],
    light: "#7a1f1f", dark: "#8c3a2c", ink: "#ffffff"},
-  {key: "wind",   name: "Wind",           cols: ["wind"],
+  {key: "wind",   en: "Wind",            he: "רוח",            cols: ["wind"],
    light: "#3cc4d6", dark: "#3cc4d6", ink: "#0b0b0b"},
-  {key: "psp",    name: "Pumped storage", cols: ["pumped_storage"],
+  {key: "psp",    en: "Pumped storage",  he: "אגירה שאובה",    cols: ["pumped_storage"],
    light: "#1f4e9c", dark: "#4a7fd4", ink: "#ffffff"},
-  {key: "other",  name: "Other (biogas…)", cols: ["biogas", "other"],
+  {key: "other",  en: "Other (biogas…)", he: "אחר (ביוגז…)",   cols: ["biogas", "other"],
    light: "#8db04a", dark: "#8db04a", ink: "#0b0b0b"},
 ];
-const UNITS = {
-  pct: {label: "Share of generation (%)", fmt: v => v.toFixed(1) + "%"},
-  gwh: {label: "Energy (GWh)",             fmt: v => d3.format(",.0f")(v) + " GWh"},
+
+// Every piece of text on the page, in both languages. Functions take the
+// numbers they need; static strings are filled into [data-t] elements.
+const HE_TIME = {
+  dateTime: "%A, %e ב%B %Y %X", date: "%d/%m/%Y", time: "%H:%M:%S",
+  periods: ["AM", "PM"],
+  days: ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"],
+  shortDays: ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"],
+  months: ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט",
+           "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"],
+  shortMonths: ["ינו׳", "פבר׳", "מרץ", "אפר׳", "מאי", "יוני", "יולי", "אוג׳",
+                "ספט׳", "אוק׳", "נוב׳", "דצמ׳"],
 };
-// Plain-language meaning of each unit, shown under the controls.
-const EXPLAIN = {
-  pct: "<b>Share %</b> — of all the electricity generated during the bar's "
-    + "period, the part that came from each source. Every bar adds up to 100%.",
-  gwh: "<b>Energy, GWh</b> — the total amount of electricity generated during "
-    + "the bar's period. One gigawatt-hour is a million kilowatt-hours, the unit "
-    + "on a household electricity bill. Longer periods simply hold more: February "
-    + "looks smaller than March, and a year still in progress looks smaller than "
-    + "a whole one.",
+const T = {
+  en: {
+    pageTitle: "Electricity by source — Israel",
+    title: "Electricity by source &mdash; Israel",
+    sub: "Gross generation by fuel: how much of the country's electricity came from "
+      + "gas, coal, liquid fuel, sun, wind and pumped storage.",
+    units: "Units", pct: "Share %", gwh: "Energy GWh",
+    layout: "Layout", timeline: "Timeline", season: "Average year",
+    eachbar: "Each bar", year: "Year", month: "Month", week: "Week", day: "Day",
+    dark: "Dark mode", light: "Light mode", home: "Home", other: "עברית",
+    loading: "loading…", table: "Table", source: "Source:", code: "Code:",
+    codeTitle: "The script that builds this table, on GitHub",
+    noga: "Noga — Israel Independent System Operator, production by unit",
+    notes: "<b>Solar</b> includes Noga's estimate of rooftop and other "
+      + "distribution-connected panels, plus two solar-thermal plants. <b>Liquid "
+      + "fuel</b> is diesel and heavy fuel oil, burned mostly when gas supply is cut. "
+      + "<b>Pumped storage</b> counts only what it generates, not the power it uses "
+      + "to pump; batteries are not in this feed. The steam stages of combined-cycle "
+      + "plants carry no fuel label in the source and are counted with the fuel their "
+      + "unit is registered for.",
+    method: "Half-hourly generation per unit published by Noga under its reporting "
+      + "obligation, one file per month, summed per day.",
+    nodata: "no data found — expected data/grid_mix.csv (run `python code/grid_mix_update.py`).",
+    foot: (n, a, b) => `${n} days, ${a} to ${b}. Hover a bar for every source and the total.`,
+    ylabel: {pct: "Share of generation (%)", gwh: "Energy (GWh)"},
+    yseason: r => `Energy per ${r} in a typical year (GWh)`,
+    explain: {
+      pct: "<b>Share %</b> — of all the electricity generated during the bar's "
+        + "period, the part that came from each source. Every bar adds up to 100%.",
+      gwh: "<b>Energy, GWh</b> — the total amount of electricity generated during "
+        + "the bar's period. One gigawatt-hour is a million kilowatt-hours, the unit "
+        + "on a household electricity bill.",
+    },
+    explainSeason: " In the <b>average year</b> layout each bar gathers that part "
+      + "of the calendar from every year on record, so the bars show how the mix "
+      + "typically moves through the seasons.",
+    explainProj: (p, y0, y1) => ` The pale segments on ${p.Y} are a <b>projection</b> of `
+      + `${p.span}: for each source, the same months in ${y0}–${y1}, scaled by how `
+      + `${p.Y} has run so far against each of those years. Tested on past years, the `
+      + `total landed within a few percent; single sources are less certain, coal most of all.`,
+    avgSpan: (n, a, b) => ` (average of ${n} years, ${a}–${b})`,
+    fmt: {season: {month: "%B", week: "week from %-d %B", day: "%-d %B"},
+          timeline: {month: "%B %Y", week: "week of %-d %b %Y", day: "%a %-d %b %Y"},
+          spanFrom: "%-d %b", spanTo: "%-d %b %Y"},
+    soFarDays: n => ` (${n} days so far)`,
+    total: "total", soFar: "so far",
+    projYear: v => ` so far, ≈ ${v} projected for the year`,
+    projected: "projected", projLegend: s => `Projected ${s}`,
+    period: "Period", totalCol: "Total",
+  },
+  he: {
+    pageTitle: "ייצור חשמל לפי מקור — ישראל",
+    title: "ייצור חשמל לפי מקור &mdash; ישראל",
+    sub: "ייצור ברוטו לפי סוג דלק: כמה מהחשמל בארץ הגיע מגז, פחם, דלק נוזלי, "
+      + "שמש, רוח ואגירה שאובה.",
+    units: "יחידות", pct: "אחוז מהייצור", gwh: "אנרגיה GWh",
+    layout: "תצוגה", timeline: "ציר זמן", season: "שנה ממוצעת",
+    eachbar: "כל עמודה", year: "שנה", month: "חודש", week: "שבוע", day: "יום",
+    dark: "מצב כהה", light: "מצב בהיר", home: "דף הבית", other: "English",
+    loading: "טוען…", table: "טבלה", source: "מקור:", code: "קוד:",
+    codeTitle: "הסקריפט שבונה את הטבלה, ב-GitHub",
+    noga: "נגה — חברת ניהול מערכת החשמל, ייצור לפי יחידה",
+    notes: "<b>שמש</b> כוללת את הערכת נגה לפאנלים על גגות ולמתקנים אחרים המחוברים "
+      + "לרשת החלוקה, וגם שתי תחנות תרמו-סולאריות. <b>דלק נוזלי</b> הוא סולר ומזוט, "
+      + "שנשרפים בעיקר כשאספקת הגז נקטעת. <b>אגירה שאובה</b> נספרת רק לפי מה שהיא "
+      + "מייצרת, לא לפי החשמל שהיא צורכת לשאיבה; סוללות אינן בנתונים האלה. שלבי "
+      + "הקיטור של תחנות במחזור משולב מופיעים במקור בלי סוג דלק, ונספרים לפי הדלק "
+      + "שהיחידה שלהם רשומה עליו.",
+    method: "נתוני ייצור חצי-שעתיים לכל יחידה, שנגה מפרסמת במסגרת חובת הדיווח, קובץ "
+      + "לכל חודש, מסוכמים לכל יום.",
+    nodata: "לא נמצאו נתונים — הקובץ data/grid_mix.csv חסר (הריצו `python code/grid_mix_update.py`).",
+    foot: (n, a, b) => `${n} ימים, ${a} עד ${b}. העבירו את העכבר מעל עמודה כדי לראות `
+      + `את כל המקורות ואת הסך הכול.`,
+    ylabel: {pct: "חלק מהייצור (%)", gwh: "אנרגיה (GWh)"},
+    yseason: r => `אנרגיה ל${r} בשנה טיפוסית (GWh)`,
+    explain: {
+      pct: "<b>אחוז מהייצור</b> — מכל החשמל שיוצר בתקופה של העמודה, החלק שהגיע "
+        + "מכל מקור. כל עמודה מסתכמת ל-100%.",
+      gwh: "<b>אנרגיה, GWh</b> — כמות החשמל הכוללת שיוצרה בתקופה של העמודה. "
+        + "ג'יגה-ואט-שעה הוא מיליון קילו-ואט-שעה, היחידה שבחשבון החשמל הביתי.",
+    },
+    explainSeason: " בתצוגת <b>שנה ממוצעת</b> כל עמודה אוספת את אותו חלק של לוח "
+      + "השנה מכל השנים שבנתונים, כך שהעמודות מראות איך תמהיל הייצור משתנה בדרך כלל "
+      + "לאורך העונות.",
+    explainProj: (p, y0, y1) => ` המקטעים החיוורים ב-${p.Y} הם <b>תחזית</b> ל-${p.span}: `
+      + `לכל מקור, אותם חודשים ב-${y0}–${y1}, מותאמים לפי היחס בין ${p.Y} עד כה לכל `
+      + `אחת מהשנים האלה. בבדיקה על שנים קודמות הסך הכול יצא בטווח של אחוזים בודדים; `
+      + `מקורות בודדים פחות ודאיים, ופחם הכי פחות.`,
+    avgSpan: (n, a, b) => ` (ממוצע של ${n} שנים, ${a}–${b})`,
+    fmt: {season: {month: "%B", week: "שבוע מ-%-d ב%B", day: "%-d ב%B"},
+          timeline: {month: "%B %Y", week: "שבוע מ-%-d ב%B %Y", day: "יום %A, %-d ב%B %Y"},
+          spanFrom: "%-d ב%B", spanTo: "%-d ב%B %Y"},
+    soFarDays: n => ` (${n} ימים עד כה)`,
+    total: "סה״כ", soFar: "עד כה",
+    projYear: v => ` עד כה, ≈ ${v} צפוי לשנה כולה`,
+    projected: "תחזית", projLegend: s => `תחזית ${s}`,
+    period: "תקופה", totalCol: "סה״כ",
+  },
+};
+// Plotly needs the Hebrew month names for its date axis.
+Plotly.register({moduleType: "locale", name: "he", dictionary: {},
+  format: {days: HE_TIME.days, shortDays: HE_TIME.shortDays,
+           months: HE_TIME.months, shortMonths: HE_TIME.shortMonths,
+           date: "%d/%m/%Y", decimal: ".", thousands: ","}});
+const UTC = {en: d3.utcFormat, he: d3.timeFormatLocale(HE_TIME).utcFormat};
+
+const fmtUnit = {
+  pct: v => v.toFixed(1) + "%",
+  gwh: v => d3.format(",.0f")(v) + " GWh",
 };
 // Segments thinner than this share of their bar get no label.
 const LABEL_MIN = 0.06;
@@ -185,7 +299,42 @@ const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781"
 const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
   grid:"#2c2c2a", axis:"#383835"};
 
-let unit = "pct", res = "month", layout = "timeline", DAYS = [];
+let unit = "pct", res = "month", layout = "timeline", lang = "en", DAYS = [];
+const L = () => T[lang];
+const F = f => UTC[lang](f);
+const sname = s => s[lang];
+
+// ---- choices in the URL, so a link reopens the same view ----------------
+// ?units=percent|gwh &layout=timeline|average &bar=year|month|week|day
+// &lang=he &theme=dark|light (the last two only when set)
+const ALIAS = {
+  units: {percent: "pct", percents: "pct", pct: "pct", share: "pct", "%": "pct",
+          gwh: "gwh", energy: "gwh"},
+  layout: {timeline: "timeline", average: "season", season: "season", year: "season"},
+  bar: {year: "year", month: "month", week: "week", day: "day"},
+  lang: {he: "he", en: "en", iw: "he"},
+};
+function readURL() {
+  const q = new URLSearchParams(location.search);
+  const get = k => ALIAS[k][(q.get(k) || "").toLowerCase()];
+  unit = get("units") || unit;
+  layout = get("layout") || layout;
+  res = get("bar") || res;
+  if (layout === "season" && res === "year") res = "month";
+  lang = get("lang") || lang;
+  const th = (q.get("theme") || "").toLowerCase();
+  if (th === "dark" || th === "light") document.documentElement.dataset.theme = th;
+}
+function writeURL() {
+  const q = new URLSearchParams();
+  q.set("units", unit === "pct" ? "percent" : "gwh");
+  q.set("layout", layout === "season" ? "average" : "timeline");
+  q.set("bar", res);
+  if (lang !== "en") q.set("lang", lang);
+  const th = document.documentElement.dataset.theme;
+  if (th) q.set("theme", th);
+  history.replaceState(null, "", "?" + q + location.hash);
+}
 
 const isDark = () => document.documentElement.dataset.theme
   ? document.documentElement.dataset.theme === "dark"
@@ -256,20 +405,13 @@ function value(b, key) {
 
 const d = iso => new Date(iso + "T00:00:00Z");
 function label(b) {
+  const t = L();
   if (layout === "season") {
     const yrs = [...b.years].sort();
-    const span = ` (average of ${yrs.length} years, ${yrs[0]}–${yrs[yrs.length - 1]})`;
-    if (res === "month") return d3.utcFormat("%B")(d(b.x)) + span;
-    if (res === "week") return "week from " + d3.utcFormat("%-d %B")(d(b.x)) + span;
-    return d3.utcFormat("%-d %B")(d(b.x)) + span;
+    return F(t.fmt.season[res])(d(b.x)) + t.avgSpan(yrs.length, yrs[0], yrs[yrs.length - 1]);
   }
-  if (res === "year") {
-    const full = b.days >= 365;
-    return b.x.slice(0, 4) + (full ? "" : ` (${b.days} days so far)`);
-  }
-  if (res === "month") return d3.utcFormat("%B %Y")(d(b.x));
-  if (res === "week") return "week of " + d3.utcFormat("%-d %b %Y")(d(b.x));
-  return d3.utcFormat("%a %-d %b %Y")(d(b.x));
+  if (res === "year") return b.x.slice(0, 4) + (b.days >= 365 ? "" : t.soFarDays(b.days));
+  return F(t.fmt.timeline[res])(d(b.x));
 }
 
 // The rest of an unfinished year, per source. Each earlier complete year says
@@ -299,18 +441,18 @@ function project() {
   }
   const from = d(last); from.setUTCDate(from.getUTCDate() + 1);
   return {Y, vals, years, total: d3.sum(Object.values(vals)),
-          span: `${d3.utcFormat("%-d %b")(from)} – 31 Dec ${Y}`};
+          span: `${F(L().fmt.spanFrom)(from)} – ${F(L().fmt.spanTo)(d(Y + "-12-31"))}`};
 }
 
 function draw() {
-  const c = C(), dark = isDark();
+  const c = C(), dark = isDark(), t = L();
   const bars = aggregate();
   // In the average year the month names sit mid-month, so the bars are
   // centred in their slice of the calendar to line up with them.
   const centre = iso => {
     if (layout !== "season" || res === "day") return iso;
-    const t = d(iso); t.setUTCDate(t.getUTCDate() + (res === "month" ? 14 : 3));
-    return t.toISOString().slice(0, 10);
+    const x = d(iso); x.setUTCDate(x.getUTCDate() + (res === "month" ? 14 : 3));
+    return x.toISOString().slice(0, 10);
   };
   const xs = bars.map(b => centre(b.x));
   const season = layout === "season";
@@ -332,21 +474,21 @@ function draw() {
     const col = dark ? s.dark : s.light;
     const ys = bars.map(b => value(b, s.key));
     traces.push({
-      type: "bar", name: s.name, legendgroup: s.key, x: xs, y: ys,
+      type: "bar", name: sname(s), legendgroup: s.key, x: xs, y: ys,
       marker: {color: col, line: {color: c.surface, width: thin ? 0 : 1}},
       text: big ? bars.map((b, i) =>
         ys[i] / (unit === "pct" ? 100 : energy(b)) >= LABEL_MIN ? short(ys[i]) : "") : null,
       textposition: big ? "inside" : "none", insidetextanchor: "middle",
       textangle: 0, textfont: {color: s.ink, size: 11},
-      customdata: bars.map(b => UNITS[unit].fmt(value(b, s.key))),
-      hovertemplate: "%{customdata}<extra>" + s.name + "</extra>",
+      customdata: bars.map(b => fmtUnit[unit](value(b, s.key))),
+      hovertemplate: "%{customdata}<extra>" + sname(s) + "</extra>",
     });
     // The projected remainder sits directly on top of its own source, in the
     // same colour washed out: grey over coal, pink over gas.
     if (proj) {
       const v = proj.vals[s.key];
       traces.push({
-        type: "bar", name: s.name + " (projected)", legendgroup: s.key,
+        type: "bar", name: `${sname(s)} (${t.projected})`, legendgroup: s.key,
         showlegend: false, x: xs,
         y: bars.map((b, i) => isProjBar(i) ? v : null),
         marker: {color: col, opacity: 0.35, line: {color: c.surface, width: 1}},
@@ -354,37 +496,37 @@ function draw() {
           ? "+" + short(v) : ""),
         textposition: "inside", insidetextanchor: "middle", textangle: 0,
         textfont: {color: c.ink, size: 11},
-        customdata: bars.map(() => "≈ " + UNITS.gwh.fmt(v)),
-        hovertemplate: "%{customdata}<extra>" + s.name + ", projected</extra>",
+        customdata: bars.map(() => "≈ " + fmtUnit.gwh(v)),
+        hovertemplate: "%{customdata}<extra>" + sname(s) + ", " + t.projected + "</extra>",
       });
     }
   }
   if (proj) {
     // One legend entry explaining the pale segments.
-    traces.push({type: "bar", name: `Projected ${proj.span}`, x: [xs[0]], y: [0],
+    traces.push({type: "bar", name: t.projLegend(proj.span), x: [xs[0]], y: [0],
       marker: {color: c.muted, opacity: 0.35}, hoverinfo: "skip"});
   }
   // An invisible trace to carry the period and the total into the hover box.
   traces.push({
     type: "scatter", mode: "markers", x: xs,
     y: bars.map(() => 0), marker: {opacity: 0}, showlegend: false,
-    customdata: bars.map((b, i) => [label(b), UNITS.gwh.fmt(energy(b))
-      + (isProjBar(i) ? ` so far, ≈ ${UNITS.gwh.fmt(energy(b) + proj.total)} projected for the year` : "")]),
-    hovertemplate: "<b>%{customdata[0]}</b><br>total %{customdata[1]}<extra></extra>",
+    customdata: bars.map((b, i) => [label(b), fmtUnit.gwh(energy(b))
+      + (isProjBar(i) ? t.projYear(fmtUnit.gwh(energy(b) + proj.total)) : "")]),
+    hovertemplate: `<b>%{customdata[0]}</b><br>${t.total} %{customdata[1]}<extra></extra>`,
   });
 
   // Totals above wide bars of energy.
   const annotations = big && unit === "gwh" ? bars.map((b, i) => ({
     x: xs[i], y: energy(b) + (isProjBar(i) ? proj.total : 0),
     text: isProjBar(i)
-      ? `<b>≈ ${short(energy(b) + proj.total)}</b><br>${short(energy(b))} so far`
+      ? `<b>≈ ${short(energy(b) + proj.total)}</b><br>${short(energy(b))} ${t.soFar}`
       : `<b>${short(energy(b))}</b>`,
     showarrow: false, yanchor: "bottom", yshift: 2,
     font: {color: c.ink, size: 11.5},
   })) : [];
 
-  const ylab = season && unit === "gwh"
-    ? `Energy per ${res} in a typical year (GWh)` : UNITS[unit].label;
+  const ylab = season && unit === "gwh" ? t.yseason(t[res]) : t.ylabel[unit];
+  const rtl = lang === "he";
   Plotly.react("chart", traces, {
     barmode: "stack", bargap: thin ? 0 : 0.12,
     height: 480, margin: {l: 62, r: 16, t: 40, b: 44},
@@ -392,7 +534,7 @@ function draw() {
     font: {color: c.ink2, size: 12},
     hovermode: "x unified",
     hoverlabel: {bgcolor: c.surface, bordercolor: c.axis,
-      font: {color: c.ink, size: 12}, align: "left"},
+      font: {color: c.ink, size: 12}, align: rtl ? "right" : "left"},
     xaxis: season
       ? {type: "date", dtick: "M1", tick0: "2020-01-01", tickformat: "%B",
          ticklabelmode: "period", range: ["2020-01-01", "2020-12-31"],
@@ -408,26 +550,25 @@ function draw() {
             : {autorange: true}),
       gridcolor: c.grid,
       linecolor: c.axis, zeroline: false, ticksuffix: unit === "pct" ? "%" : ""},
-    legend: {orientation: "h", x: 0, y: 1.02, yanchor: "bottom",
-      traceorder: "normal", bgcolor: "rgba(0,0,0,0)", font: {size: 12}},
+    // Hebrew readers start at the right, so the legend runs from there:
+    // reversed and right-aligned, gas ends up rightmost.
+    legend: {orientation: "h", x: rtl ? 1 : 0, xanchor: rtl ? "right" : "left",
+      y: 1.02, yanchor: "bottom",
+      traceorder: rtl ? "reversed" : "normal", bgcolor: "rgba(0,0,0,0)", font: {size: 12}},
     uirevision: layout + res,
     annotations,
-  }, {displayModeBar: false, responsive: true});
+  }, {displayModeBar: false, responsive: true, locale: lang});
   document.getElementById("status")?.remove();
-  document.getElementById("explain").innerHTML = EXPLAIN[unit]
-    + (season ? " In the <b>average year</b> layout each bar gathers that part "
-      + "of the calendar from every year on record, so the bars show how the mix "
-      + "typically moves through the seasons." : "")
-    + (proj ? ` The pale segments on ${proj.Y} are a <b>projection</b> of ${proj.span}: `
-      + `for each source, the same months in ${proj.years[0]}–${proj.years[proj.years.length - 1]}, `
-      + `scaled by how ${proj.Y} has run so far against each of those years. Tested `
-      + `on past years, the total landed within a few percent; single sources are `
-      + `less certain, coal most of all.` : "");
+  document.getElementById("explain").innerHTML = t.explain[unit]
+    + (season ? t.explainSeason : "")
+    + (proj ? t.explainProj(proj, proj.years[0], proj.years[proj.years.length - 1]) : "");
   table(bars, proj);
+  writeURL();
 }
 
 function table(bars, proj) {
-  const head = ["Period", ...SERIES.map(s => s.name), "Total"];
+  const t = L();
+  const head = [t.period, ...SERIES.map(sname), t.totalCol];
   const num = v => d3.format(",.0f")(v);
   const cell = (b, key) => {
     if (unit === "pct" && key !== "total") return value(b, key).toFixed(1) + "%";
@@ -440,20 +581,50 @@ function table(bars, proj) {
     + SERIES.map(s => `<td>${cell(b, s.key)}</td>`).join("")
     + `<td>${cell(b, "total")}</td></tr>`).join("");
   if (proj) {
-    rows = `<tr><td><i>${proj.span}, projected</i></td>`
+    rows = `<tr><td><i>${proj.span}, ${t.projected}</i></td>`
       + SERIES.map(s => `<td><i>${num(proj.vals[s.key])}</i></td>`).join("")
       + `<td><i>${num(proj.total)}</i></td></tr>` + rows;
   }
-  const u = " (GWh)";
   document.getElementById("table").innerHTML =
     `<table><thead><tr>${head.map((h, i) =>
-      `<th>${h}${i === head.length - 1 ? u : ""}</th>`).join("")}</tr></thead>`
+      `<th>${h}${i === head.length - 1 ? " (GWh)" : ""}</th>`).join("")}</tr></thead>`
     + `<tbody>${rows}</tbody></table>`;
+}
+
+// Static text, direction and the state of every control.
+function applyLang() {
+  const t = L(), root = document.documentElement;
+  root.lang = lang;
+  root.dir = lang === "he" ? "rtl" : "ltr";
+  document.title = t.pageTitle;
+  document.querySelectorAll("[data-t]").forEach(e => e.innerHTML = t[e.dataset.t]);
+  document.querySelectorAll("[data-t-title]").forEach(e => {
+    e.title = t[e.dataset.tTitle]; e.setAttribute("aria-label", t[e.dataset.tTitle]); });
+  const lb = document.getElementById("lang");
+  lb.textContent = t.other;
+  lb.lang = lang === "he" ? "en" : "he";
+  document.getElementById("theme").textContent = isDark() ? t.light : t.dark;
+  if (DAYS.length) {
+    const fmt = UTC[lang]("%-d %b %Y");
+    document.getElementById("foot").textContent = t.foot(DAYS.length.toLocaleString(),
+      fmt(d(DAYS[0].date)), fmt(d(DAYS[DAYS.length - 1].date)));
+  }
+}
+
+function syncControls() {
+  const sel = document.getElementById("res");
+  sel.value = res;
+  sel.querySelector('option[value="year"]').disabled = layout === "season";
+  for (const [cls, v] of [["unit", unit], ["layout", layout]]) {
+    document.querySelectorAll(`button.${cls}`).forEach(b => {
+      b.classList.toggle("on", b.dataset.v === v);
+      b.setAttribute("aria-checked", b.dataset.v === v);
+    });
+  }
 }
 
 function wire() {
   const sel = document.getElementById("res");
-  const yearOpt = sel.querySelector('option[value="year"]');
   sel.onchange = () => {
     res = layout === "season" && sel.value === "year" ? (sel.value = "month") : sel.value;
     draw();
@@ -461,48 +632,42 @@ function wire() {
   const setLayout = v => {
     layout = v;
     // A whole year has no place inside an average year.
-    yearOpt.disabled = v === "season";
-    if (v === "season" && res === "year") { res = sel.value = "month"; }
+    if (v === "season" && res === "year") res = "month";
   };
   for (const [cls, set] of [["unit", v => unit = v], ["layout", setLayout]]) {
-    const btns = document.querySelectorAll(`button.${cls}`);
-    btns.forEach(b => {
-      b.setAttribute("aria-checked", b.classList.contains("on"));
-      b.onclick = () => {
-        set(b.dataset.v);
-        btns.forEach(o => { o.classList.toggle("on", o === b);
-                            o.setAttribute("aria-checked", o === b); });
-        draw();
-      };
+    document.querySelectorAll(`button.${cls}`).forEach(b => {
+      b.onclick = () => { set(b.dataset.v); syncControls(); draw(); };
     });
   }
-  const t = document.getElementById("theme");
-  t.onclick = () => {
+  const th = document.getElementById("theme");
+  th.onclick = () => {
     document.documentElement.dataset.theme = isDark() ? "light" : "dark";
-    t.textContent = isDark() ? "Light mode" : "Dark mode";
+    th.textContent = isDark() ? L().light : L().dark;
     draw();
   };
-  t.textContent = isDark() ? "Light mode" : "Dark mode";
+  document.getElementById("lang").onclick = () => {
+    lang = lang === "he" ? "en" : "he";
+    applyLang(); draw();
+  };
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if (!document.documentElement.dataset.theme) draw();
+    if (!document.documentElement.dataset.theme) { applyLang(); draw(); }
   });
 }
 
 async function main() {
+  readURL();
+  applyLang();
+  syncControls();
   const rows = await load();
   if (!rows) {
-    document.getElementById("status").textContent =
-      "no data found — expected data/grid_mix.csv (run `python code/grid_mix_update.py`).";
+    document.getElementById("status").textContent = L().nodata;
     return;
   }
   const num = ["coal", "gas", "liquid", "biogas", "pumped_storage", "wind",
                "solar_thermal", "solar_pv", "other", "total_gwh", "slots"];
   DAYS = rows.map(r => { const o = {date: r.date};
     num.forEach(k => o[k] = +r[k] || 0); return o; });
-  const first = DAYS[0].date, last = DAYS[DAYS.length - 1].date;
-  document.getElementById("foot").textContent =
-    `${DAYS.length.toLocaleString()} days, ${first} to ${last}. `
-    + `Hover a bar for every source and the total.`;
+  applyLang();
   wire();
   draw();
 }
