@@ -38,15 +38,24 @@ jobs:
           cd code
           python grid_update.py
 
+      # Separate step so a failure here never holds back the peak-hour table:
+      # it is marked failed in the run, and the commit step still runs.
+      - name: Update the generation-by-source table
+        id: mix
+        continue-on-error: true
+        run: |
+          cd code
+          python grid_mix_update.py
+
       - name: Commit and push changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add data/grid_peaks.csv data/grid_sources.csv
+          git add data/grid_peaks.csv data/grid_sources.csv data/grid_mix.csv
           if git diff --cached --quiet; then
             echo "no changes to commit"
           else
-            git commit -m "auto update grid peak data"
+            git commit -m "auto update grid data"
             git pull --no-rebase
             git push
           fi

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electricity by source — Israel</title>
+<link rel="icon" href="logo.jpg">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root, .viz-root { color-scheme: light;
+    --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10); }
+  body { margin:0; padding:26px 22px 56px; background:var(--page); color:var(--ink);
+    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])),
+    :root:where(:not([data-theme="light"])) .viz-root { color-scheme: dark;
+      --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+      --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+      --border:rgba(255,255,255,0.10); } }
+  :root[data-theme="dark"], :root[data-theme="dark"] .viz-root { color-scheme: dark;
+    --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7;
+    --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+    --border:rgba(255,255,255,0.10); }
+  .wrap { max-width:1400px; margin:0 auto; }
+  h1 { font-size:19px; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
+  .sub { color:var(--ink2); margin:0 0 14px; max-width:960px; }
+  .bar { display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; }
+  .grp { display:flex; gap:0; }
+  .grp button { border-radius:0; margin-left:-1px; }
+  .grp button:first-child { border-radius:7px 0 0 7px; margin-left:0; }
+  .grp button:last-child { border-radius:0 7px 7px 0; }
+  .lbl { color:var(--muted); font-size:12.5px; margin-right:2px; }
+  .spacer { flex:1 }
+  button { font:inherit; font-size:12.5px; color:var(--ink2);
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:6px 12px; cursor:pointer; }
+  button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
+  button:hover { color:var(--ink); }
+  .card { background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:8px 4px 4px; min-height:200px; }
+  .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; max-width:1000px; }
+  .note a { color:var(--ink2); }
+  .note a:hover { color:var(--ink); }
+  .status { color:var(--muted); padding:24px 12px; }
+  details { margin:14px 2px 0; }
+  summary { cursor:pointer; color:var(--ink2); font-size:13px; }
+  .tablewrap { overflow-x:auto; max-height:420px; overflow-y:auto; margin-top:8px; }
+  table { border-collapse:collapse; font-size:12.5px; }
+  th, td { padding:4px 12px 4px 0; text-align:right; border-bottom:1px solid var(--border);
+    font-variant-numeric:tabular-nums; white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--page); }
+  th:first-child, td:first-child { text-align:left; }
+  .source { display:inline-flex; align-items:center; gap:8px; margin-right:8px;
+    vertical-align:middle; }
+  :root[data-theme="dark"] .source img,
+  :root:where(:not([data-theme="light"])) .source img { filter:invert(1) brightness(1.6); }
+  @media (prefers-color-scheme: light) {
+    :root:where(:not([data-theme="dark"])) .source img { filter:none; } }
+  @media (max-width:600px) { body { padding:18px 16px 40px; } }
+</style>
+</head>
+<body>
+<div class="viz-root wrap">
+
+  <h1>Electricity by source &mdash; Israel</h1>
+  <p class="sub">
+    Gross generation by fuel: how much of the country's electricity came from
+    gas, coal, liquid fuel, sun, wind and pumped storage.
+  </p>
+
+  <div class="bar">
+    <span class="lbl" id="unitlbl">Units</span>
+    <span class="grp" role="radiogroup" aria-labelledby="unitlbl">
+      <button class="unit on" role="radio" data-v="pct">Share %</button>
+      <button class="unit" role="radio" data-v="gw">Average GW</button>
+      <button class="unit" role="radio" data-v="gwh">Energy GWh</button>
+    </span>
+    <span class="lbl" id="reslbl" style="margin-left:14px">Each bar</span>
+    <span class="grp" role="radiogroup" aria-labelledby="reslbl">
+      <button class="res on" role="radio" data-v="month">Month</button>
+      <button class="res" role="radio" data-v="week">Week</button>
+      <button class="res" role="radio" data-v="day">Day</button>
+    </span>
+    <span class="spacer"></span>
+    <button id="theme">Dark mode</button>
+  </div>
+
+  <div class="card"><div id="chart"><div class="status" id="status">loading&hellip;</div></div></div>
+  <p class="note" id="foot"></p>
+
+  <details>
+    <summary>Table</summary>
+    <div class="tablewrap" id="table"></div>
+  </details>
+
+  <p class="note">
+    <b>GWh</b> (gigawatt-hours) is an amount of energy. <b>Average GW</b> is that
+    energy spread evenly over the hours in the bar &mdash; the steady power it
+    would take to produce it, comparable with the peak-demand figures on the
+    <a href="grid.html">reserve page</a>. <b>Solar</b> includes Noga's estimate
+    of rooftop and other distribution-connected panels, plus two solar-thermal
+    plants. <b>Liquid fuel</b> is diesel and heavy fuel oil, burned mostly when
+    gas supply is cut. <b>Pumped storage</b> counts only what it generates, not
+    the power it uses to pump; batteries are not in this feed. The steam stages
+    of combined-cycle plants carry no fuel label in the source and are counted
+    with the fuel their unit is registered for.
+  </p>
+
+  <p class="note">
+    <span class="source">
+      Source:
+      <a href="https://www.noga-iso.co.il/obligation-to-report-new/?feed=stations-nopv"
+         target="_blank" rel="noopener"
+         title="Noga — Israel Independent System Operator, production by unit">
+        <img src="https://www.noga-iso.co.il/media/jhzn54k0/logostiki.svg?v=1dc52170218afd0"
+             alt="Noga — Israel Independent System Operator" height="34">
+      </a>
+    </span>
+    Half-hourly generation per unit published by Noga under its reporting
+    obligation, one file per month, summed per day by
+    <code>code/grid_mix_update.py</code>.
+    <a href="#" id="csv">Download the daily table</a>
+    &middot; <a href="index.html">All charts</a>
+  </p>
+</div>
+
+<script>
+const RAW = "https://raw.githubusercontent.com/yuval-harpaz/weather/refs/heads/main/data";
+const LOCAL = location.protocol === "file:"
+  || ["localhost", "127.0.0.1", ""].includes(location.hostname);
+const BASES = LOCAL ? ["../data", RAW] : [RAW, "../data"];
+
+// Stacking order, bottom to top, and the colour slots in their validated order
+// (adjacent pairs pass the colour-vision checks only in this sequence).
+const SERIES = [
+  {key: "coal",   name: "Coal",           cols: ["coal"],
+   light: "#2a78d6", dark: "#3987e5"},
+  {key: "gas",    name: "Natural gas",    cols: ["gas"],
+   light: "#eb6834", dark: "#d95926"},
+  {key: "liquid", name: "Liquid fuel",    cols: ["liquid"],
+   light: "#1baf7a", dark: "#199e70"},
+  {key: "solar",  name: "Solar",          cols: ["solar_pv", "solar_thermal"],
+   light: "#eda100", dark: "#c98500"},
+  {key: "wind",   name: "Wind",           cols: ["wind"],
+   light: "#e87ba4", dark: "#d55181"},
+  {key: "psp",    name: "Pumped storage", cols: ["pumped_storage"],
+   light: "#008300", dark: "#008300"},
+  {key: "other",  name: "Other (biogas…)", cols: ["biogas", "other"],
+   light: "#6250d6", dark: "#9085e9"},
+];
+const UNITS = {
+  pct: {label: "Share of generation (%)", fmt: v => v.toFixed(1) + "%"},
+  gw:  {label: "Average power (GW)",       fmt: v => v.toFixed(2) + " GW"},
+  gwh: {label: "Energy (GWh)",             fmt: v => d3.format(",.0f")(v) + " GWh"},
+};
+const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
+  grid:"#e1e0d9", axis:"#c3c2b7"};
+const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
+  grid:"#2c2c2a", axis:"#383835"};
+
+let unit = "pct", res = "month", DAYS = [], csvURL = null;
+
+const isDark = () => document.documentElement.dataset.theme
+  ? document.documentElement.dataset.theme === "dark"
+  : matchMedia("(prefers-color-scheme: dark)").matches;
+const C = () => isDark() ? DARK : LIGHT;
+
+async function load() {
+  for (const base of BASES) {
+    try {
+      const rows = await d3.csv(`${base}/grid_mix.csv`);
+      if (rows && rows.length) { csvURL = `${base}/grid_mix.csv`; return rows; }
+    } catch (e) { /* try the next base */ }
+  }
+  return null;
+}
+
+// Monday of the ISO week, as YYYY-MM-DD.
+function weekStart(iso) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+const bucketOf = {
+  day: iso => iso,
+  week: weekStart,
+  month: iso => iso.slice(0, 7) + "-01",
+};
+
+// One record per bar: GWh per series, total, and the hours actually covered
+// (so a half-finished month averages over the days present, not 30).
+function aggregate() {
+  const by = new Map();
+  for (const r of DAYS) {
+    const k = bucketOf[res](r.date);
+    let b = by.get(k);
+    if (!b) { b = {x: k, days: 0, total: 0}; SERIES.forEach(s => b[s.key] = 0); by.set(k, b); }
+    b.days += 1;
+    for (const s of SERIES) b[s.key] += s.cols.reduce((a, c) => a + r[c], 0);
+  }
+  const out = [...by.values()];
+  for (const b of out) b.total = SERIES.reduce((a, s) => a + b[s.key], 0);
+  return out;
+}
+
+function value(b, key) {
+  if (unit === "pct") return b.total ? 100 * b[key] / b.total : 0;
+  if (unit === "gw") return b[key] / (24 * b.days);
+  return b[key];
+}
+
+const fmtX = {
+  month: d3.utcFormat("%B %Y"),
+  week: d => "week of " + d3.utcFormat("%-d %b %Y")(d),
+  day: d3.utcFormat("%a %-d %b %Y"),
+};
+
+function draw() {
+  const c = C(), dark = isDark();
+  const bars = aggregate();
+  const xs = bars.map(b => b.x);
+  const totals = bars.map(b => value(b, "total"));
+  const traces = SERIES.map(s => ({
+    type: "bar", name: s.name, x: xs,
+    y: bars.map(b => value(b, s.key)),
+    marker: {color: dark ? s.dark : s.light,
+             line: {color: c.surface, width: res === "day" ? 0 : 1}},
+    customdata: bars.map((b, i) => [UNITS[unit].fmt(value(b, s.key)),
+                                    unit === "pct" ? "" : UNITS[unit].fmt(totals[i])]),
+    hovertemplate: "%{customdata[0]}<extra>" + s.name + "</extra>",
+  }));
+  // An invisible trace to carry the total and the period into the hover box.
+  traces.push({
+    type: "scatter", mode: "markers", x: xs,
+    y: bars.map(() => 0), marker: {opacity: 0}, showlegend: false,
+    customdata: bars.map((b, i) => [fmtX[res](new Date(b.x + "T00:00:00Z")),
+      UNITS[unit === "pct" ? "gwh" : unit].fmt(unit === "pct" ? b.total : totals[i]),
+      b.days]),
+    hovertemplate: "<b>%{customdata[0]}</b> · total %{customdata[1]}"
+      + (res === "day" ? "" : " · %{customdata[2]} days")
+      + "<extra></extra>",
+  });
+
+  Plotly.react("chart", traces, {
+    barmode: "stack", bargap: res === "day" ? 0 : 0.12,
+    height: 480, margin: {l: 62, r: 16, t: 40, b: 44},
+    paper_bgcolor: c.surface, plot_bgcolor: c.surface,
+    font: {color: c.ink2, size: 12},
+    hovermode: "x unified",
+    hoverlabel: {bgcolor: c.surface, bordercolor: c.axis,
+      font: {color: c.ink, size: 12}, align: "left"},
+    xaxis: {type: "date", gridcolor: c.grid, linecolor: c.axis, zeroline: false,
+      hoverformat: " ", automargin: true},
+    yaxis: {title: {text: UNITS[unit].label, font: {size: 12}},
+      range: unit === "pct" ? [0, 100] : null, gridcolor: c.grid,
+      linecolor: c.axis, zeroline: false, ticksuffix: unit === "pct" ? "%" : ""},
+    legend: {orientation: "h", x: 0, y: 1.02, yanchor: "bottom",
+      traceorder: "normal", bgcolor: "rgba(0,0,0,0)", font: {size: 12}},
+    uirevision: res,
+  }, {displayModeBar: false, responsive: true});
+  document.getElementById("status")?.remove();
+  table(bars);
+}
+
+function table(bars) {
+  const head = ["Period", ...SERIES.map(s => s.name), "Total"];
+  const cell = (b, key) => unit === "pct" && key !== "total"
+    ? value(b, key).toFixed(1) + "%"
+    : UNITS[unit === "pct" ? "gwh" : unit].fmt(value(b, key)).replace(/ GWh| GW/, "");
+  const rows = [...bars].reverse().map(b =>
+    `<tr><td>${fmtX[res](new Date(b.x + "T00:00:00Z"))}</td>`
+    + SERIES.map(s => `<td>${cell(b, s.key)}</td>`).join("")
+    + `<td>${cell(b, "total")}</td></tr>`).join("");
+  const u = unit === "gw" ? " (GW)" : " (GWh)";
+  document.getElementById("table").innerHTML =
+    `<table><thead><tr>${head.map((h, i) =>
+      `<th>${h}${i === head.length - 1 ? u : ""}</th>`).join("")}</tr></thead>`
+    + `<tbody>${rows}</tbody></table>`;
+}
+
+function wire() {
+  for (const [cls, set] of [["unit", v => unit = v], ["res", v => res = v]]) {
+    const btns = document.querySelectorAll(`button.${cls}`);
+    btns.forEach(b => {
+      b.setAttribute("aria-checked", b.classList.contains("on"));
+      b.onclick = () => {
+        set(b.dataset.v);
+        btns.forEach(o => { o.classList.toggle("on", o === b);
+                            o.setAttribute("aria-checked", o === b); });
+        draw();
+      };
+    });
+  }
+  const t = document.getElementById("theme");
+  t.onclick = () => {
+    document.documentElement.dataset.theme = isDark() ? "light" : "dark";
+    t.textContent = isDark() ? "Light mode" : "Dark mode";
+    draw();
+  };
+  t.textContent = isDark() ? "Light mode" : "Dark mode";
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (!document.documentElement.dataset.theme) draw();
+  });
+}
+
+async function main() {
+  const rows = await load();
+  if (!rows) {
+    document.getElementById("status").textContent =
+      "no data found — expected data/grid_mix.csv (run `python code/grid_mix_update.py`).";
+    return;
+  }
+  const num = ["coal", "gas", "liquid", "biogas", "pumped_storage", "wind",
+               "solar_thermal", "solar_pv", "other", "total_gwh", "slots"];
+  DAYS = rows.map(r => { const o = {date: r.date};
+    num.forEach(k => o[k] = +r[k] || 0); return o; });
+  document.getElementById("csv").href = csvURL;
+  const first = DAYS[0].date, last = DAYS[DAYS.length - 1].date;
+  document.getElementById("foot").textContent =
+    `${DAYS.length.toLocaleString()} days, ${first} to ${last}. `
+    + `Hover a bar for every source and the total.`;
+  wire();
+  draw();
+}
+main();
+</script>
+</body>
+</html>
