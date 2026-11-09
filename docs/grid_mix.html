@@ -38,7 +38,10 @@
     background:var(--surface); border:1px solid var(--border); border-radius:7px;
     padding:6px 12px; cursor:pointer; }
   button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
-  button:hover, select:hover { color:var(--ink); }
+  button:hover, select:hover, a.home:hover { color:var(--ink); }
+  a.home { display:inline-flex; align-items:center; gap:6px; font-size:12.5px;
+    color:var(--ink2); text-decoration:none; background:var(--surface);
+    border:1px solid var(--border); border-radius:7px; padding:6px 12px; }
   option:disabled { color:var(--muted); }
   .card { background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:8px 4px 4px; min-height:200px; }
@@ -92,6 +95,12 @@
     </select>
     <span class="spacer"></span>
     <button id="theme">Dark mode</button>
+    <a href="index.html" class="home" title="All charts" aria-label="Home">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+           stroke-width="2" aria-hidden="true">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+      </svg>Home</a>
   </div>
   <p class="explain" id="explain"></p>
 
@@ -126,8 +135,6 @@
     Half-hourly generation per unit published by Noga under its reporting
     obligation, one file per month, summed per day by
     <code>code/grid_mix_update.py</code>.
-    <a href="#" id="csv">Download the daily table</a>
-    &middot; <a href="index.html">All charts</a>
   </p>
 </div>
 
@@ -178,7 +185,7 @@ const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781"
 const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
   grid:"#2c2c2a", axis:"#383835"};
 
-let unit = "pct", res = "month", layout = "timeline", DAYS = [], csvURL = null;
+let unit = "pct", res = "month", layout = "timeline", DAYS = [];
 
 const isDark = () => document.documentElement.dataset.theme
   ? document.documentElement.dataset.theme === "dark"
@@ -189,7 +196,7 @@ async function load() {
   for (const base of BASES) {
     try {
       const rows = await d3.csv(`${base}/grid_mix.csv`);
-      if (rows && rows.length) { csvURL = `${base}/grid_mix.csv`; return rows; }
+      if (rows && rows.length) return rows;
     } catch (e) { /* try the next base */ }
   }
   return null;
@@ -492,7 +499,6 @@ async function main() {
                "solar_thermal", "solar_pv", "other", "total_gwh", "slots"];
   DAYS = rows.map(r => { const o = {date: r.date};
     num.forEach(k => o[k] = +r[k] || 0); return o; });
-  document.getElementById("csv").href = csvURL;
   const first = DAYS[0].date, last = DAYS[DAYS.length - 1].date;
   document.getElementById("foot").textContent =
     `${DAYS.length.toLocaleString()} days, ${first} to ${last}. `
