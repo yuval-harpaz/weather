@@ -33,11 +33,13 @@
   .grp button:last-child { border-radius:0 7px 7px 0; }
   .lbl { color:var(--muted); font-size:12.5px; margin-right:2px; }
   .spacer { flex:1 }
-  button { font:inherit; font-size:12.5px; color:var(--ink2);
+  .explain { color:var(--ink2); font-size:13px; margin:-4px 2px 14px; max-width:960px; }
+  button, select { font:inherit; font-size:12.5px; color:var(--ink2);
     background:var(--surface); border:1px solid var(--border); border-radius:7px;
     padding:6px 12px; cursor:pointer; }
   button.on { color:var(--ink); border-color:var(--axis); font-weight:600; }
-  button:hover { color:var(--ink); }
+  button:hover, select:hover { color:var(--ink); }
+  option:disabled { color:var(--muted); }
   .card { background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:8px 4px 4px; min-height:200px; }
   .note { color:var(--muted); font-size:12.5px; margin:10px 2px 0; max-width:1000px; }
@@ -74,18 +76,24 @@
     <span class="lbl" id="unitlbl">Units</span>
     <span class="grp" role="radiogroup" aria-labelledby="unitlbl">
       <button class="unit on" role="radio" data-v="pct">Share %</button>
-      <button class="unit" role="radio" data-v="gw">Average GW</button>
       <button class="unit" role="radio" data-v="gwh">Energy GWh</button>
     </span>
-    <span class="lbl" id="reslbl" style="margin-left:14px">Each bar</span>
-    <span class="grp" role="radiogroup" aria-labelledby="reslbl">
-      <button class="res on" role="radio" data-v="month">Month</button>
-      <button class="res" role="radio" data-v="week">Week</button>
-      <button class="res" role="radio" data-v="day">Day</button>
+    <span class="lbl" id="layoutlbl" style="margin-left:14px">Layout</span>
+    <span class="grp" role="radiogroup" aria-labelledby="layoutlbl">
+      <button class="layout on" role="radio" data-v="timeline">Timeline</button>
+      <button class="layout" role="radio" data-v="season">Average year</button>
     </span>
+    <label class="lbl" for="res" style="margin-left:14px">Each bar</label>
+    <select id="res">
+      <option value="year">Year</option>
+      <option value="month" selected>Month</option>
+      <option value="week">Week</option>
+      <option value="day">Day</option>
+    </select>
     <span class="spacer"></span>
     <button id="theme">Dark mode</button>
   </div>
+  <p class="explain" id="explain"></p>
 
   <div class="card"><div id="chart"><div class="status" id="status">loading&hellip;</div></div></div>
   <p class="note" id="foot"></p>
@@ -96,10 +104,7 @@
   </details>
 
   <p class="note">
-    <b>GWh</b> (gigawatt-hours) is an amount of energy. <b>Average GW</b> is that
-    energy spread evenly over the hours in the bar &mdash; the steady power it
-    would take to produce it, comparable with the peak-demand figures on the
-    <a href="grid.html">reserve page</a>. <b>Solar</b> includes Noga's estimate
+    <b>Solar</b> includes Noga's estimate
     of rooftop and other distribution-connected panels, plus two solar-thermal
     plants. <b>Liquid fuel</b> is diesel and heavy fuel oil, burned mostly when
     gas supply is cut. <b>Pumped storage</b> counts only what it generates, not
@@ -132,35 +137,48 @@ const LOCAL = location.protocol === "file:"
   || ["localhost", "127.0.0.1", ""].includes(location.hostname);
 const BASES = LOCAL ? ["../data", RAW] : [RAW, "../data"];
 
-// Stacking order, bottom to top, and the colour slots in their validated order
-// (adjacent pairs pass the colour-vision checks only in this sequence).
+// Stacking order, bottom to top. Colours follow the usual energy conventions:
+// gas orange, coal dark, sun yellow, oil maroon, wind cyan, water (pumped
+// storage) blue, biomass green. Adjacent pairs pass the colour-blindness
+// separation check in both themes. `ink` is the label colour inside a segment.
 const SERIES = [
-  {key: "coal",   name: "Coal",           cols: ["coal"],
-   light: "#2a78d6", dark: "#3987e5"},
   {key: "gas",    name: "Natural gas",    cols: ["gas"],
-   light: "#eb6834", dark: "#d95926"},
-  {key: "liquid", name: "Liquid fuel",    cols: ["liquid"],
-   light: "#1baf7a", dark: "#199e70"},
+   light: "#e8603c", dark: "#f0703f", ink: "#ffffff"},
+  {key: "coal",   name: "Coal",           cols: ["coal"],
+   light: "#3b3631", dark: "#9a9089", ink: "#ffffff"},
   {key: "solar",  name: "Solar",          cols: ["solar_pv", "solar_thermal"],
-   light: "#eda100", dark: "#c98500"},
+   light: "#f2c12e", dark: "#f2c12e", ink: "#0b0b0b"},
+  {key: "liquid", name: "Liquid fuel",    cols: ["liquid"],
+   light: "#7a1f1f", dark: "#8c3a2c", ink: "#ffffff"},
   {key: "wind",   name: "Wind",           cols: ["wind"],
-   light: "#e87ba4", dark: "#d55181"},
+   light: "#3cc4d6", dark: "#3cc4d6", ink: "#0b0b0b"},
   {key: "psp",    name: "Pumped storage", cols: ["pumped_storage"],
-   light: "#008300", dark: "#008300"},
+   light: "#1f4e9c", dark: "#4a7fd4", ink: "#ffffff"},
   {key: "other",  name: "Other (biogas…)", cols: ["biogas", "other"],
-   light: "#6250d6", dark: "#9085e9"},
+   light: "#8db04a", dark: "#8db04a", ink: "#0b0b0b"},
 ];
 const UNITS = {
   pct: {label: "Share of generation (%)", fmt: v => v.toFixed(1) + "%"},
-  gw:  {label: "Average power (GW)",       fmt: v => v.toFixed(2) + " GW"},
   gwh: {label: "Energy (GWh)",             fmt: v => d3.format(",.0f")(v) + " GWh"},
 };
+// Plain-language meaning of each unit, shown under the controls.
+const EXPLAIN = {
+  pct: "<b>Share %</b> — of all the electricity generated during the bar's "
+    + "period, the part that came from each source. Every bar adds up to 100%.",
+  gwh: "<b>Energy, GWh</b> — the total amount of electricity generated during "
+    + "the bar's period. One gigawatt-hour is a million kilowatt-hours, the unit "
+    + "on a household electricity bill. Longer periods simply hold more: February "
+    + "looks smaller than March, and a year still in progress looks smaller than "
+    + "a whole one.",
+};
+// Segments thinner than this share of their bar get no label.
+const LABEL_MIN = 0.06;
 const LIGHT = {surface:"#fcfcfb", ink:"#0b0b0b", ink2:"#52514e", muted:"#898781",
   grid:"#e1e0d9", axis:"#c3c2b7"};
 const DARK = {surface:"#1a1a19", ink:"#ffffff", ink2:"#c3c2b7", muted:"#898781",
   grid:"#2c2c2a", axis:"#383835"};
 
-let unit = "pct", res = "month", DAYS = [], csvURL = null;
+let unit = "pct", res = "month", layout = "timeline", DAYS = [], csvURL = null;
 
 const isDark = () => document.documentElement.dataset.theme
   ? document.documentElement.dataset.theme === "dark"
@@ -184,96 +202,242 @@ function weekStart(iso) {
   return d.toISOString().slice(0, 10);
 }
 const bucketOf = {
-  day: iso => iso,
-  week: weekStart,
+  year: iso => iso.slice(0, 4) + "-01-01",
   month: iso => iso.slice(0, 7) + "-01",
+  week: weekStart,
+  day: iso => iso,
+};
+// "Average year": every year is laid over 2020, a leap year, so each bar
+// gathers the same calendar slice from every year in the record.
+const seasonOf = {
+  month: iso => "2020-" + iso.slice(5, 7) + "-01",
+  week: iso => {               // 7-day slices from 1 January; the 53rd folds into the 52nd
+    const d = new Date(iso + "T00:00:00Z");
+    const doy = Math.round((d - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5);
+    return new Date(Date.UTC(2020, 0, 1 + 7 * Math.min(51, Math.floor(doy / 7))))
+      .toISOString().slice(0, 10);
+  },
+  day: iso => "2020-" + iso.slice(5),
 };
 
-// One record per bar: GWh per series, total, and the hours actually covered
-// (so a half-finished month averages over the days present, not 30).
+// One record per bar: GWh per series, total, the days covered (so a part
+// month averages over the days present) and, for the average year, how many
+// different years fed the bar.
 function aggregate() {
+  const key = layout === "season" ? seasonOf[res] : bucketOf[res];
   const by = new Map();
   for (const r of DAYS) {
-    const k = bucketOf[res](r.date);
+    const k = key(r.date);
     let b = by.get(k);
-    if (!b) { b = {x: k, days: 0, total: 0}; SERIES.forEach(s => b[s.key] = 0); by.set(k, b); }
+    if (!b) { b = {x: k, days: 0, years: new Set()};
+              SERIES.forEach(s => b[s.key] = 0); by.set(k, b); }
     b.days += 1;
+    b.years.add(r.date.slice(0, 4));
     for (const s of SERIES) b[s.key] += s.cols.reduce((a, c) => a + r[c], 0);
   }
-  const out = [...by.values()];
+  const out = [...by.values()].sort((a, b) => a.x < b.x ? -1 : 1);
   for (const b of out) b.total = SERIES.reduce((a, s) => a + b[s.key], 0);
   return out;
 }
 
 function value(b, key) {
   if (unit === "pct") return b.total ? 100 * b[key] / b.total : 0;
-  if (unit === "gw") return b[key] / (24 * b.days);
-  return b[key];
+  // Energy in the average year is the typical amount for that slice of the
+  // year, so the sum over all years is divided by how many years there were.
+  return layout === "season" ? b[key] / b.years.size : b[key];
 }
 
-const fmtX = {
-  month: d3.utcFormat("%B %Y"),
-  week: d => "week of " + d3.utcFormat("%-d %b %Y")(d),
-  day: d3.utcFormat("%a %-d %b %Y"),
-};
+const d = iso => new Date(iso + "T00:00:00Z");
+function label(b) {
+  if (layout === "season") {
+    const yrs = [...b.years].sort();
+    const span = ` (average of ${yrs.length} years, ${yrs[0]}–${yrs[yrs.length - 1]})`;
+    if (res === "month") return d3.utcFormat("%B")(d(b.x)) + span;
+    if (res === "week") return "week from " + d3.utcFormat("%-d %B")(d(b.x)) + span;
+    return d3.utcFormat("%-d %B")(d(b.x)) + span;
+  }
+  if (res === "year") {
+    const full = b.days >= 365;
+    return b.x.slice(0, 4) + (full ? "" : ` (${b.days} days so far)`);
+  }
+  if (res === "month") return d3.utcFormat("%B %Y")(d(b.x));
+  if (res === "week") return "week of " + d3.utcFormat("%-d %b %Y")(d(b.x));
+  return d3.utcFormat("%a %-d %b %Y")(d(b.x));
+}
+
+// The rest of an unfinished year, per source. Each earlier complete year says
+// how its remainder compared with its own year-to-date; that ratio is applied
+// to this year's year-to-date and the estimates are averaged. Backtested on
+// 2023-2025 from the end of September, the total came within 1-4% of what
+// happened; single sources are looser (gas about +-10%, coal up to 40%,
+// since how much coal is burned is a policy decision, not a trend).
+function project() {
+  const last = DAYS[DAYS.length - 1].date, Y = last.slice(0, 4), cut = last.slice(5);
+  if (cut === "12-31") return null;
+  const byYear = d3.group(DAYS, r => r.date.slice(0, 4));
+  const sum = (rows, s) => rows.reduce((a, r) => a + s.cols.reduce((t, c) => t + r[c], 0), 0);
+  const now = byYear.get(Y);
+  const years = [...byYear.keys()].filter(y => y < Y && byYear.get(y).length >= 365);
+  if (!years.length) return null;
+  const vals = {};
+  for (const s of SERIES) {
+    const ytd = sum(now, s), ests = [];
+    for (const y of years) {
+      const rows = byYear.get(y);
+      const a = sum(rows.filter(r => r.date.slice(5) <= cut), s);
+      const rest = sum(rows.filter(r => r.date.slice(5) > cut), s);
+      if (a > 0) ests.push(rest * ytd / a);
+    }
+    vals[s.key] = ests.length ? d3.mean(ests) : 0;
+  }
+  const from = d(last); from.setUTCDate(from.getUTCDate() + 1);
+  return {Y, vals, years, total: d3.sum(Object.values(vals)),
+          span: `${d3.utcFormat("%-d %b")(from)} – 31 Dec ${Y}`};
+}
 
 function draw() {
   const c = C(), dark = isDark();
   const bars = aggregate();
-  const xs = bars.map(b => b.x);
-  const totals = bars.map(b => value(b, "total"));
-  const traces = SERIES.map(s => ({
-    type: "bar", name: s.name, x: xs,
-    y: bars.map(b => value(b, s.key)),
-    marker: {color: dark ? s.dark : s.light,
-             line: {color: c.surface, width: res === "day" ? 0 : 1}},
-    customdata: bars.map((b, i) => [UNITS[unit].fmt(value(b, s.key)),
-                                    unit === "pct" ? "" : UNITS[unit].fmt(totals[i])]),
-    hovertemplate: "%{customdata[0]}<extra>" + s.name + "</extra>",
-  }));
-  // An invisible trace to carry the total and the period into the hover box.
+  // In the average year the month names sit mid-month, so the bars are
+  // centred in their slice of the calendar to line up with them.
+  const centre = iso => {
+    if (layout !== "season" || res === "day") return iso;
+    const t = d(iso); t.setUTCDate(t.getUTCDate() + (res === "month" ? 14 : 3));
+    return t.toISOString().slice(0, 10);
+  };
+  const xs = bars.map(b => centre(b.x));
+  const season = layout === "season";
+  const thin = res === "day" || (res === "week" && !season);
+  // Few, wide bars (years on the timeline, months in the average year) are
+  // wide enough to carry their numbers.
+  const big = season ? res === "month" : res === "year";
+  const energy = b => season ? b.total / b.years.size : b.total;
+  const short = v => unit === "pct" ? v.toFixed(0) + "%" : d3.format(",.0f")(v);
+
+  // Completing an unfinished year: only for yearly bars of energy, where a
+  // short last bar would otherwise read as a collapse in generation.
+  const proj = !season && res === "year" && unit === "gwh" ? project() : null;
+  const lastI = bars.length - 1;
+  const isProjBar = i => proj && i === lastI && bars[i].x.slice(0, 4) === proj.Y;
+
+  const traces = [];
+  for (const s of SERIES) {
+    const col = dark ? s.dark : s.light;
+    const ys = bars.map(b => value(b, s.key));
+    traces.push({
+      type: "bar", name: s.name, legendgroup: s.key, x: xs, y: ys,
+      marker: {color: col, line: {color: c.surface, width: thin ? 0 : 1}},
+      text: big ? bars.map((b, i) =>
+        ys[i] / (unit === "pct" ? 100 : energy(b)) >= LABEL_MIN ? short(ys[i]) : "") : null,
+      textposition: big ? "inside" : "none", insidetextanchor: "middle",
+      textangle: 0, textfont: {color: s.ink, size: 11},
+      customdata: bars.map(b => UNITS[unit].fmt(value(b, s.key))),
+      hovertemplate: "%{customdata}<extra>" + s.name + "</extra>",
+    });
+    // The projected remainder sits directly on top of its own source, in the
+    // same colour washed out: grey over coal, pink over gas.
+    if (proj) {
+      const v = proj.vals[s.key];
+      traces.push({
+        type: "bar", name: s.name + " (projected)", legendgroup: s.key,
+        showlegend: false, x: xs,
+        y: bars.map((b, i) => isProjBar(i) ? v : null),
+        marker: {color: col, opacity: 0.35, line: {color: c.surface, width: 1}},
+        text: bars.map((b, i) => isProjBar(i) && v / (energy(b) + proj.total) >= LABEL_MIN
+          ? "+" + short(v) : ""),
+        textposition: "inside", insidetextanchor: "middle", textangle: 0,
+        textfont: {color: c.ink, size: 11},
+        customdata: bars.map(() => "≈ " + UNITS.gwh.fmt(v)),
+        hovertemplate: "%{customdata}<extra>" + s.name + ", projected</extra>",
+      });
+    }
+  }
+  if (proj) {
+    // One legend entry explaining the pale segments.
+    traces.push({type: "bar", name: `Projected ${proj.span}`, x: [xs[0]], y: [0],
+      marker: {color: c.muted, opacity: 0.35}, hoverinfo: "skip"});
+  }
+  // An invisible trace to carry the period and the total into the hover box.
   traces.push({
     type: "scatter", mode: "markers", x: xs,
     y: bars.map(() => 0), marker: {opacity: 0}, showlegend: false,
-    customdata: bars.map((b, i) => [fmtX[res](new Date(b.x + "T00:00:00Z")),
-      UNITS[unit === "pct" ? "gwh" : unit].fmt(unit === "pct" ? b.total : totals[i]),
-      b.days]),
-    hovertemplate: "<b>%{customdata[0]}</b> · total %{customdata[1]}"
-      + (res === "day" ? "" : " · %{customdata[2]} days")
-      + "<extra></extra>",
+    customdata: bars.map((b, i) => [label(b), UNITS.gwh.fmt(energy(b))
+      + (isProjBar(i) ? ` so far, ≈ ${UNITS.gwh.fmt(energy(b) + proj.total)} projected for the year` : "")]),
+    hovertemplate: "<b>%{customdata[0]}</b><br>total %{customdata[1]}<extra></extra>",
   });
 
+  // Totals above wide bars of energy.
+  const annotations = big && unit === "gwh" ? bars.map((b, i) => ({
+    x: xs[i], y: energy(b) + (isProjBar(i) ? proj.total : 0),
+    text: isProjBar(i)
+      ? `<b>≈ ${short(energy(b) + proj.total)}</b><br>${short(energy(b))} so far`
+      : `<b>${short(energy(b))}</b>`,
+    showarrow: false, yanchor: "bottom", yshift: 2,
+    font: {color: c.ink, size: 11.5},
+  })) : [];
+
+  const ylab = season && unit === "gwh"
+    ? `Energy per ${res} in a typical year (GWh)` : UNITS[unit].label;
   Plotly.react("chart", traces, {
-    barmode: "stack", bargap: res === "day" ? 0 : 0.12,
+    barmode: "stack", bargap: thin ? 0 : 0.12,
     height: 480, margin: {l: 62, r: 16, t: 40, b: 44},
     paper_bgcolor: c.surface, plot_bgcolor: c.surface,
     font: {color: c.ink2, size: 12},
     hovermode: "x unified",
     hoverlabel: {bgcolor: c.surface, bordercolor: c.axis,
       font: {color: c.ink, size: 12}, align: "left"},
-    xaxis: {type: "date", gridcolor: c.grid, linecolor: c.axis, zeroline: false,
-      hoverformat: " ", automargin: true},
-    yaxis: {title: {text: UNITS[unit].label, font: {size: 12}},
-      range: unit === "pct" ? [0, 100] : null, gridcolor: c.grid,
+    xaxis: season
+      ? {type: "date", dtick: "M1", tick0: "2020-01-01", tickformat: "%B",
+         ticklabelmode: "period", range: ["2020-01-01", "2020-12-31"],
+         gridcolor: c.grid, linecolor: c.axis, zeroline: false,
+         hoverformat: " ", automargin: true}
+      : {type: "date", gridcolor: c.grid, linecolor: c.axis, zeroline: false,
+         hoverformat: " ", automargin: true,
+         ...(res === "year" ? {dtick: "M12", tickformat: "%Y"} : {})},
+    yaxis: {title: {text: ylab, font: {size: 12}},
+      ...(unit === "pct" ? {range: [0, 100], autorange: false}
+          : annotations.length
+            ? {range: [0, 1.12 * d3.max(annotations, a => a.y)], autorange: false}
+            : {autorange: true}),
+      gridcolor: c.grid,
       linecolor: c.axis, zeroline: false, ticksuffix: unit === "pct" ? "%" : ""},
     legend: {orientation: "h", x: 0, y: 1.02, yanchor: "bottom",
       traceorder: "normal", bgcolor: "rgba(0,0,0,0)", font: {size: 12}},
-    uirevision: res,
+    uirevision: layout + res,
+    annotations,
   }, {displayModeBar: false, responsive: true});
   document.getElementById("status")?.remove();
-  table(bars);
+  document.getElementById("explain").innerHTML = EXPLAIN[unit]
+    + (season ? " In the <b>average year</b> layout each bar gathers that part "
+      + "of the calendar from every year on record, so the bars show how the mix "
+      + "typically moves through the seasons." : "")
+    + (proj ? ` The pale segments on ${proj.Y} are a <b>projection</b> of ${proj.span}: `
+      + `for each source, the same months in ${proj.years[0]}–${proj.years[proj.years.length - 1]}, `
+      + `scaled by how ${proj.Y} has run so far against each of those years. Tested `
+      + `on past years, the total landed within a few percent; single sources are `
+      + `less certain, coal most of all.` : "");
+  table(bars, proj);
 }
 
-function table(bars) {
+function table(bars, proj) {
   const head = ["Period", ...SERIES.map(s => s.name), "Total"];
-  const cell = (b, key) => unit === "pct" && key !== "total"
-    ? value(b, key).toFixed(1) + "%"
-    : UNITS[unit === "pct" ? "gwh" : unit].fmt(value(b, key)).replace(/ GWh| GW/, "");
-  const rows = [...bars].reverse().map(b =>
-    `<tr><td>${fmtX[res](new Date(b.x + "T00:00:00Z"))}</td>`
+  const num = v => d3.format(",.0f")(v);
+  const cell = (b, key) => {
+    if (unit === "pct" && key !== "total") return value(b, key).toFixed(1) + "%";
+    return num(unit === "pct"
+      ? (layout === "season" ? b.total / b.years.size : b.total) : value(b, key));
+  };
+  const ordered = layout === "season" ? bars : [...bars].reverse();
+  let rows = ordered.map(b =>
+    `<tr><td>${label(b)}</td>`
     + SERIES.map(s => `<td>${cell(b, s.key)}</td>`).join("")
     + `<td>${cell(b, "total")}</td></tr>`).join("");
-  const u = unit === "gw" ? " (GW)" : " (GWh)";
+  if (proj) {
+    rows = `<tr><td><i>${proj.span}, projected</i></td>`
+      + SERIES.map(s => `<td><i>${num(proj.vals[s.key])}</i></td>`).join("")
+      + `<td><i>${num(proj.total)}</i></td></tr>` + rows;
+  }
+  const u = " (GWh)";
   document.getElementById("table").innerHTML =
     `<table><thead><tr>${head.map((h, i) =>
       `<th>${h}${i === head.length - 1 ? u : ""}</th>`).join("")}</tr></thead>`
@@ -281,7 +445,19 @@ function table(bars) {
 }
 
 function wire() {
-  for (const [cls, set] of [["unit", v => unit = v], ["res", v => res = v]]) {
+  const sel = document.getElementById("res");
+  const yearOpt = sel.querySelector('option[value="year"]');
+  sel.onchange = () => {
+    res = layout === "season" && sel.value === "year" ? (sel.value = "month") : sel.value;
+    draw();
+  };
+  const setLayout = v => {
+    layout = v;
+    // A whole year has no place inside an average year.
+    yearOpt.disabled = v === "season";
+    if (v === "season" && res === "year") { res = sel.value = "month"; }
+  };
+  for (const [cls, set] of [["unit", v => unit = v], ["layout", setLayout]]) {
     const btns = document.querySelectorAll(`button.${cls}`);
     btns.forEach(b => {
       b.setAttribute("aria-checked", b.classList.contains("on"));
