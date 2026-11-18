@@ -210,7 +210,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-02,Ashdod_IL,CHL,my,,0.3232,0.1902,0.4929,0.6766
 2026-11-04,Ashdod_IL,CHL,my,0.4531,0.4531,0.3301,0.6793,0.995
 2026-11-06,Ashdod_IL,CHL,my,0.3416,,,,0.0796
-2026-11-09,Ashdod_IL,CHL,nrt,1.255,1.255,0.8547,1.324,0.995
+2026-11-09,Ashdod_IL,CHL,my,1.253,1.253,0.8509,1.298,0.995
 2026-11-10,Ashdod_IL,CHL,nrt,0.7973,0.724,0.4605,1.167,0.995
 2026-11-11,Ashdod_IL,CHL,nrt,0.4302,0.3824,0.2224,0.4843,0.9254
 2026-11-12,Ashdod_IL,CHL,nrt,0.4156,0.4156,0.254,0.5262,0.995
@@ -433,13 +433,13 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-04,Ashkelon_IL,CHL,my,0.6907,0.6907,0.3016,0.871,0.9502
 2026-11-05,Ashkelon_IL,CHL,my,0.8648,,,,0.4279
 2026-11-08,Ashkelon_IL,CHL,my,,0.4478,0.3328,0.927,0.5025
-2026-11-09,Ashkelon_IL,CHL,nrt,1.365,1.424,0.9203,1.63,1
-2026-11-10,Ashkelon_IL,CHL,nrt,0.9477,0.8439,0.582,1.043,0.9502
-2026-11-11,Ashkelon_IL,CHL,nrt,0.6085,0.5294,0.332,0.6659,0.9104
-2026-11-12,Ashkelon_IL,CHL,nrt,0.6682,0.6682,0.4182,0.7926,0.9502
-2026-11-13,Ashkelon_IL,CHL,nrt,0.6124,0.6124,0.4467,0.7297,0.9502
-2026-11-14,Ashkelon_IL,CHL,nrt,0.4273,0.4273,0.3305,0.6283,0.9502
-2026-11-15,Ashkelon_IL,CHL,nrt,0.4402,0.3703,0.2573,0.4402,0.7512
+2026-11-09,Ashkelon_IL,CHL,my,1.364,1.403,0.9163,1.628,1
+2026-11-10,Ashkelon_IL,CHL,nrt,0.9477,0.8439,0.582,1.043,1
+2026-11-11,Ashkelon_IL,CHL,nrt,0.6085,0.5294,0.332,0.6659,0.9581
+2026-11-12,Ashkelon_IL,CHL,nrt,0.6682,0.6682,0.4182,0.7926,1
+2026-11-13,Ashkelon_IL,CHL,nrt,0.6124,0.6124,0.4467,0.7297,1
+2026-11-14,Ashkelon_IL,CHL,nrt,0.4273,0.4273,0.3305,0.6283,1
+2026-11-15,Ashkelon_IL,CHL,nrt,0.4402,0.3703,0.2573,0.4402,0.7906
 2026-01-02,Bardawil_off,CHL,my,5.855,,,,0.3132
 2026-01-03,Bardawil_off,CHL,my,3.495,3.202,2.075,3.495,1
 2026-01-04,Bardawil_off,CHL,my,3.949,4.203,2.644,4.928,1
@@ -913,7 +913,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-05,Damietta_mouth,CHL,my,1.649,1.497,1.031,2.666,1
 2026-11-06,Damietta_mouth,CHL,my,2.121,1.778,1.31,2.613,0.989
 2026-11-08,Damietta_mouth,CHL,my,3.372,3.372,1.81,3.466,0.5659
-2026-11-09,Damietta_mouth,CHL,nrt,5.436,3.894,2.487,5.931,0.8022
+2026-11-09,Damietta_mouth,CHL,my,5.468,3.832,2.455,5.651,0.8022
 2026-11-10,Damietta_mouth,CHL,nrt,4.249,3.966,2.217,4.319,0.8736
 2026-11-11,Damietta_mouth,CHL,nrt,2.228,2.124,1.281,2.362,0.8791
 2026-11-12,Damietta_mouth,CHL,nrt,2.001,1.768,1.152,2.215,1
@@ -1153,7 +1153,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-05,El_Arish_EG,CHL,my,1.633,,,,0.4826
 2026-11-06,El_Arish_EG,CHL,my,1.359,1.397,1.095,1.912,0.9851
 2026-11-08,El_Arish_EG,CHL,my,1.875,1.848,1.306,1.909,0.9851
-2026-11-09,El_Arish_EG,CHL,nrt,2.349,2.169,1.592,2.349,1
+2026-11-09,El_Arish_EG,CHL,my,2.347,2.169,1.591,2.347,0.9851
 2026-11-10,El_Arish_EG,CHL,nrt,2.075,2.071,1.351,2.17,1
 2026-11-11,El_Arish_EG,CHL,nrt,1.577,1.462,1.031,1.611,0.9394
 2026-11-12,El_Arish_EG,CHL,nrt,1.791,1.781,1.308,2.904,1
@@ -1383,7 +1383,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-01,Gaza_City,CHL,my,1.074,1.055,0.684,1.605,0.9254
 2026-11-02,Gaza_City,CHL,nrt,,0.6666,0.3359,0.8667,0.6613
 2026-11-04,Gaza_City,CHL,my,0.9702,0.8403,0.548,1.391,0.9254
-2026-11-09,Gaza_City,CHL,nrt,1.334,1.3,0.96,1.537,0.9254
+2026-11-09,Gaza_City,CHL,my,1.332,1.295,0.9543,1.52,0.9254
 2026-11-10,Gaza_City,CHL,nrt,1.024,0.9895,0.6483,1.059,1
 2026-11-11,Gaza_City,CHL,nrt,0.8372,0.6766,0.4356,0.8372,0.9104
 2026-11-12,Gaza_City,CHL,nrt,0.7382,0.7382,0.5725,1.116,1
@@ -1576,7 +1576,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-02,Hadera_IL,CHL,nrt,,0.1755,0.1317,0.1843,0.5075
 2026-11-04,Hadera_IL,CHL,my,0.2852,0.2786,0.2319,0.3074,0.9403
 2026-11-05,Hadera_IL,CHL,my,0.2778,,,,0.4876
-2026-11-09,Hadera_IL,CHL,nrt,0.352,0.352,0.2446,0.501,1
+2026-11-09,Hadera_IL,CHL,my,0.3509,0.3509,0.244,0.5007,1
 2026-11-10,Hadera_IL,CHL,nrt,0.2907,0.3082,0.2385,0.4749,1
 2026-11-11,Hadera_IL,CHL,nrt,0.1921,0.1921,0.1527,0.2221,0.9403
 2026-11-12,Hadera_IL,CHL,nrt,0.2211,0.2211,0.1711,0.3101,0.9652
@@ -2238,7 +2238,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-04,Rafah_Gaza,CHL,my,1.764,1.674,1.023,2.32,0.86
 2026-11-06,Rafah_Gaza,CHL,my,1.033,0.9167,0.5726,1.033,0.825
 2026-11-08,Rafah_Gaza,CHL,my,1.265,1.287,0.8764,1.42,0.64
-2026-11-09,Rafah_Gaza,CHL,nrt,1.957,1.892,1.372,2.075,0.95
+2026-11-09,Rafah_Gaza,CHL,my,1.966,1.885,1.37,2.084,0.95
 2026-11-10,Rafah_Gaza,CHL,nrt,1.512,1.526,1.167,2.073,1
 2026-11-11,Rafah_Gaza,CHL,nrt,1.274,1.194,0.77,1.274,0.95
 2026-11-12,Rafah_Gaza,CHL,nrt,1.047,1.115,0.8636,1.351,1
@@ -2452,7 +2452,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-04,Rosetta_mouth,CHL,my,3.287,2.559,1.682,3.449,1
 2026-11-05,Rosetta_mouth,CHL,my,2.641,2.355,1.639,2.68,1
 2026-11-06,Rosetta_mouth,CHL,my,1.918,,,,0.2541
-2026-11-09,Rosetta_mouth,CHL,nrt,4.706,4.108,2.464,5.259,0.9337
+2026-11-09,Rosetta_mouth,CHL,my,4.704,4.107,2.463,5.253,0.9337
 2026-11-10,Rosetta_mouth,CHL,nrt,5.112,3.535,2.355,5.218,1
 2026-11-11,Rosetta_mouth,CHL,nrt,2.554,2.401,1.255,2.811,1
 2026-11-12,Rosetta_mouth,CHL,nrt,3.343,2.632,1.542,3.343,1
@@ -2653,7 +2653,7 @@ date,site,variable,stream,at_station,transect_p80,transect_mean,transect_max,val
 2026-11-02,Tel_Aviv_IL,CHL,my,,0.2753,0.1909,0.3398,0.67
 2026-11-04,Tel_Aviv_IL,CHL,my,0.2353,0.2089,0.1582,0.4493,1
 2026-11-06,Tel_Aviv_IL,CHL,my,,0.1649,0.1179,0.294,0.7
-2026-11-09,Tel_Aviv_IL,CHL,nrt,0.9922,0.9748,0.4352,1.093,0.93
+2026-11-09,Tel_Aviv_IL,CHL,my,0.9905,0.9735,0.4339,1.091,0.93
 2026-11-10,Tel_Aviv_IL,CHL,nrt,0.6418,0.5866,0.3506,0.7649,1
 2026-11-11,Tel_Aviv_IL,CHL,nrt,0.3799,0.3637,0.2192,0.4061,0.93
 2026-11-12,Tel_Aviv_IL,CHL,nrt,0.3367,0.355,0.2471,0.4854,1
